@@ -18,7 +18,7 @@ impl Span {
         }
     }
 
-    pub fn at_range(source: &Arc<Source>, range: &std::ops::Range<usize>) -> Span {
+    pub fn at_range(source: &Arc<Source>, range: std::ops::Range<usize>) -> Span {
         Span::new(
             Location::at_offset(source, range.start),
             Location::at_offset(source, range.end),

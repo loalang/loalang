@@ -13,3 +13,4 @@ name = "loa"
 path = "src/bin/loa.rs"
 
 [dependencies]
+matches = "0.1.8"
