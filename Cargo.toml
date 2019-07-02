@@ -1,0 +1,15 @@
+[package]
+name = "loa"
+version = "0.1.0"
+authors = ["Emil Broman <emil@emilbroman.me>"]
+edition = "2018"
+
+[lib]
+name = "loa"
+path = "src/lib/mod.rs"
+
+[[bin]]
+name = "loa"
+path = "src/bin/loa.rs"
+
+[dependencies]
