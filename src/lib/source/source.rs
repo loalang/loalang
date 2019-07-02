@@ -1,7 +1,7 @@
 use crate::*;
-use std::path::PathBuf;
-use std::io;
 use std::fmt;
+use std::io;
+use std::path::PathBuf;
 
 pub struct Source {
     pub uri: URI,
@@ -15,12 +15,15 @@ impl Source {
 
     pub fn file(path: PathBuf) -> io::Result<Arc<Source>> {
         let path = path.canonicalize()?;
-        Ok(Self::new(URI::File(path.clone()), std::fs::read_to_string(path)?))
+        Ok(Self::new(
+            URI::File(path.clone()),
+            std::fs::read_to_string(path)?,
+        ))
     }
 
     #[cfg(test)]
-    pub fn test(code: String) -> Arc<Source> {
-        Self::new(URI::Test, code)
+    pub fn test(code: &str) -> Arc<Source> {
+        Self::new(URI::Test, code.into())
     }
 }
 

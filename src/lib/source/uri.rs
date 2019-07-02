@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::fmt;
 
+#[derive(PartialEq, Debug)]
 pub enum URI {
     #[cfg(test)]
     Test,
