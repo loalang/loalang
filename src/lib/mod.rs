@@ -1,12 +1,16 @@
-// Commonly used std imports
+#![feature(termination_trait_lib)]
+#![feature(box_patterns)]
+
 pub use std::sync::Arc;
 
-#[cfg(test)]
 extern crate matches;
-#[cfg(test)]
 use matches::*;
 
 mod source;
 pub use self::source::*;
+
+#[macro_use]
+mod diagnostics;
+pub use self::diagnostics::*;
 
 pub mod syntax;

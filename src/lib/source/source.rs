@@ -1,6 +1,6 @@
 use crate::*;
 use std::fmt;
-use std::io;
+use std::io::{self, Read};
 use std::path::PathBuf;
 
 pub struct Source {
@@ -19,6 +19,12 @@ impl Source {
             URI::File(path.clone()),
             std::fs::read_to_string(path)?,
         ))
+    }
+
+    pub fn stdin() -> io::Result<Arc<Source>> {
+        let mut code = String::new();
+        io::stdin().read_to_string(&mut code)?;
+        Ok(Self::new(URI::Stdin, code))
     }
 
     #[cfg(test)]

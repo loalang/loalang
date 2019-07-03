@@ -27,15 +27,18 @@ pub fn tokenize(source: Arc<Source>) -> Vec<Token> {
 fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
     let (offset, ch) = stream.next()?;
     let kind;
-    let mut end_offset;
+    let mut end_offset = offset;
 
-    match ch {
-        ' ' => {
-            end_offset = offset;
+    let peek = stream.peek();
+    let next_ch = peek.map(|(_, c)| *c).unwrap_or('\0');
+
+    match (ch, next_ch) {
+        // Whitespace
+        (s, _) if matches!(s, ' ' | '\n' | '\r' | '\t') => {
             let mut chars = vec![ch];
             loop {
                 match stream.peek() {
-                    Some((_, ' ')) => {
+                    Some((_, s)) if matches!(s, ' ' | '\n' | '\r' | '\t') => {
                         let (o, c) = stream.next().unwrap();
                         end_offset = o;
                         chars.push(c);
@@ -45,12 +48,82 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
             }
             kind = TokenKind::Whitespace(chars.iter().collect());
         }
-        _ => panic!("Unknown input"),
+
+        // LineComment
+        ('/', '/') => {
+            let (o, _) = stream.next().unwrap();
+            end_offset = o;
+            let mut chars = vec![];
+            loop {
+                match stream.peek() {
+                    Some((_, '\n')) | None => break,
+                    Some((_, _)) => {
+                        let (o, c) = stream.next().unwrap();
+                        end_offset = o;
+                        chars.push(c);
+                    }
+                }
+            }
+            kind = TokenKind::LineComment(chars.iter().collect());
+        }
+
+        // SimpleInteger
+        (n, _) if n.is_numeric() => {
+            let mut chars = vec![ch];
+            loop {
+                match stream.peek() {
+                    Some((_, s)) if s.is_numeric() || *s == '_' => {
+                        let (o, c) = stream.next().unwrap();
+                        end_offset = o;
+                        chars.push(c);
+                    }
+                    _ => break,
+                }
+            }
+            kind = TokenKind::SimpleInteger(chars.iter().collect());
+        }
+
+        // SimpleSymbol
+        (n, _) if n.is_alphabetic() => {
+            let mut chars = vec![ch];
+            loop {
+                match stream.peek() {
+                    Some((_, s)) if s.is_alphanumeric() || *s == '_' => {
+                        let (o, c) = stream.next().unwrap();
+                        end_offset = o;
+                        chars.push(c);
+                    }
+                    _ => break,
+                }
+            }
+            loop {
+                match stream.peek() {
+                    Some((_, '\'')) => {
+                        let (o, c) = stream.next().unwrap();
+                        end_offset = o;
+                        chars.push(c);
+                    }
+                    _ => break,
+                }
+            }
+            kind = TokenKind::SimpleSymbol(chars.iter().collect());
+        }
+
+        // Plus
+        ('+', _) => kind = TokenKind::Plus,
+
+        // Colon
+        (':', _) => kind = TokenKind::Colon,
+
+        // Unknown
+        (c, _) => {
+            kind = TokenKind::Unknown(c);
+        }
     }
 
     Some(Token {
         kind,
-        span: Span::at_range(source, offset..end_offset),
+        span: Span::at_range(source, offset..end_offset + 1),
     })
 }
 
@@ -72,5 +145,21 @@ mod tests {
 
         assert_eq!(tokens.len(), 2);
         assert_matches!(tokens[0].kind, TokenKind::Whitespace(ref s) if s == "  ");
+    }
+
+    #[test]
+    fn line_comment() {
+        let tokens = tokenize(Source::test("  // line comment here\n  "));
+
+        assert_eq!(tokens.len(), 4);
+        assert_matches!(tokens[0].kind, TokenKind::Whitespace(ref s) if s == "  ");
+        assert_eq!(tokens[0].span.start.offset, 0);
+        assert_eq!(tokens[0].span.end.offset, 2);
+        assert_matches!(tokens[1].kind, TokenKind::LineComment(ref s) if s == " line comment here");
+        assert_eq!(tokens[1].span.start.offset, 2);
+        assert_eq!(tokens[1].span.end.offset, 22);
+        assert_matches!(tokens[2].kind, TokenKind::Whitespace(ref s) if s == "\n  ");
+        assert_eq!(tokens[2].span.start.offset, 22);
+        assert_eq!(tokens[2].span.end.offset, 25);
     }
 }

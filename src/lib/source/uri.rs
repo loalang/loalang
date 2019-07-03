@@ -7,6 +7,7 @@ pub enum URI {
     Test,
 
     File(PathBuf),
+    Stdin,
 }
 
 impl fmt::Display for URI {
@@ -16,6 +17,7 @@ impl fmt::Display for URI {
             URI::Test => write!(f, "test:"),
 
             URI::File(path) => write!(f, "file://{}", path.display()),
+            URI::Stdin => write!(f, "stdin:"),
         }
     }
 }
