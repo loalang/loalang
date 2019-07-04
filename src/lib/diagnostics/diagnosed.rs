@@ -20,19 +20,37 @@ macro_rules! diagnose {
 
     ($diagnostics: expr, $diagnosed: expr) => (
         match $diagnosed {
-            Just(t) => t,
+            Just(t) => Just(t),
             Diagnosis(t, d) => {
-                let dd = $diagnosed;
-                dd.push(d);
+                let mut dd = $diagnostics;
+                dd.extend(d);
                 Diagnosis(t, dd)
             }
             Failure(d) => {
-                let dd = $diagnosed;
-                dd.push(d);
+                let mut dd = $diagnostics;
+                dd.extend(d);
                 Failure(dd)
             }
         }
     )
+}
+
+impl<T> Diagnosed<T> {
+    pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Diagnosed<U> {
+        match self {
+            Just(t) => Just(f(t)),
+            Diagnosis(t, d) => Diagnosis(f(t), d),
+            Failure(d) => Failure(d),
+        }
+    }
+
+    pub fn flat_map<U, F: FnOnce(T) -> Diagnosed<U>>(self, f: F) -> Diagnosed<U> {
+        match self {
+            Just(t) => f(t),
+            Diagnosis(t, d) => diagnose!(d, f(t)),
+            Failure(d) => Failure(d),
+        }
+    }
 }
 
 #[cfg(test)]

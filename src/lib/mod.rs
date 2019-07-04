@@ -1,9 +1,9 @@
-#![feature(termination_trait_lib)]
 #![feature(box_patterns)]
 
 pub use std::sync::Arc;
 pub use std::slice::Iter;
 pub use std::collections::HashMap;
+pub use std::collections::HashSet;
 pub use std::fmt;
 
 extern crate matches;
@@ -22,3 +22,5 @@ pub use self::diagnostics::*;
 pub mod syntax;
 
 pub mod semantics;
+
+pub mod format;

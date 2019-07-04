@@ -10,15 +10,15 @@ pub struct Class {
 }
 
 impl Class {
-    pub fn callable_methods(&self) -> HashMap<Symbol, &Method> {
-        let mut methods = HashMap::<Symbol, &Method>::new();
+    pub fn callable_methods(&self) -> HashMap<Symbol, Method> {
+        let mut methods = HashMap::<Symbol, Method>::new();
 
         for super_type in &self.super_types {
             methods.extend(super_type.callable_methods());
         }
 
         for own_method in &self.methods {
-            methods.insert(own_method.selector().clone(), own_method);
+            methods.insert(own_method.selector().clone(), own_method.clone());
         }
 
         methods
@@ -29,54 +29,8 @@ impl Class {
 mod tests {
     use super::*;
 
-    fn class<F: FnOnce(&mut Class)>(name: &str, f: F) -> Arc<Class> {
-        let mut class = Class {
-            name: Symbol(name.into()),
-            type_parameters: vec![],
-            super_types: vec![],
-            variables: vec![],
-            methods: vec![],
-        };
-        f(&mut class);
-        Arc::new(class)
-    }
-
-    fn class_type(class: Arc<Class>) -> Type {
-        Type {
-            constructor: TypeConstructor::Class(class),
-            arguments: vec![],
-        }
-    }
-
-    fn proper_type(name: &str) -> Type {
-        class_type(class(name, |_| {}))
-    }
-
-    fn partial_unary_method(selector: &str, return_type: Type) -> Method {
-        Method {
-            signature: Signature {
-                selector: Symbol(selector.into()),
-                type_parameters: vec![],
-                parameters: vec![],
-                return_type,
-            },
-            implementation: None,
-        }
-    }
-
-    fn format_methods(methods: HashMap<Symbol, &Method>) -> Vec<String> {
-        let mut methods = methods
-            .iter()
-            .map(|(_, m)| format!("{}", m.signature))
-            .collect::<Vec<_>>();
-
-        methods.sort();
-
-        methods
-    }
-
     #[test]
-    fn methods_of_sub_class() {
+    fn inherited_method() {
         let x_type = proper_type("X");
 
         let method_a = partial_unary_method("a", x_type.clone());
@@ -98,7 +52,7 @@ mod tests {
     }
 
     #[test]
-    fn overridden_methods() {
+    fn overridden_method() {
         let x_type = proper_type("X");
         let y_type = proper_type("Y");
 

@@ -24,33 +24,22 @@ impl TypeConstructor {
             TypeConstructor::TypeParameter(param) => &param.name,
         }
     }
+
+    pub fn type_parameters(&self) -> &Vec<Arc<TypeParameter>> {
+        match self {
+            TypeConstructor::Class(class) => &class.type_parameters,
+            TypeConstructor::TypeParameter(param) => &param.type_parameters,
+        }
+    }
 }
 
 pub struct TypeParameter {
     pub constraint: Type,
     pub name: Symbol,
-    pub parameters: Vec<Arc<TypeParameter>>,
-}
-
-pub struct Signature {
-    pub selector: Symbol,
     pub type_parameters: Vec<Arc<TypeParameter>>,
-    pub parameters: Vec<Type>,
-    pub return_type: Type,
 }
 
-impl fmt::Display for Signature {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} -> {}", self.selector, self.return_type)
-    }
-}
-
-pub enum MethodImplementation {
-    Body(Vec<Pattern>, Arc<Expression>),
-    VariableGetter(Arc<Variable>),
-    VariableSetter(Arc<Variable>),
-}
-
+#[derive(Clone)]
 pub enum Pattern {
     Binding(Type, Symbol),
 }
