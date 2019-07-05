@@ -2,110 +2,98 @@ use crate::format::*;
 use crate::syntax::*;
 
 impl Format for Token {
-    fn write(&self, out: &mut String, _ctx: &mut FormattingContext) {
-        use TokenKind::*;
-
-        match &self.kind {
-            EOF => (),
-            Unknown(c) => out.push(*c),
-
-            Plus => out.push('+'),
-            Colon => out.push(':'),
-
-            Whitespace(s) | LineComment(s) | SimpleInteger(s) | SimpleSymbol(s) => {
-                out.push_str(s.as_str())
-            }
-        }
+    fn write(&self, ctx: &mut FormattingContext) {
+        ctx.putstr(self.lexeme())
     }
 }
 
 impl Format for Integer {
-    fn write(&self, out: &mut String, ctx: &mut FormattingContext) {
+    fn write(&self, ctx: &mut FormattingContext) {
         let Integer(t) = self;
-        t.write(out, ctx);
+        t.write(ctx);
     }
 }
 
 impl Format for Identifier {
-    fn write(&self, out: &mut String, _ctx: &mut FormattingContext) {
+    fn write(&self, ctx: &mut FormattingContext) {
         if let Identifier(Token {
             kind: TokenKind::SimpleSymbol(s),
             ..
         }) = self
         {
-            out.push_str(s.as_ref());
+            ctx.putstr(s);
         } else {
-            out.push('?');
+            ctx.putchar('?');
         }
     }
 }
 
 impl<T: Format> Format for Keyworded<T> {
-    fn write(&self, out: &mut String, ctx: &mut FormattingContext) {
+    fn write(&self, ctx: &mut FormattingContext) {
         for (i, (keyword, value)) in self.iter().enumerate() {
             if i > 0 {
                 if ctx.one_line(self) {
-                    out.push(' ');
+                    ctx.space();
                 } else {
-                    ctx.break_line(out);
+                    ctx.break_line();
                 }
             }
-            keyword.write(out, ctx);
-            out.push(' ');
-            value.write(out, ctx);
+            keyword.write(ctx);
+            ctx.space();
+            value.write(ctx);
         }
     }
 }
 
 impl Format for MessageSend {
-    fn write(&self, out: &mut String, ctx: &mut FormattingContext) {
+    fn write(&self, ctx: &mut FormattingContext) {
         if ctx.one_line(self) {
             match self {
                 MessageSend::Unary(r, id) => {
-                    r.write(out, ctx);
-                    out.push(' ');
-                    id.write(out, ctx);
+                    r.write(ctx);
+                    ctx.space();
+                    id.write(ctx);
                 }
 
                 MessageSend::Binary(r, op, a) => {
-                    r.write(out, ctx);
-                    out.push(' ');
-                    op.write(out, ctx);
-                    out.push(' ');
-                    a.write(out, ctx);
+                    r.write(ctx);
+                    ctx.space();
+                    op.write(ctx);
+                    ctx.space();
+                    a.write(ctx);
                 }
 
                 MessageSend::Keyword(r, kws) => {
-                    r.write(out, ctx);
-                    out.push(' ');
-                    kws.write(out, ctx);
+                    r.write(ctx);
+                    ctx.space();
+                    kws.write(ctx);
                 }
             }
         } else {
             match self {
                 MessageSend::Unary(r, id) => {
-                    r.write(out, ctx);
+                    r.write(ctx);
                     ctx.indent(move |ctx| {
-                        ctx.break_line(out);
-                        id.write(out, ctx);
+                        ctx.break_line();
+                        id.write(ctx);
                     });
                 }
 
                 MessageSend::Binary(r, op, a) => {
-                    r.write(out, ctx);
+                    r.write(ctx);
                     ctx.indent(move |ctx| {
-                        ctx.break_line(out);
-                        op.write(out, ctx);
-                        out.push(' ');
-                        a.write(out, ctx);
+                        ctx.break_line();
+                        op.write(ctx);
+                        ctx.space();
+                        a.write(ctx);
                     });
                 }
 
                 MessageSend::Keyword(r, kws) => {
-                    r.write(out, ctx);
+                    r.write(ctx);
                     ctx.indent(move |ctx| {
-                        ctx.break_line(out);
-                        kws.write(out, ctx);
+                        ctx.break_line();
+                        kws.write(ctx);
                     });
                 }
             }
@@ -114,18 +102,18 @@ impl Format for MessageSend {
 }
 
 impl Format for Keyword {
-    fn write(&self, out: &mut String, ctx: &mut FormattingContext) {
+    fn write(&self, ctx: &mut FormattingContext) {
         let Keyword(id, _) = self;
-        id.write(out, ctx);
-        out.push(':');
+        id.write(ctx);
+        ctx.putchar(':');
     }
 }
 
 impl Format for Expression {
-    fn write(&self, out: &mut String, ctx: &mut FormattingContext) {
+    fn write(&self, ctx: &mut FormattingContext) {
         match self {
-            Expression::Integer(i) => i.write(out, ctx),
-            Expression::MessageSend(i) => i.write(out, ctx),
+            Expression::Integer(i) => i.write(ctx),
+            Expression::MessageSend(i) => i.write(ctx),
         }
     }
 }

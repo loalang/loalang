@@ -33,6 +33,7 @@ pub fn proper_type(name: &str) -> Type {
 
 pub fn partial_unary_method(selector: &str, return_type: Type) -> Method {
     Method {
+        visibility: Visibility::Public,
         signature: Signature {
             selector: Symbol(selector.into()),
             type_parameters: vec![],
@@ -52,6 +53,7 @@ pub fn type_parameter<F: FnOnce(&mut TypeParameter)>(
         constraint,
         name: Symbol(name.into()),
         type_parameters: vec![],
+        variance: Variance::Invariant,
     };
     f(&mut param);
     Arc::new(param)

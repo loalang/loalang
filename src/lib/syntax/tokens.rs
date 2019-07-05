@@ -7,6 +7,39 @@ pub struct Token {
     pub span: Span,
 }
 
+impl Token {
+    pub fn lexeme(&self) -> String {
+        use TokenKind::*;
+
+        match &self.kind {
+            EOF => "\0".into(),
+            Unknown(c) => c.to_string(),
+
+            InKeyword => "in".into(),
+            OutKeyword => "out".into(),
+            InoutKeyword => "inout".into(),
+            ClassKeyword => "class".into(),
+            PrivateKeyword => "private".into(),
+            PublicKeyword => "public".into(),
+
+            Plus => "+".into(),
+            Colon => ":".into(),
+            Comma => ",".into(),
+            Period => ".".into(),
+
+            Arrow => "->".into(),
+            FatArrow => "=>".into(),
+
+            OpenAngle => "<".into(),
+            CloseAngle => ">".into(),
+            OpenCurly => "{".into(),
+            CloseCurly => "}".into(),
+
+            Whitespace(s) | LineComment(s) | SimpleInteger(s) | SimpleSymbol(s) => s.clone(),
+        }
+    }
+}
+
 impl fmt::Debug for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.kind.fmt(f)
@@ -20,8 +53,25 @@ pub enum TokenKind {
     Whitespace(String),
     LineComment(String),
 
+    InKeyword,
+    OutKeyword,
+    InoutKeyword,
+    ClassKeyword,
+    PrivateKeyword,
+    PublicKeyword,
+
     Plus,
     Colon,
+    Comma,
+    Period,
+
+    Arrow,
+    FatArrow,
+
+    OpenAngle,
+    CloseAngle,
+    OpenCurly,
+    CloseCurly,
 
     SimpleInteger(String),
     SimpleSymbol(String),

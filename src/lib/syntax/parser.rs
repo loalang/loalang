@@ -3,12 +3,12 @@ use crate::*;
 use TokenKind::*;
 
 macro_rules! consume {
-    ($self: expr, $kind: pat) => {{
+    ($self: expr, $($kind: tt)+) => {{
         let t = $self.tokens[$self.offset].clone();
-        if !matches!(t.kind, $kind) {
+        if !matches!(t.kind, $($kind)+) {
             return Failure(vec![Diagnostic::UnexpectedToken(
                 t,
-                stringify!($kind).into(),
+                stringify!($($kind)+).into(),
             )]);
         }
         $self.offset += 1;
@@ -17,13 +17,13 @@ macro_rules! consume {
 }
 
 macro_rules! sees {
-    ($self: expr, $kind: pat, $ahead: expr) => {{
+    ($ahead: expr => $self: expr, $($kind: tt)+) => {{
         let t = &$self.tokens[$self.offset + $ahead];
-        matches!(t.kind, $kind)
+        matches!(t.kind, $($kind)+)
     }};
 
-    ($self: expr, $kind: pat) => {{
-        sees!($self, $kind, 0)
+    ($self: expr, $($kind: tt)+) => {{
+        sees!(0 => $self, $($kind)+)
     }};
 }
 
@@ -62,7 +62,7 @@ impl Parser {
     }
 
     fn parse_potential_unary(&mut self, receiver: Expression) -> Diagnosed<Expression> {
-        if sees!(self, SimpleSymbol(_)) && !sees!(self, Colon, 1) {
+        if sees!(self, SimpleSymbol(_)) && !sees!(1 => self, Colon) {
             let message = diagnose!(self.parse_identifier());
 
             let e = MessageSend::Unary(receiver, message);
@@ -124,6 +124,184 @@ impl Parser {
 
     pub fn parse_identifier(&mut self) -> Diagnosed<Identifier> {
         Just(Identifier(consume!(self, SimpleSymbol(_))))
+    }
+
+    pub fn parse_method(&mut self) -> Diagnosed<Method> {
+        Just(Method::Concrete(diagnose!(self.parse_concrete_method())))
+    }
+
+    pub fn parse_concrete_method(&mut self) -> Diagnosed<ConcreteMethod> {
+        Just(ConcreteMethod(
+            if sees!(self, OpenAngle) {
+                Some(diagnose!(self.parse_type_parameter_list()))
+            } else {
+                None
+            },
+            diagnose!(self.parse_message_pattern()),
+            if sees!(self, Arrow) {
+                Some(diagnose!(self.parse_return_type()))
+            } else {
+                None
+            },
+            diagnose!(self.parse_method_body()),
+        ))
+    }
+
+    pub fn parse_type_parameter_list(&mut self) -> Diagnosed<TypeParameterList> {
+        Just(TypeParameterList(
+            consume!(self, OpenAngle),
+            {
+                let mut params = vec![];
+                while !sees!(self, CloseAngle) {
+                    params.push(diagnose!(self.parse_type_parameter()));
+                    if !sees!(self, Comma) {
+                        break;
+                    }
+                    consume!(self, Comma);
+                }
+                params
+            },
+            consume!(self, CloseAngle),
+        ))
+    }
+
+    pub fn parse_type_parameter(&mut self) -> Diagnosed<TypeParameter> {
+        Just(TypeParameter(
+            if !sees!(1 => self, InKeyword | OutKeyword | InoutKeyword | CloseAngle) {
+                Some(diagnose!(self.parse_type()))
+            } else {
+                None
+            },
+            diagnose!(self.parse_identifier()),
+            if !sees!(self, CloseAngle) {
+                Some(diagnose!(self.parse_variance()))
+            } else {
+                None
+            },
+        ))
+    }
+
+    pub fn parse_variance(&mut self) -> Diagnosed<Variance> {
+        let token = consume!(self, InKeyword | OutKeyword | InoutKeyword);
+
+        Just(match token.kind {
+            InKeyword => Variance::In(token),
+            OutKeyword => Variance::Out(token),
+            InoutKeyword => Variance::Inout(token),
+            _ => panic!("Invalid state"),
+        })
+    }
+
+    pub fn parse_type(&mut self) -> Diagnosed<Type> {
+        Just(Type::Class(
+            diagnose!(self.parse_identifier()),
+            if sees!(self, OpenAngle) {
+                Some(diagnose!(self.parse_type_argument_list()))
+            } else {
+                None
+            },
+        ))
+    }
+
+    pub fn parse_type_argument_list(&mut self) -> Diagnosed<TypeArgumentList> {
+        Just(TypeArgumentList(
+            consume!(self, OpenAngle),
+            {
+                let mut args = vec![];
+                while !sees!(self, CloseAngle) {
+                    args.push(diagnose!(self.parse_type()));
+                    if !sees!(self, Comma) {
+                        break;
+                    }
+                    consume!(self, Comma);
+                }
+                args
+            },
+            consume!(self, CloseAngle),
+        ))
+    }
+
+    pub fn parse_message_pattern(&mut self) -> Diagnosed<MessagePattern> {
+        Just(if sees!(self, SimpleSymbol(_)) && sees!(1 => self, Colon) {
+            MessagePattern::Keyword({
+                let mut keywords = vec![];
+                while sees!(self, SimpleSymbol(_)) {
+                    keywords.push((
+                        diagnose!(self.parse_keyword()),
+                        diagnose!(self.parse_pattern()),
+                    ));
+                }
+                keywords.into()
+            })
+        } else if sees!(self, SimpleSymbol(_)) {
+            MessagePattern::Unary(diagnose!(self.parse_identifier()))
+        } else {
+            MessagePattern::Binary(consume!(self, Plus), diagnose!(self.parse_pattern()))
+        })
+    }
+
+    pub fn parse_pattern(&mut self) -> Diagnosed<Pattern> {
+        Just(Pattern::Binding(
+            if sees!(1 => self, OpenAngle) || !sees!(2 => self, Colon) {
+                Some(diagnose!(self.parse_type()))
+            } else {
+                None
+            },
+            diagnose!(self.parse_identifier()),
+        ))
+    }
+
+    pub fn parse_return_type(&mut self) -> Diagnosed<ReturnType> {
+        Just(ReturnType(
+            consume!(self, Arrow),
+            diagnose!(self.parse_type()),
+        ))
+    }
+
+    pub fn parse_method_body(&mut self) -> Diagnosed<MethodBody> {
+        Just(MethodBody(
+            consume!(self, FatArrow),
+            diagnose!(self.parse_expression()),
+        ))
+    }
+
+    pub fn parse_class(&mut self) -> Diagnosed<Class> {
+        Just(Class(
+            consume!(self, ClassKeyword),
+            diagnose!(self.parse_identifier()),
+            if sees!(self, OpenAngle) {
+                Some(diagnose!(self.parse_type_parameter_list()))
+            } else {
+                None
+            },
+            diagnose!(self.parse_class_body()),
+        ))
+    }
+
+    pub fn parse_class_body(&mut self) -> Diagnosed<ClassBody> {
+        if sees!(self, Period) {
+            Just(ClassBody::Empty(consume!(self, Period)))
+        } else {
+            Just(ClassBody::Braced(
+                consume!(self, OpenCurly),
+                {
+                    let mut members = vec![];
+                    while !sees!(self, CloseCurly) {
+                        members.push(diagnose!(self.parse_class_member()));
+                    }
+                    members
+                },
+                consume!(self, CloseCurly),
+            ))
+        }
+    }
+
+    pub fn parse_class_member(&mut self) -> Diagnosed<ClassMember> {
+        Just(ClassMember::Method(
+            consume!(self, PrivateKeyword | PublicKeyword),
+            diagnose!(self.parse_method()),
+            consume!(self, Period),
+        ))
     }
 }
 
@@ -224,5 +402,19 @@ mod tests {
                 ]
             )
         )
+    }
+
+    assert_parses! {
+        minimal_concrete_method,
+        "x => 12",
+        parse_concrete_method,
+        ConcreteMethod(_, _, _, _)
+    }
+
+    assert_parses! {
+        maximal_concrete_method,
+        "<List<X> a in, Object b out> method: a x with: a y -> Dictionary<X, Y> => 12 + 42",
+        parse_concrete_method,
+        ConcreteMethod(_, _, _, _)
     }
 }

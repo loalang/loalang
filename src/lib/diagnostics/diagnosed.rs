@@ -10,15 +10,15 @@ pub enum Diagnosed<T> {
 }
 
 macro_rules! diagnose {
-    ($diagnosed: expr) => (
+    ($diagnosed: expr) => {
         match $diagnosed {
             Just(t) => t,
             Diagnosis(_, d) => return Failure(d),
             Failure(d) => return Failure(d),
         }
-    );
+    };
 
-    ($diagnostics: expr, $diagnosed: expr) => (
+    ($diagnostics: expr, $diagnosed: expr) => {
         match $diagnosed {
             Just(t) => Just(t),
             Diagnosis(t, d) => {
@@ -32,7 +32,7 @@ macro_rules! diagnose {
                 Failure(dd)
             }
         }
-    )
+    };
 }
 
 impl<T> Diagnosed<T> {
@@ -51,15 +51,23 @@ impl<T> Diagnosed<T> {
             Failure(d) => Failure(d),
         }
     }
+
+    #[cfg(test)]
+    pub fn unwrap(self) -> T {
+        match self {
+            Just(t) => t,
+            Diagnosis(_, d) | Failure(d) => panic!("Diagnostics: {:?}", d),
+        }
+    }
 }
 
 #[cfg(test)]
 macro_rules! assert_diagnose {
-    ($diagnosed: expr) => (
+    ($diagnosed: expr) => {
         match $diagnosed {
             Just(t) => t,
             Diagnosis(_, d) => panic!("{:?}", d),
             Failure(d) => panic!("{:?}", d),
         }
-    );
+    };
 }

@@ -3,6 +3,7 @@ use crate::semantics::*;
 
 #[derive(Clone)]
 pub struct Method {
+    pub visibility: Visibility,
     pub signature: Signature,
     pub implementation: Option<MethodImplementation>,
 }
@@ -14,6 +15,7 @@ impl Method {
 
     pub fn apply_type_arguments(&self, arguments: &Vec<(Arc<TypeParameter>, Type)>) -> Method {
         Method {
+            visibility: self.visibility.clone(),
             signature: self.signature.apply_type_arguments(arguments),
             implementation: self.implementation.clone(),
         }
@@ -25,4 +27,10 @@ pub enum MethodImplementation {
     Body(Vec<Pattern>, Arc<Expression>),
     VariableGetter(Arc<Variable>),
     VariableSetter(Arc<Variable>),
+}
+
+#[derive(Clone)]
+pub enum Visibility {
+    Public,
+    Private,
 }

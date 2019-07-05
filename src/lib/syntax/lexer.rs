@@ -106,7 +106,16 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
                     _ => break,
                 }
             }
-            kind = TokenKind::SimpleSymbol(chars.iter().collect());
+            match chars.iter().collect::<String>().as_str() {
+                "in" => kind = TokenKind::InKeyword,
+                "out" => kind = TokenKind::OutKeyword,
+                "inout" => kind = TokenKind::InoutKeyword,
+                "class" => kind = TokenKind::ClassKeyword,
+                "private" => kind = TokenKind::PrivateKeyword,
+                "public" => kind = TokenKind::PublicKeyword,
+
+                lexeme => kind = TokenKind::SimpleSymbol(lexeme.into()),
+            }
         }
 
         // Plus
@@ -114,6 +123,34 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
 
         // Colon
         (':', _) => kind = TokenKind::Colon,
+
+        // Comma
+        (',', _) => kind = TokenKind::Comma,
+
+        // Period
+        ('.', _) => kind = TokenKind::Period,
+
+        // Arrow
+        ('-', '>') => {
+            let (o, _) = stream.next().unwrap();
+            end_offset = o;
+            kind = TokenKind::Arrow;
+        }
+
+        // FatArrow
+        ('=', '>') => {
+            let (o, _) = stream.next().unwrap();
+            end_offset = o;
+            kind = TokenKind::FatArrow;
+        }
+
+        // (Open/Close)Angle
+        ('<', _) => kind = TokenKind::OpenAngle,
+        ('>', _) => kind = TokenKind::CloseAngle,
+
+        // (Open/Close)Curly
+        ('{', _) => kind = TokenKind::OpenCurly,
+        ('}', _) => kind = TokenKind::CloseCurly,
 
         // Unknown
         (c, _) => {

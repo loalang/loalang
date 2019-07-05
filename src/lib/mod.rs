@@ -5,6 +5,7 @@ pub use std::slice::Iter;
 pub use std::collections::HashMap;
 pub use std::collections::HashSet;
 pub use std::fmt;
+pub use std::borrow::Cow;
 
 extern crate matches;
 use matches::*;

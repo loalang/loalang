@@ -28,7 +28,10 @@ impl Type {
                     )
                 })
                 .collect(),
+
             TypeConstructor::TypeParameter(_) => HashMap::new(),
+
+            TypeConstructor::Unresolved(_) => panic!("Cannot get methods before resolving references"),
         }
     }
 

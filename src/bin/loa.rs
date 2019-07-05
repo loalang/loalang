@@ -3,9 +3,13 @@ use loa::format::Format;
 
 fn main() -> std::io::Result<()> {
     let source = loa::Source::stdin()?;
-    let expression = loa::syntax::Parser::new(&source).parse_expression();
-    expression.map(|exp| {
-        println!("{}", &exp as &Format);
-    });
+    loa::syntax::Parser::new(&source)
+        .parse_class()
+        .map(|e| {
+            loa::semantics::Resolver::new().resolve_class(&e)
+        })
+        .map(|e| {
+            println!("{}", &e as &Format);
+        });
     Ok(())
 }
