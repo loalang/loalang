@@ -1,5 +1,5 @@
-use crate::*;
 use crate::semantics::*;
+use crate::*;
 
 #[derive(Clone)]
 pub enum TypeConstructor {
@@ -28,4 +28,3 @@ impl TypeConstructor {
         }
     }
 }
-

@@ -9,7 +9,7 @@ fn main() -> std::io::Result<()> {
             loa::semantics::Resolver::new().resolve_class(&e)
         })
         .map(|e| {
-            println!("{}", &e as &Format);
+            println!("{}", &e as &dyn Format);
         });
     Ok(())
 }

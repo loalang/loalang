@@ -39,7 +39,7 @@ impl Resolver {
                 let message = semantics::Message {
                     selector: semantics::Symbol(
                         args.iter()
-                            .map(|(k, _)| (k as &format::Format).to_string())
+                            .map(|(k, _)| (k as &dyn format::Format).to_string())
                             .collect(),
                     ),
                     arguments: args
@@ -110,7 +110,7 @@ impl Resolver {
                         let mut params = vec![];
                         let mut selector = String::new();
                         for (kw, p) in kws.iter() {
-                            selector.push_str((kw as &format::Format).to_string().as_ref());
+                            selector.push_str((kw as &dyn format::Format).to_string().as_ref());
                             params.push(self.resolve_pattern(p));
                         }
                         signature = semantics::Signature {
@@ -230,13 +230,13 @@ mod tests {
                 .parse_method()
                 .unwrap(),
         );
-        (&method as &format::Format).to_string();
+        (&method as &dyn format::Format).to_string();
     }
 
     fn assert_parses_resolves_and_formats_class(s: &str) {
         let method = Resolver::new()
             .resolve_class(&syntax::Parser::new(&Source::test(s)).parse_class().unwrap());
-        (&method as &format::Format).to_string();
+        (&method as &dyn format::Format).to_string();
     }
 
     #[test]

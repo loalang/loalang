@@ -9,7 +9,7 @@ pub struct FormattingContext {
 }
 
 impl FormattingContext {
-    pub fn one_line(&self, f: &Format) -> bool {
+    pub fn one_line(&self, f: &dyn Format) -> bool {
         self.one_line || (self.line_len + f.format_one_line().len()) < self.max_width
     }
 
@@ -113,7 +113,7 @@ impl<T: Format> Format for Arc<T> {
     }
 }
 
-impl fmt::Display for Format {
+impl fmt::Display for dyn Format {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.format())
     }

@@ -38,3 +38,6 @@ pub use self::variable::*;
 
 mod resolver;
 pub use self::resolver::*;
+
+mod lexical_scope;
+pub use self::lexical_scope::*;

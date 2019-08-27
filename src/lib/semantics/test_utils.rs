@@ -1,6 +1,10 @@
 use crate::semantics::*;
 use crate::*;
 
+pub fn symbol(name: &str) -> Symbol {
+    Symbol(name.into())
+}
+
 pub fn class<F: FnOnce(&mut Class)>(name: &str, f: F) -> Arc<Class> {
     let mut class = Class {
         name: Symbol(name.into()),

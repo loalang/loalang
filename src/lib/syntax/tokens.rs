@@ -1,6 +1,37 @@
 use crate::*;
 use std::fmt;
 
+#[derive(Debug, Clone)]
+pub enum TokenKind {
+    EOF,
+    Unknown(char),
+    Whitespace(String),
+    LineComment(String),
+
+    InKeyword,
+    OutKeyword,
+    InoutKeyword,
+    ClassKeyword,
+    PrivateKeyword,
+    PublicKeyword,
+
+    Plus,
+    Colon,
+    Comma,
+    Period,
+
+    Arrow,
+    FatArrow,
+
+    OpenAngle,
+    CloseAngle,
+    OpenCurly,
+    CloseCurly,
+
+    SimpleInteger(String),
+    SimpleSymbol(String),
+}
+
 #[derive(Clone)]
 pub struct Token {
     pub kind: TokenKind,
@@ -44,35 +75,4 @@ impl fmt::Debug for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.kind.fmt(f)
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum TokenKind {
-    EOF,
-    Unknown(char),
-    Whitespace(String),
-    LineComment(String),
-
-    InKeyword,
-    OutKeyword,
-    InoutKeyword,
-    ClassKeyword,
-    PrivateKeyword,
-    PublicKeyword,
-
-    Plus,
-    Colon,
-    Comma,
-    Period,
-
-    Arrow,
-    FatArrow,
-
-    OpenAngle,
-    CloseAngle,
-    OpenCurly,
-    CloseCurly,
-
-    SimpleInteger(String),
-    SimpleSymbol(String),
 }
