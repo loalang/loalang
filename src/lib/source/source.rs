@@ -27,6 +27,21 @@ impl Source {
         Ok(Self::new(URI::Stdin, code))
     }
 
+    pub fn files<S: AsRef<str>>(s: S) -> io::Result<Vec<Arc<Source>>> {
+        let mut sources = vec![];
+        match glob(s.as_ref()) {
+            Ok(paths) => {
+                for path in paths {
+                    if let Ok(path) = path {
+                        sources.push(Self::file(path)?);
+                    }
+                }
+            }
+            _ => (),
+        }
+        Ok(sources)
+    }
+
     #[cfg(test)]
     pub fn test(code: &str) -> Arc<Source> {
         Self::new(URI::Test, code.into())

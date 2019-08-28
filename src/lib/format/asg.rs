@@ -90,7 +90,10 @@ impl Format for Class {
             if ctx.one_line(self) {
                 ctx.space();
                 for method in self.methods.iter() {
+                    method.visibility.write(ctx);
+                    ctx.space();
                     method.write(ctx);
+                    ctx.putchar('.');
                     ctx.space();
                 }
             } else {

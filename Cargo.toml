@@ -15,3 +15,4 @@ path = "src/bin/loa.rs"
 [dependencies]
 matches = "0.1.8"
 num-bigint = "0.2"
+glob = "0.3.0"

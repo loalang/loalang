@@ -161,10 +161,37 @@ impl<'a> LexicalScope<'a> {
         Just(variable)
     }
 
-    pub fn register_method(&mut self, _method: &Method) {}
+    pub fn register_method(&mut self, method: &Method) {
+        self.register_signature(&method.signature);
+    }
 
-    pub fn resolve_method(&self, method: Method) -> Diagnosed<Method> {
+    pub fn resolve_method(&self, mut method: Method) -> Diagnosed<Method> {
+        method.signature = diagnose!(self.resolve_signature(method.signature));
         Just(method)
+    }
+
+    pub fn register_signature(&mut self, signature: &Signature) {
+        for type_parameter in signature.type_parameters.iter() {
+            self.register_type_parameter(type_parameter);
+        }
+    }
+
+    pub fn resolve_signature(&self, mut signature: Signature) -> Diagnosed<Signature> {
+        for type_parameter in std::mem::replace(&mut signature.type_parameters, vec![]) {
+            signature
+                .type_parameters
+                .push(diagnose!(self.resolve_type_parameter(type_parameter)));
+        }
+
+        for parameter in std::mem::replace(&mut signature.parameters, vec![]) {
+            signature
+                .parameters
+                .push(diagnose!(self.resolve_type(parameter)));
+        }
+
+        signature.return_type = diagnose!(self.resolve_type(signature.return_type));
+
+        Just(signature)
     }
 }
 

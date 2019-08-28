@@ -73,6 +73,9 @@ impl<T> Diagnosed<T> {
                 Failure(d) => diagnostics.extend(d),
             }
         }
+        if diagnostics.len() == 0 {
+            return Just(o);
+        }
         Diagnosis(o, diagnostics)
     }
 
