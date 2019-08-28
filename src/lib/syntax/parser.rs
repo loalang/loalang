@@ -45,6 +45,14 @@ impl Parser {
         }
     }
 
+    pub fn parse_module(&mut self) -> Diagnosed<Module> {
+        let mut classes = vec![];
+        while !sees!(self, EOF) {
+            classes.push(diagnose!(self.parse_class()));
+        }
+        Just(Module(classes))
+    }
+
     pub fn parse_integer(&mut self) -> Diagnosed<Integer> {
         Just(Integer(consume!(self, SimpleInteger(_))))
     }

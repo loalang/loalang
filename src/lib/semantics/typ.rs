@@ -10,7 +10,7 @@ pub struct Type {
 impl Type {
     pub fn callable_methods(&self) -> HashMap<Symbol, Method> {
         match self.constructor {
-            TypeConstructor::Class(ref class) => class
+            TypeConstructor::Class(ref class) => unsafe { &**class }
                 .callable_methods()
                 .into_iter()
                 .map(|(s, m)| {
@@ -31,14 +31,16 @@ impl Type {
 
             TypeConstructor::TypeParameter(_) => HashMap::new(),
 
-            TypeConstructor::Unresolved(_) => panic!("Cannot get methods before resolving references"),
+            TypeConstructor::Unresolved(_) => {
+                panic!("Cannot get methods before resolving references")
+            }
         }
     }
 
     pub fn apply_type_arguments(&self, arguments: &Vec<(Arc<TypeParameter>, Type)>) -> Type {
         if let TypeConstructor::TypeParameter(ref p) = self.constructor {
             for (pp, a) in arguments.iter() {
-                if Arc::ptr_eq(p, pp) {
+                if Arc::into_raw(pp.clone()) == *p {
                     return a.clone();
                 }
             }

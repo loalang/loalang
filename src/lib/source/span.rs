@@ -29,3 +29,13 @@ impl Span {
         Span::over(self.clone(), other.clone())
     }
 }
+
+impl fmt::Display for Span {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}:{}:{}",
+            self.start.source.uri, self.start.line, self.start.character
+        )
+    }
+}

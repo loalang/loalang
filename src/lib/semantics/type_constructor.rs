@@ -5,8 +5,8 @@ use crate::*;
 pub enum TypeConstructor {
     Unresolved(Symbol),
 
-    Class(Arc<Class>),
-    TypeParameter(Arc<TypeParameter>),
+    Class(*const Class),
+    TypeParameter(*const TypeParameter),
 }
 
 impl TypeConstructor {
@@ -14,8 +14,8 @@ impl TypeConstructor {
         match self {
             TypeConstructor::Unresolved(s) => &s,
 
-            TypeConstructor::Class(class) => &class.name,
-            TypeConstructor::TypeParameter(param) => &param.name,
+            TypeConstructor::Class(class) => unsafe { &(**class).name },
+            TypeConstructor::TypeParameter(param) => unsafe { &(**param).name },
         }
     }
 
@@ -23,8 +23,10 @@ impl TypeConstructor {
         match self {
             TypeConstructor::Unresolved(_) => Cow::Owned(vec![]),
 
-            TypeConstructor::Class(class) => Cow::Borrowed(&class.type_parameters),
-            TypeConstructor::TypeParameter(param) => Cow::Borrowed(&param.type_parameters),
+            TypeConstructor::Class(class) => Cow::Borrowed(unsafe { &(**class).type_parameters }),
+            TypeConstructor::TypeParameter(param) => {
+                Cow::Borrowed(unsafe { &(**param).type_parameters })
+            }
         }
     }
 }

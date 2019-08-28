@@ -52,6 +52,30 @@ impl<T> Diagnosed<T> {
         }
     }
 
+    pub fn report(&self, reporter: &dyn Reporter) {
+        match self {
+            Just(_) => (),
+            Diagnosis(_, d) => reporter.report(d),
+            Failure(d) => reporter.report(d),
+        }
+    }
+
+    pub fn extract_flat_map<U, F: Fn(T) -> Diagnosed<U>>(input: Vec<T>, f: F) -> Diagnosed<Vec<U>> {
+        let mut diagnostics = vec![];
+        let mut o = vec![];
+        for i in input {
+            match f(i) {
+                Just(u) => o.push(u),
+                Diagnosis(u, d) => {
+                    diagnostics.extend(d);
+                    o.push(u);
+                }
+                Failure(d) => diagnostics.extend(d),
+            }
+        }
+        Diagnosis(o, diagnostics)
+    }
+
     #[cfg(test)]
     pub fn unwrap(self) -> T {
         match self {

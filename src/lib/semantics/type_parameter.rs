@@ -1,5 +1,5 @@
-use crate::*;
 use crate::semantics::*;
+use crate::*;
 
 pub struct TypeParameter {
     pub constraint: Type,
@@ -13,4 +13,3 @@ pub enum Variance {
     Covariant,
     Contravariant,
 }
-

@@ -7,6 +7,18 @@ impl Resolver {
         Resolver
     }
 
+    pub fn resolve_modules(&mut self, modules: &Vec<syntax::Module>) -> semantics::Program {
+        let mut program = semantics::Program { classes: vec![] };
+
+        for syntax::Module(classes) in modules.iter() {
+            for class in classes.iter() {
+                program.classes.push(self.resolve_class(class));
+            }
+        }
+
+        program
+    }
+
     pub fn resolve_expression(&mut self, cst: &syntax::Expression) -> Arc<semantics::Expression> {
         Arc::new(match cst {
             syntax::Expression::Integer(syntax::Integer(syntax::Token { kind, .. })) => {
@@ -30,7 +42,7 @@ impl Resolver {
             }
             syntax::Expression::MessageSend(box syntax::MessageSend::Binary(receiver, op, arg)) => {
                 let message = semantics::Message {
-                    selector: semantics::Symbol(op.lexeme()),
+                    selector: semantics::Symbol(Some(op.span.clone()), op.lexeme()),
                     arguments: vec![self.resolve_expression(arg)],
                 };
                 semantics::Expression::MessageSend(self.resolve_expression(receiver), message)
@@ -38,6 +50,7 @@ impl Resolver {
             syntax::Expression::MessageSend(box syntax::MessageSend::Keyword(receiver, args)) => {
                 let message = semantics::Message {
                     selector: semantics::Symbol(
+                        Some(cst.span()),
                         args.iter()
                             .map(|(k, _)| (k as &dyn format::Format).to_string())
                             .collect(),
@@ -56,7 +69,7 @@ impl Resolver {
         &mut self,
         syntax::Identifier(t): &syntax::Identifier,
     ) -> semantics::Symbol {
-        semantics::Symbol(t.lexeme())
+        semantics::Symbol(Some(t.span.clone()), t.lexeme())
     }
 
     pub fn resolve_method(
@@ -99,7 +112,7 @@ impl Resolver {
                         let param = self.resolve_pattern(param);
                         signature = semantics::Signature {
                             type_parameters,
-                            selector: semantics::Symbol(op.lexeme()),
+                            selector: semantics::Symbol(Some(op.span.clone()), op.lexeme()),
                             parameters: vec![param.typ()],
                             return_type,
                         };
@@ -115,7 +128,7 @@ impl Resolver {
                         }
                         signature = semantics::Signature {
                             type_parameters,
-                            selector: semantics::Symbol(selector),
+                            selector: semantics::Symbol(Some(message_pattern.span()), selector),
                             parameters: params.iter().map(|p| p.typ()).collect(),
                             return_type,
                         };

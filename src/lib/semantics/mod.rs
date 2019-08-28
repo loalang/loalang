@@ -3,6 +3,9 @@ mod test_utils;
 #[cfg(test)]
 pub use self::test_utils::*;
 
+mod program;
+pub use self::program::*;
+
 mod class;
 pub use self::class::*;
 

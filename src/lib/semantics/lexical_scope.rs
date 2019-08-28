@@ -24,14 +24,14 @@ pub struct LexicalScope<'a> {
 
 impl<'a> LexicalScope<'a> {
     pub fn new() -> LexicalScope<'a> {
-        Self::new_(None)
+        Self::with_parent(None)
     }
 
-    fn inner(outer: &'a LexicalScope<'a>) -> LexicalScope<'a> {
-        Self::new_(Some(outer))
+    fn inner(&'a self) -> LexicalScope<'a> {
+        Self::with_parent(Some(self))
     }
 
-    fn new_(parent: Option<&'a LexicalScope<'a>>) -> LexicalScope<'a> {
+    fn with_parent(parent: Option<&'a LexicalScope<'a>>) -> LexicalScope<'a> {
         LexicalScope {
             parent,
             type_constructors: vec![],
@@ -48,15 +48,30 @@ impl<'a> LexicalScope<'a> {
         IterOrChain::Iter(iter)
     }
 
-    pub fn register_class(&mut self, class: &Arc<Class>) {
-        self.type_constructors
-            .push(TypeConstructor::Class(class.clone()));
+    pub fn register_program(&mut self, program: &Program) {
+        for class in program.classes.iter() {
+            self.register_class(class);
+        }
     }
 
-    pub fn resolve_class(&self, mut class: Arc<Class>) -> Arc<Class> {
+    pub fn resolve_program(&self, mut program: Program) -> Diagnosed<Program> {
+        Just(Program {
+            classes: diagnose!(Diagnosed::extract_flat_map(
+                std::mem::replace(&mut program.classes, vec![]),
+                |class| self.resolve_class(class),
+            )),
+        })
+    }
+
+    pub fn register_class(&mut self, class: &Arc<Class>) {
+        self.type_constructors
+            .push(TypeConstructor::Class(&**class as *const Class));
+    }
+
+    pub fn resolve_class(&self, mut class: Arc<Class>) -> Diagnosed<Arc<Class>> {
         {
             let class = Arc::get_mut(&mut class).unwrap();
-            let mut class_scope = LexicalScope::inner(self);
+            let mut class_scope = self.inner();
 
             for param in class.type_parameters.iter() {
                 class_scope.register_type_parameter(param);
@@ -73,59 +88,83 @@ impl<'a> LexicalScope<'a> {
             for param in std::mem::replace(&mut class.type_parameters, vec![]) {
                 class
                     .type_parameters
-                    .push(class_scope.resolve_type_parameter(param));
+                    .push(diagnose!(class_scope.resolve_type_parameter(param)));
             }
 
             for super_type in std::mem::replace(&mut class.super_types, vec![]) {
-                class.super_types.push(class_scope.resolve_type(super_type));
+                class
+                    .super_types
+                    .push(diagnose!(class_scope.resolve_type(super_type)));
             }
 
             for variable in std::mem::replace(&mut class.variables, vec![]) {
-                class.variables.push(class_scope.resolve_variable(variable));
+                class
+                    .variables
+                    .push(diagnose!(class_scope.resolve_variable(variable)));
             }
 
             for method in std::mem::replace(&mut class.methods, vec![]) {
-                class.methods.push(class_scope.resolve_method(method));
+                class
+                    .methods
+                    .push(diagnose!(class_scope.resolve_method(method)));
             }
         }
 
-        class
+        Just(class)
     }
 
-    pub fn register_type_parameter(&mut self, _param: &Arc<TypeParameter>) {}
-
-    pub fn resolve_type_parameter(&self, param: Arc<TypeParameter>) -> Arc<TypeParameter> {
-        param
+    pub fn register_type_parameter(&mut self, param: &Arc<TypeParameter>) {
+        self.type_constructors.push(TypeConstructor::TypeParameter(
+            &**param as *const TypeParameter,
+        ));
     }
 
-    pub fn resolve_type(&self, typ: Type) -> Type {
+    pub fn resolve_type_parameter(
+        &self,
+        mut param: Arc<TypeParameter>,
+    ) -> Diagnosed<Arc<TypeParameter>> {
+        {
+            let param = Arc::get_mut(&mut param).unwrap();
+
+            param.constraint = diagnose!(self.resolve_type(param.constraint.clone()));
+            for hk in std::mem::replace(&mut param.type_parameters, vec![]) {
+                param
+                    .type_parameters
+                    .push(diagnose!(self.resolve_type_parameter(hk)));
+            }
+        }
+        Just(param)
+    }
+
+    pub fn resolve_type(&self, typ: Type) -> Diagnosed<Type> {
         if let TypeConstructor::Unresolved(ref name) = typ.constructor {
             for available_constructor in self.type_constructors() {
                 if available_constructor.name() == name {
-                    return Type {
+                    let mut t = Type {
                         constructor: available_constructor.clone(),
-                        arguments: typ
-                            .arguments
-                            .into_iter()
-                            .map(|a| self.resolve_type(a))
-                            .collect(),
+                        arguments: vec![],
                     };
+                    for a in typ.arguments.into_iter() {
+                        t.arguments.push(diagnose!(self.resolve_type(a)));
+                    }
+                    return Just(t);
                 }
             }
+            return Failure(vec![Diagnostic::UndefinedSymbol(name.clone())]);
         }
-        typ
+        Just(typ)
     }
 
     pub fn register_variable(&mut self, _variable: &Arc<Variable>) {}
 
-    pub fn resolve_variable(&self, variable: Arc<Variable>) -> Arc<Variable> {
-        variable
+    pub fn resolve_variable(&self, variable: Arc<Variable>) -> Diagnosed<Arc<Variable>> {
+        Just(variable)
     }
 
     pub fn register_method(&mut self, _method: &Method) {}
 
-    pub fn resolve_method(&self, method: Method) -> Method {
-        method
+    pub fn resolve_method(&self, method: Method) -> Diagnosed<Method> {
+        Just(method)
     }
 }
 
@@ -145,11 +184,42 @@ mod tests {
 
         scope.register_class(&class);
 
-        let typ = scope.resolve_type(typ);
+        let typ = scope.resolve_type(typ).unwrap();
 
         match typ.constructor {
-            TypeConstructor::Class(ref c) if Arc::ptr_eq(&class, c) => (),
+            TypeConstructor::Class(ref c) if Arc::into_raw(class) == *c => (),
             _ => panic!("The resolved type did not receive the correct constructor"),
+        }
+    }
+
+    #[test]
+    fn circular_reference() {
+        let type_x = Type {
+            constructor: TypeConstructor::Unresolved(symbol("X")),
+            arguments: vec![],
+        };
+        let type_y = Type {
+            constructor: TypeConstructor::Unresolved(symbol("Y")),
+            arguments: vec![],
+        };
+
+        let class_x = class("X", |c| c.super_types.push(type_y));
+        let class_y = class("Y", |c| c.super_types.push(type_x));
+
+        let mut scope = LexicalScope::new();
+        scope.register_class(&class_x);
+        scope.register_class(&class_y);
+
+        let class_x = scope.resolve_class(class_x).unwrap();
+        let class_y = scope.resolve_class(class_y).unwrap();
+
+        match class_x.super_types[0].constructor {
+            TypeConstructor::Class(ref c) if &*class_y as *const Class == *c => (),
+            _ => panic!("class X's super type was not resolved to Y correctly"),
+        }
+        match class_y.super_types[0].constructor {
+            TypeConstructor::Class(ref c) if &*class_x as *const Class == *c => (),
+            _ => panic!("class Y's super type was not resolved to X correctly"),
         }
     }
 }

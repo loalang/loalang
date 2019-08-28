@@ -1,6 +1,15 @@
 use crate::format::*;
 use crate::semantics::*;
 
+impl Format for Program {
+    fn write(&self, ctx: &mut FormattingContext) {
+        for class in self.classes.iter() {
+            class.write(ctx);
+            ctx.break_line();
+        }
+    }
+}
+
 impl Format for Expression {
     fn write(&self, ctx: &mut FormattingContext) {
         match self {
@@ -76,30 +85,34 @@ impl Format for Class {
             tp.write(ctx);
         });
 
-        ctx.putstr(" {");
-        if ctx.one_line(self) {
-            ctx.space();
-            for method in self.methods.iter() {
-                method.write(ctx);
+        if self.methods.len() > 0 {
+            ctx.putstr(" {");
+            if ctx.one_line(self) {
                 ctx.space();
-            }
-        } else if self.methods.len() > 0 {
-            ctx.indent(|ctx| {
-                ctx.break_line();
-                for (i, method) in self.methods.iter().enumerate() {
-                    if i > 0 {
-                        ctx.break_line();
-                        ctx.break_line();
-                    }
-                    method.visibility.write(ctx);
-                    ctx.space();
+                for method in self.methods.iter() {
                     method.write(ctx);
-                    ctx.putchar('.');
+                    ctx.space();
                 }
-            });
-            ctx.break_line();
+            } else {
+                ctx.indent(|ctx| {
+                    ctx.break_line();
+                    for (i, method) in self.methods.iter().enumerate() {
+                        if i > 0 {
+                            ctx.break_line();
+                            ctx.break_line();
+                        }
+                        method.visibility.write(ctx);
+                        ctx.space();
+                        method.write(ctx);
+                        ctx.putchar('.');
+                    }
+                });
+                ctx.break_line();
+            }
+            ctx.putchar('}');
+        } else {
+            ctx.putchar('.');
         }
-        ctx.putchar('}');
     }
 }
 
@@ -114,7 +127,7 @@ impl Format for Visibility {
 
 impl Format for Symbol {
     fn write(&self, ctx: &mut FormattingContext) {
-        let Symbol(s) = self;
+        let Symbol(_, s) = self;
         ctx.putstr(s);
     }
 }
@@ -279,6 +292,9 @@ impl Format for Pattern {
 
 impl Format for Type {
     fn write(&self, ctx: &mut FormattingContext) {
+        if let TypeConstructor::Unresolved(ref name) = self.constructor {
+            panic!("Unresolved: {}", name);
+        }
         self.constructor.name().write(ctx);
         ctx.type_var_list(&self.arguments, |ctx, a| {
             a.write(ctx);

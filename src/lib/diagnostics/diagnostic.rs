@@ -1,8 +1,20 @@
-use crate::syntax::*;
+use crate::*;
 use std::fmt;
 
 pub enum Diagnostic {
-    UnexpectedToken(Token, String),
+    UnexpectedToken(syntax::Token, String),
+    UndefinedSymbol(semantics::Symbol),
+}
+
+impl Diagnostic {
+    pub fn span(&self) -> Option<Span> {
+        use Diagnostic::*;
+
+        match self {
+            UnexpectedToken(t, _) => Some(t.span.clone()),
+            UndefinedSymbol(semantics::Symbol(s, _)) => s.clone(),
+        }
+    }
 }
 
 impl fmt::Debug for Diagnostic {
@@ -10,7 +22,11 @@ impl fmt::Debug for Diagnostic {
         use Diagnostic::*;
 
         match self {
-            UnexpectedToken(token, expected) => write!(f, "Unexpected {:?}; expected {}", token, expected)
+            UnexpectedToken(token, expected) => {
+                write!(f, "Unexpected {:?}; expected {}.", token, expected)
+            }
+
+            UndefinedSymbol(symbol) => write!(f, "`{}` is undefined.", symbol),
         }
     }
 }

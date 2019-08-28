@@ -2,12 +2,12 @@ use crate::semantics::*;
 use crate::*;
 
 pub fn symbol(name: &str) -> Symbol {
-    Symbol(name.into())
+    Symbol(None, name.into())
 }
 
 pub fn class<F: FnOnce(&mut Class)>(name: &str, f: F) -> Arc<Class> {
     let mut class = Class {
-        name: Symbol(name.into()),
+        name: Symbol(None, name.into()),
         type_parameters: vec![],
         super_types: vec![],
         variables: vec![],
@@ -19,14 +19,14 @@ pub fn class<F: FnOnce(&mut Class)>(name: &str, f: F) -> Arc<Class> {
 
 pub fn class_type(class: Arc<Class>) -> Type {
     Type {
-        constructor: TypeConstructor::Class(class),
+        constructor: TypeConstructor::Class(Arc::into_raw(class)),
         arguments: vec![],
     }
 }
 
 pub fn type_parameter_type(type_parameter: Arc<TypeParameter>) -> Type {
     Type {
-        constructor: TypeConstructor::TypeParameter(type_parameter),
+        constructor: TypeConstructor::TypeParameter(Arc::into_raw(type_parameter)),
         arguments: vec![],
     }
 }
@@ -39,7 +39,7 @@ pub fn partial_unary_method(selector: &str, return_type: Type) -> Method {
     Method {
         visibility: Visibility::Public,
         signature: Signature {
-            selector: Symbol(selector.into()),
+            selector: Symbol(None, selector.into()),
             type_parameters: vec![],
             parameters: vec![],
             return_type,
@@ -55,7 +55,7 @@ pub fn type_parameter<F: FnOnce(&mut TypeParameter)>(
 ) -> Arc<TypeParameter> {
     let mut param = TypeParameter {
         constraint,
-        name: Symbol(name.into()),
+        name: Symbol(None, name.into()),
         type_parameters: vec![],
         variance: Variance::Invariant,
     };
