@@ -52,6 +52,7 @@ pub struct Keyword(pub Identifier, pub Token);
 pub enum Expression {
     Integer(Integer),
     MessageSend(Box<MessageSend>),
+    Reference(Identifier),
 }
 
 impl Expression {
@@ -59,6 +60,7 @@ impl Expression {
         match self {
             Expression::Integer(i) => i.span(),
             Expression::MessageSend(s) => s.span(),
+            Expression::Reference(i) => i.span(),
         }
     }
 }

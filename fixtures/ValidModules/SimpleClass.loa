@@ -1,0 +1,3 @@
+class SimpleClass {
+    public method: SimpleClass object -> SimpleClass => object.
+}

@@ -47,7 +47,17 @@ impl<T> Diagnosed<T> {
     pub fn flat_map<U, F: FnOnce(T) -> Diagnosed<U>>(self, f: F) -> Diagnosed<U> {
         match self {
             Just(t) => f(t),
-            Diagnosis(t, d) => diagnose!(d, f(t)),
+            Diagnosis(t, d) => match f(t) {
+                Just(tt) => Diagnosis(tt, d),
+                Diagnosis(tt, mut dd) => {
+                    dd.extend(d);
+                    Diagnosis(tt, dd)
+                }
+                Failure(mut dd) => {
+                    dd.extend(d);
+                    Failure(dd)
+                }
+            },
             Failure(d) => Failure(d),
         }
     }

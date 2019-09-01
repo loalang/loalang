@@ -1,5 +1,5 @@
-use crate::*;
 use crate::semantics::*;
+use crate::*;
 
 #[derive(Clone)]
 pub struct Method {
@@ -25,8 +25,8 @@ impl Method {
 #[derive(Clone)]
 pub enum MethodImplementation {
     Body(Vec<Pattern>, Arc<Expression>),
-    VariableGetter(Arc<Variable>),
-    VariableSetter(Arc<Variable>),
+    VariableGetter(*const Variable),
+    VariableSetter(*const Variable),
 }
 
 #[derive(Clone)]

@@ -19,7 +19,9 @@ impl<'a, T> Iterator for IterOrChain<'a, T> {
 
 pub struct LexicalScope<'a> {
     parent: Option<&'a LexicalScope<'a>>,
-    type_constructors: Vec<TypeConstructor>,
+    classes: Vec<*const Class>,
+    type_parameters: Vec<*const TypeParameter>,
+    bindings: Vec<*const Binding>,
 }
 
 impl<'a> LexicalScope<'a> {
@@ -34,18 +36,51 @@ impl<'a> LexicalScope<'a> {
     fn with_parent(parent: Option<&'a LexicalScope<'a>>) -> LexicalScope<'a> {
         LexicalScope {
             parent,
-            type_constructors: vec![],
+            classes: vec![],
+            type_parameters: vec![],
+            bindings: vec![],
         }
     }
 
-    fn type_constructors(&self) -> IterOrChain<TypeConstructor> {
-        let iter = self.type_constructors.iter();
+    fn classes(&self) -> IterOrChain<*const Class> {
+        let iter = self.classes.iter();
 
         if let Some(ref parent) = self.parent {
-            return IterOrChain::Chain(iter.chain(Box::new(parent.type_constructors())));
+            return IterOrChain::Chain(iter.chain(Box::new(parent.classes())));
         }
 
         IterOrChain::Iter(iter)
+    }
+
+    fn type_parameters(&self) -> IterOrChain<*const TypeParameter> {
+        let iter = self.type_parameters.iter();
+
+        if let Some(ref parent) = self.parent {
+            return IterOrChain::Chain(iter.chain(Box::new(parent.type_parameters())));
+        }
+
+        IterOrChain::Iter(iter)
+    }
+
+    fn bindings(&self) -> IterOrChain<*const Binding> {
+        let iter = self.bindings.iter();
+
+        if let Some(ref parent) = self.parent {
+            return IterOrChain::Chain(iter.chain(Box::new(parent.bindings())));
+        }
+
+        IterOrChain::Iter(iter)
+    }
+
+    fn type_constructors(&self) -> Vec<TypeConstructor> {
+        let mut o = vec![];
+        for c in self.classes() {
+            o.push(TypeConstructor::Class(*c))
+        }
+        for t in self.type_parameters() {
+            o.push(TypeConstructor::TypeParameter(*t))
+        }
+        o
     }
 
     pub fn register_program(&mut self, program: &Program) {
@@ -64,8 +99,7 @@ impl<'a> LexicalScope<'a> {
     }
 
     pub fn register_class(&mut self, class: &Arc<Class>) {
-        self.type_constructors
-            .push(TypeConstructor::Class(&**class as *const Class));
+        self.classes.push(&**class as *const Class);
     }
 
     pub fn resolve_class(&self, mut class: Arc<Class>) -> Diagnosed<Arc<Class>> {
@@ -114,9 +148,7 @@ impl<'a> LexicalScope<'a> {
     }
 
     pub fn register_type_parameter(&mut self, param: &Arc<TypeParameter>) {
-        self.type_constructors.push(TypeConstructor::TypeParameter(
-            &**param as *const TypeParameter,
-        ));
+        self.type_parameters.push(&**param as *const TypeParameter);
     }
 
     pub fn resolve_type_parameter(
@@ -163,10 +195,17 @@ impl<'a> LexicalScope<'a> {
 
     pub fn register_method(&mut self, method: &Method) {
         self.register_signature(&method.signature);
+        if let Some(ref implementation) = method.implementation {
+            self.register_method_implementation(implementation);
+        }
     }
 
     pub fn resolve_method(&self, mut method: Method) -> Diagnosed<Method> {
         method.signature = diagnose!(self.resolve_signature(method.signature));
+        if let Some(implementation) = method.implementation {
+            method.implementation =
+                Some(diagnose!(self.resolve_method_implementation(implementation)));
+        }
         Just(method)
     }
 
@@ -192,6 +231,79 @@ impl<'a> LexicalScope<'a> {
         signature.return_type = diagnose!(self.resolve_type(signature.return_type));
 
         Just(signature)
+    }
+
+    pub fn register_method_implementation(&mut self, _implementation: &MethodImplementation) {}
+
+    pub fn resolve_method_implementation(
+        &self,
+        implementation: MethodImplementation,
+    ) -> Diagnosed<MethodImplementation> {
+        match implementation {
+            MethodImplementation::Body(patterns, body) => {
+                let mut method_scope = self.inner();
+                for pattern in patterns.iter() {
+                    method_scope.register_pattern(pattern);
+                }
+                method_scope.register_expression(&body);
+
+                Just(MethodImplementation::Body(
+                    diagnose!(Diagnosed::extract_flat_map(patterns, |pattern| {
+                        method_scope.resolve_pattern(pattern)
+                    })),
+                    diagnose!(method_scope.resolve_expression(body)),
+                ))
+            }
+            m => Just(m),
+        }
+    }
+
+    pub fn register_pattern(&mut self, pattern: &Pattern) {
+        match pattern {
+            Pattern::Binding(binding) => self.register_binding(binding),
+        }
+    }
+
+    pub fn resolve_pattern(&self, pattern: Pattern) -> Diagnosed<Pattern> {
+        Just(pattern)
+    }
+
+    pub fn register_binding(&mut self, binding: &Arc<Binding>) {
+        self.bindings.push(&**binding as *const _);
+    }
+
+    pub fn register_expression(&mut self, _expression: &Arc<Expression>) {}
+
+    pub fn resolve_expression(&self, expression: Arc<Expression>) -> Diagnosed<Arc<Expression>> {
+        Just(match &*expression {
+            Expression::Integer(_) => expression,
+            Expression::MessageSend(rcv, message) => Arc::new(Expression::MessageSend(
+                diagnose!(self.resolve_expression(rcv.clone())),
+                diagnose!(self.resolve_message(message.clone())),
+            )),
+            Expression::Reference(reference) => Arc::new(Expression::Reference(diagnose!(
+                self.resolve_reference(reference.clone())
+            ))),
+        })
+    }
+
+    pub fn resolve_message(&self, message: Message) -> Diagnosed<Message> {
+        Just(message)
+    }
+
+    pub fn resolve_reference(&self, reference: Reference) -> Diagnosed<Reference> {
+        match reference {
+            Reference::Unresolved(s) => {
+                for binding in self.bindings() {
+                    let Binding(_, ss) = unsafe { &**binding };
+                    if *ss == s {
+                        return Just(Reference::Binding(*binding));
+                    }
+                }
+                return Failure(vec![Diagnostic::UndefinedSymbol(s)]);
+            }
+            r => Just(r),
+        }
     }
 }
 
@@ -247,6 +359,53 @@ mod tests {
         match class_y.super_types[0].constructor {
             TypeConstructor::Class(ref c) if &*class_x as *const Class == *c => (),
             _ => panic!("class Y's super type was not resolved to X correctly"),
+        }
+    }
+
+    #[test]
+    fn integration() {
+        let mut parser = syntax::Parser::new(&Source::test(
+            r#"
+            class X<Y y> {
+              public <y y'> y -> X => 123.
+            }
+            class Y<X x>.
+            "#,
+        ));
+        let module = parser.parse_module().unwrap();
+        let program = Resolver::new().resolve_modules(&vec![module]);
+        let mut global_scope = LexicalScope::new();
+        global_scope.register_program(&program);
+        let program = global_scope.resolve_program(program).unwrap();
+
+        let class_x = &program.classes[0];
+        let class_y = &program.classes[1];
+
+        let type_parameter_y = &class_x.type_parameters[0];
+
+        assert_eq!(program.classes.len(), 2);
+        match type_parameter_y.constraint.constructor {
+            TypeConstructor::Class(c) => assert_eq!(unsafe { &*c }.name.to_string(), "Y"),
+            _ => panic!("Expected a class type constructor"),
+        }
+        match class_y.type_parameters[0].constraint.constructor {
+            TypeConstructor::Class(c) => assert_eq!(unsafe { &*c }.name.to_string(), "X"),
+            _ => panic!("Expected a class type constructor"),
+        }
+
+        match class_x
+            .callable_methods()
+            .get(&symbol("y"))
+            .unwrap()
+            .signature
+            .type_parameters[0]
+            .constraint
+            .constructor
+        {
+            TypeConstructor::TypeParameter(p) => {
+                assert_eq!(p, &**type_parameter_y as *const TypeParameter)
+            }
+            _ => panic!("Expected a type parameter type constructor"),
         }
     }
 }

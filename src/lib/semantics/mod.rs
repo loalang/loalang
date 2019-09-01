@@ -39,6 +39,9 @@ pub use self::pattern::*;
 mod variable;
 pub use self::variable::*;
 
+mod reference;
+pub use self::reference::*;
+
 mod resolver;
 pub use self::resolver::*;
 

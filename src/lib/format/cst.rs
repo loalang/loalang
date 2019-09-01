@@ -114,6 +114,7 @@ impl Format for Expression {
         match self {
             Expression::Integer(i) => i.write(ctx),
             Expression::MessageSend(i) => i.write(ctx),
+            Expression::Reference(i) => i.write(ctx),
         }
     }
 }

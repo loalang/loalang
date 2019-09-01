@@ -33,6 +33,10 @@ impl Resolver {
                 }
             }
 
+            syntax::Expression::Reference(id) => semantics::Expression::Reference(
+                semantics::Reference::Unresolved(self.resolve_identifier(id)),
+            ),
+
             syntax::Expression::MessageSend(box syntax::MessageSend::Unary(receiver, id)) => {
                 let message = semantics::Message {
                     selector: self.resolve_identifier(id),
@@ -150,10 +154,12 @@ impl Resolver {
 
     pub fn resolve_pattern(&mut self, pattern: &syntax::Pattern) -> semantics::Pattern {
         match pattern {
-            syntax::Pattern::Binding(t, i) => semantics::Pattern::Binding(
-                self.resolve_type(t.as_ref().expect("TODO: INFER BINDING TYPE")),
-                self.resolve_identifier(i),
-            ),
+            syntax::Pattern::Binding(t, i) => {
+                semantics::Pattern::Binding(Arc::new(semantics::Binding(
+                    self.resolve_type(t.as_ref().expect("TODO: INFER BINDING TYPE")),
+                    self.resolve_identifier(i),
+                )))
+            }
         }
     }
 

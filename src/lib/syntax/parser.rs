@@ -66,7 +66,11 @@ impl Parser {
     }
 
     fn parse_leaf_expression(&mut self) -> Diagnosed<Expression> {
-        Just(Expression::Integer(diagnose!(self.parse_integer())))
+        if sees!(self, SimpleSymbol(_)) {
+            Just(Expression::Reference(diagnose!(self.parse_identifier())))
+        } else {
+            Just(Expression::Integer(diagnose!(self.parse_integer())))
+        }
     }
 
     fn parse_potential_unary(&mut self, receiver: Expression) -> Diagnosed<Expression> {

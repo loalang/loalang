@@ -33,7 +33,14 @@ impl Format for Expression {
                 }
                 ctx.putchar(')');
             }
+            Expression::Reference(r) => r.write(ctx),
         }
+    }
+}
+
+impl Format for Reference {
+    fn write(&self, ctx: &mut FormattingContext) {
+        self.symbol().write(ctx)
     }
 }
 
@@ -284,7 +291,8 @@ impl Format for Signature {
 impl Format for Pattern {
     fn write(&self, ctx: &mut FormattingContext) {
         match self {
-            Pattern::Binding(t, id) => {
+            Pattern::Binding(b) => {
+                let Binding(t, id) = &**b;
                 t.write(ctx);
                 ctx.space();
                 id.write(ctx);
@@ -295,9 +303,6 @@ impl Format for Pattern {
 
 impl Format for Type {
     fn write(&self, ctx: &mut FormattingContext) {
-        if let TypeConstructor::Unresolved(ref name) = self.constructor {
-            panic!("Unresolved: {}", name);
-        }
         self.constructor.name().write(ctx);
         ctx.type_var_list(&self.arguments, |ctx, a| {
             a.write(ctx);
