@@ -62,11 +62,17 @@ impl<T> Diagnosed<T> {
         }
     }
 
-    pub fn report(&self, reporter: &dyn Reporter) {
+    pub fn report(self, reporter: &dyn Reporter) -> Option<T> {
         match self {
-            Just(_) => (),
-            Diagnosis(_, d) => reporter.report(d),
-            Failure(d) => reporter.report(d),
+            Just(t) => Some(t),
+            Diagnosis(t, d) => {
+                reporter.report(&d);
+                Some(t)
+            }
+            Failure(d) => {
+                reporter.report(&d);
+                None
+            }
         }
     }
 

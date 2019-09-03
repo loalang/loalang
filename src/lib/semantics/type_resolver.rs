@@ -2,12 +2,14 @@ use crate::semantics::*;
 use crate::*;
 
 pub struct TypeResolver {
+    pub diagnostics: Vec<Diagnostic>,
     types: HashMap<*const Expression, Type>,
 }
 
 impl TypeResolver {
     pub fn new() -> TypeResolver {
         TypeResolver {
+            diagnostics: vec![],
             types: HashMap::new(),
         }
     }
@@ -55,7 +57,9 @@ impl TypeResolver {
                             return;
                         }
                     }
-                    panic!("`{}` doesn't respond to `{}`.", t, m.selector);
+                    self.diagnostics
+                        .push(Diagnostic::MissingBehaviour(t.clone(), m.selector.clone()));
+                    return;
                 }
             }
 

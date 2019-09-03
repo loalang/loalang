@@ -1,7 +1,7 @@
 use crate::semantics::*;
 use crate::*;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Type {
     pub constructor: TypeConstructor,
     pub arguments: Vec<Type>,

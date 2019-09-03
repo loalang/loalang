@@ -265,11 +265,21 @@ impl<'a> LexicalScope<'a> {
     }
 
     pub fn resolve_pattern(&self, pattern: Pattern) -> Diagnosed<Pattern> {
-        Just(pattern)
+        Just(match pattern {
+            Pattern::Binding(binding) => Pattern::Binding(diagnose!(self.resolve_binding(binding))),
+        })
     }
 
     pub fn register_binding(&mut self, binding: &Arc<Binding>) {
         self.bindings.push(&**binding as *const _);
+    }
+
+    pub fn resolve_binding(&self, mut binding: Arc<Binding>) -> Diagnosed<Arc<Binding>> {
+        {
+            let mut binding = Arc::get_mut(&mut binding).unwrap();
+            binding.0 = diagnose!(self.resolve_type(binding.0.clone()));
+        }
+        Just(binding)
     }
 
     pub fn register_expression(&mut self, _expression: &Arc<Expression>) {}
@@ -287,7 +297,10 @@ impl<'a> LexicalScope<'a> {
         })
     }
 
-    pub fn resolve_message(&self, message: Message) -> Diagnosed<Message> {
+    pub fn resolve_message(&self, mut message: Message) -> Diagnosed<Message> {
+        message.arguments = diagnose!(Diagnosed::extract_flat_map(message.arguments, |arg| {
+            self.resolve_expression(arg)
+        }));
         Just(message)
     }
 

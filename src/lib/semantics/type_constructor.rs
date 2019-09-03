@@ -1,7 +1,7 @@
 use crate::semantics::*;
 use crate::*;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum TypeConstructor {
     Unresolved(Symbol),
 

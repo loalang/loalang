@@ -11,13 +11,14 @@ fn main() -> std::io::Result<()> {
         global_scope.register_program(&p);
         global_scope.resolve_program(p)
     })
-    .map(|p| {
+    .flat_map(|p| {
         let mut resolver = loa::semantics::TypeResolver::new();
         resolver.resolve_program(&p);
-        p
+        loa::Diagnosed::Diagnosis(p, resolver.diagnostics)
     })
     .map(|p| {
         println!("{}", &p as &dyn Format);
+        p
     })
     .report(&loa::BasicReporter);
     Ok(())

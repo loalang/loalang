@@ -4,6 +4,7 @@ use std::fmt;
 pub enum Diagnostic {
     UnexpectedToken(syntax::Token, String),
     UndefinedSymbol(semantics::Symbol),
+    MissingBehaviour(semantics::Type, semantics::Symbol),
 }
 
 impl Diagnostic {
@@ -13,6 +14,7 @@ impl Diagnostic {
         match self {
             UnexpectedToken(t, _) => Some(t.span.clone()),
             UndefinedSymbol(semantics::Symbol(s, _)) => s.clone(),
+            MissingBehaviour(_, semantics::Symbol(s, _)) => s.clone(),
         }
     }
 }
@@ -27,6 +29,10 @@ impl fmt::Debug for Diagnostic {
             }
 
             UndefinedSymbol(symbol) => write!(f, "`{}` is undefined.", symbol),
+
+            MissingBehaviour(typ, symbol) => {
+                write!(f, "`{}` doesn't respond to `{}`.", typ, symbol)
+            }
         }
     }
 }

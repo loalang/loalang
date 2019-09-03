@@ -1,3 +1,7 @@
 class SimpleClass {
-    public method: SimpleClass object -> SimpleClass => object.
+  public method: SimpleClass object -> SimpleClass =>
+    object identify: object.
+
+  public identity: SimpleClass object -> SimpleClass =>
+    object.
 }
