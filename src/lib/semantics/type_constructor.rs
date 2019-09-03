@@ -7,6 +7,8 @@ pub enum TypeConstructor {
 
     Class(*const Class),
     TypeParameter(*const TypeParameter),
+
+    UnresolvedInteger,
 }
 
 impl TypeConstructor {
@@ -16,6 +18,8 @@ impl TypeConstructor {
 
             TypeConstructor::Class(class) => unsafe { &(**class).name },
             TypeConstructor::TypeParameter(param) => unsafe { &(**param).name },
+
+            TypeConstructor::UnresolvedInteger => panic!("Unresolved integer has no name."),
         }
     }
 
@@ -27,6 +31,8 @@ impl TypeConstructor {
             TypeConstructor::TypeParameter(param) => {
                 Cow::Borrowed(unsafe { &(**param).type_parameters })
             }
+
+            TypeConstructor::UnresolvedInteger => Cow::Owned(vec![]),
         }
     }
 }

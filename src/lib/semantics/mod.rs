@@ -47,3 +47,6 @@ pub use self::resolver::*;
 
 mod lexical_scope;
 pub use self::lexical_scope::*;
+
+mod type_resolver;
+pub use self::type_resolver::*;

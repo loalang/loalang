@@ -31,7 +31,14 @@ impl Type {
 
             TypeConstructor::TypeParameter(_) => HashMap::new(),
 
-            TypeConstructor::Unresolved(_) => {
+            TypeConstructor::Unresolved(Symbol(Some(ref span), ref s)) => panic!(
+                "{} @ {}: Cannot get methods before resolving references",
+                s, span
+            ),
+            TypeConstructor::Unresolved(Symbol(None, ref s)) => {
+                panic!("{}: Cannot get methods before resolving references", s);
+            }
+            TypeConstructor::UnresolvedInteger => {
                 panic!("Cannot get methods before resolving references")
             }
         }

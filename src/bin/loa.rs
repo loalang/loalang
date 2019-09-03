@@ -12,6 +12,11 @@ fn main() -> std::io::Result<()> {
         global_scope.resolve_program(p)
     })
     .map(|p| {
+        let mut resolver = loa::semantics::TypeResolver::new();
+        resolver.resolve_program(&p);
+        p
+    })
+    .map(|p| {
         println!("{}", &p as &dyn Format);
     })
     .report(&loa::BasicReporter);
