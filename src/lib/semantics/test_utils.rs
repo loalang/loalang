@@ -8,6 +8,7 @@ pub fn symbol(name: &str) -> Symbol {
 pub fn class<F: FnOnce(&mut Class)>(name: &str, f: F) -> Arc<Class> {
     let mut class = Class {
         name: Symbol(None, name.into()),
+        qualified_name: name.into(),
         type_parameters: vec![],
         super_types: vec![],
         variables: vec![],

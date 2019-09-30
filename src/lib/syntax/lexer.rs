@@ -113,6 +113,8 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
                 "class" => kind = TokenKind::ClassKeyword,
                 "private" => kind = TokenKind::PrivateKeyword,
                 "public" => kind = TokenKind::PublicKeyword,
+                "namespace" => kind = TokenKind::NamespaceKeyword,
+                "self" => kind = TokenKind::SelfKeyword,
 
                 lexeme => kind = TokenKind::SimpleSymbol(lexeme.into()),
             }
@@ -129,6 +131,9 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
 
         // Period
         ('.', _) => kind = TokenKind::Period,
+
+        // Slash
+        ('/', _) => kind = TokenKind::Slash,
 
         // Arrow
         ('-', '>') => {

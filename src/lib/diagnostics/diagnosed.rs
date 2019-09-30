@@ -9,10 +9,23 @@ pub enum Diagnosed<T> {
     Failure(Vec<Diagnostic>),
 }
 
+impl<T> Diagnosed<T> {
+    pub fn maybe_diagnosis(t: T, diagnostics: Vec<Diagnostic>) -> Diagnosed<T> {
+        if diagnostics.len() == 0 {
+            Just(t)
+        } else {
+            Diagnosis(t, diagnostics)
+        }
+    }
+}
+
 macro_rules! diagnose {
     ($diagnosed: expr) => {
         match $diagnosed {
             Just(t) => t,
+            #[cfg(test)]
+            Diagnosis(_, _) => panic!("Lost possibility for recovering!"),
+            #[cfg(not(test))]
             Diagnosis(_, d) => return Failure(d),
             Failure(d) => return Failure(d),
         }
@@ -20,16 +33,14 @@ macro_rules! diagnose {
 
     ($diagnostics: expr, $diagnosed: expr) => {
         match $diagnosed {
-            Just(t) => Just(t),
+            Just(t) => t,
             Diagnosis(t, d) => {
-                let mut dd = $diagnostics;
-                dd.extend(d);
-                Diagnosis(t, dd)
+                $diagnostics.extend(d);
+                t
             }
             Failure(d) => {
-                let mut dd = $diagnostics;
-                dd.extend(d);
-                Failure(dd)
+                $diagnostics.extend(d);
+                return Failure($diagnostics);
             }
         }
     };
@@ -93,6 +104,33 @@ impl<T> Diagnosed<T> {
             return Just(o);
         }
         Diagnosis(o, diagnostics)
+    }
+
+    pub fn diagnostics<F: FnOnce(Vec<Diagnostic>) -> ()>(self, f: F) -> Option<T> {
+        match self {
+            Just(t) => {
+                f(vec![]);
+                Some(t)
+            }
+            Diagnosis(t, v) => {
+                f(v);
+                Some(t)
+            }
+            Failure(v) => {
+                f(v);
+                None
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub fn print(self) -> Self {
+        match self {
+            Just(_) => println!("Just []"),
+            Diagnosis(_, ref d) => println!("Diagnosis {:?}", d),
+            Failure(ref d) => println!("Failure {:?}", d),
+        }
+        self
     }
 
     #[cfg(test)]

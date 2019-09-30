@@ -19,6 +19,12 @@ impl Diagnostic {
     }
 }
 
+impl ToString for Diagnostic {
+    fn to_string(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
 impl fmt::Debug for Diagnostic {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Diagnostic::*;

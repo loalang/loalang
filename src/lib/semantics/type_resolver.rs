@@ -33,7 +33,7 @@ impl TypeResolver {
     }
 
     pub fn resolve_expression(&mut self, expression: &Arc<Expression>) {
-        match &**expression {
+        match expression.as_ref() {
             i @ Expression::Integer(_) => {
                 self.types.insert(
                     i as *const Expression,
@@ -53,7 +53,7 @@ impl TypeResolver {
                     for (s, mt) in t.callable_methods() {
                         if s == m.selector {
                             self.types
-                                .insert(&**expression as *const _, mt.signature.return_type);
+                                .insert(expression.as_ref() as *const _, mt.signature.return_type);
                             return;
                         }
                     }
@@ -63,9 +63,20 @@ impl TypeResolver {
                 }
             }
 
+            Expression::SelfExpression(_, class) => {
+                self.types.insert(
+                    expression.as_ref() as *const _,
+                    Type {
+                        constructor: TypeConstructor::SelfType(*class),
+                        arguments: vec![], // TODO: Make types referencing all type params for the class.
+                    },
+                );
+            }
+
             Expression::Reference(Reference::Unresolved(_)) => (),
 
             Expression::Reference(Reference::Class(c)) => {
+                // TODO: Class constructor types
                 self.types.insert(
                     &**expression as *const _,
                     Type {

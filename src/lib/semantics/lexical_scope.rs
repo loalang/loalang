@@ -90,12 +90,17 @@ impl<'a> LexicalScope<'a> {
     }
 
     pub fn resolve_program(&self, mut program: Program) -> Diagnosed<Program> {
-        Just(Program {
-            classes: diagnose!(Diagnosed::extract_flat_map(
-                std::mem::replace(&mut program.classes, vec![]),
-                |class| self.resolve_class(class),
-            )),
-        })
+        let mut diagnostics = vec![];
+        let program = Program {
+            classes: diagnose!(
+                diagnostics,
+                Diagnosed::extract_flat_map(
+                    std::mem::replace(&mut program.classes, vec![]),
+                    |class| self.resolve_class(class),
+                )
+            ),
+        };
+        Diagnosed::maybe_diagnosis(program, diagnostics)
     }
 
     pub fn register_class(&mut self, class: &Arc<Class>) {
@@ -103,6 +108,7 @@ impl<'a> LexicalScope<'a> {
     }
 
     pub fn resolve_class(&self, mut class: Arc<Class>) -> Diagnosed<Arc<Class>> {
+        let mut diagnostics = vec![];
         {
             let class = Arc::get_mut(&mut class).unwrap();
             let mut class_scope = self.inner();
@@ -120,31 +126,33 @@ impl<'a> LexicalScope<'a> {
             }
 
             for param in std::mem::replace(&mut class.type_parameters, vec![]) {
-                class
-                    .type_parameters
-                    .push(diagnose!(class_scope.resolve_type_parameter(param)));
+                class.type_parameters.push(diagnose!(
+                    diagnostics,
+                    class_scope.resolve_type_parameter(param)
+                ));
             }
 
             for super_type in std::mem::replace(&mut class.super_types, vec![]) {
                 class
                     .super_types
-                    .push(diagnose!(class_scope.resolve_type(super_type)));
+                    .push(diagnose!(diagnostics, class_scope.resolve_type(super_type)));
             }
 
             for variable in std::mem::replace(&mut class.variables, vec![]) {
-                class
-                    .variables
-                    .push(diagnose!(class_scope.resolve_variable(variable)));
+                class.variables.push(diagnose!(
+                    diagnostics,
+                    class_scope.resolve_variable(variable)
+                ));
             }
 
             for method in std::mem::replace(&mut class.methods, vec![]) {
                 class
                     .methods
-                    .push(diagnose!(class_scope.resolve_method(method)));
+                    .push(diagnose!(diagnostics, class_scope.resolve_method(method)));
             }
         }
 
-        Just(class)
+        Diagnosed::maybe_diagnosis(class, diagnostics)
     }
 
     pub fn register_type_parameter(&mut self, param: &Arc<TypeParameter>) {
@@ -170,19 +178,28 @@ impl<'a> LexicalScope<'a> {
 
     pub fn resolve_type(&self, typ: Type) -> Diagnosed<Type> {
         if let TypeConstructor::Unresolved(ref name) = typ.constructor {
+            let mut t = Type {
+                constructor: TypeConstructor::Unresolved(name.clone()),
+                arguments: vec![],
+            };
+            let mut defined = false;
             for available_constructor in self.type_constructors() {
                 if available_constructor.name() == name {
-                    let mut t = Type {
+                    t = Type {
                         constructor: available_constructor.clone(),
                         arguments: vec![],
                     };
-                    for a in typ.arguments.into_iter() {
-                        t.arguments.push(diagnose!(self.resolve_type(a)));
-                    }
-                    return Just(t);
+                    defined = true;
                 }
             }
-            return Failure(vec![Diagnostic::UndefinedSymbol(name.clone())]);
+            for a in typ.arguments.into_iter() {
+                t.arguments.push(diagnose!(self.resolve_type(a)));
+            }
+            if defined {
+                return Just(t);
+            } else {
+                return Diagnosis(t, vec![Diagnostic::UndefinedSymbol(name.clone())]);
+            }
         }
         Just(typ)
     }
@@ -201,12 +218,15 @@ impl<'a> LexicalScope<'a> {
     }
 
     pub fn resolve_method(&self, mut method: Method) -> Diagnosed<Method> {
-        method.signature = diagnose!(self.resolve_signature(method.signature));
+        let mut diagnostics = vec![];
+        method.signature = diagnose!(diagnostics, self.resolve_signature(method.signature));
         if let Some(implementation) = method.implementation {
-            method.implementation =
-                Some(diagnose!(self.resolve_method_implementation(implementation)));
+            method.implementation = Some(diagnose!(
+                diagnostics,
+                self.resolve_method_implementation(implementation)
+            ));
         }
-        Just(method)
+        Diagnosed::maybe_diagnosis(method, diagnostics)
     }
 
     pub fn register_signature(&mut self, signature: &Signature) {
@@ -216,21 +236,24 @@ impl<'a> LexicalScope<'a> {
     }
 
     pub fn resolve_signature(&self, mut signature: Signature) -> Diagnosed<Signature> {
+        let mut diagnostics = vec![];
+
         for type_parameter in std::mem::replace(&mut signature.type_parameters, vec![]) {
-            signature
-                .type_parameters
-                .push(diagnose!(self.resolve_type_parameter(type_parameter)));
+            signature.type_parameters.push(diagnose!(
+                diagnostics,
+                self.resolve_type_parameter(type_parameter)
+            ));
         }
 
         for parameter in std::mem::replace(&mut signature.parameters, vec![]) {
             signature
                 .parameters
-                .push(diagnose!(self.resolve_type(parameter)));
+                .push(diagnose!(diagnostics, self.resolve_type(parameter)));
         }
 
-        signature.return_type = diagnose!(self.resolve_type(signature.return_type));
+        signature.return_type = diagnose!(diagnostics, self.resolve_type(signature.return_type));
 
-        Just(signature)
+        Diagnosed::maybe_diagnosis(signature, diagnostics)
     }
 
     pub fn register_method_implementation(&mut self, _implementation: &MethodImplementation) {}
@@ -241,18 +264,23 @@ impl<'a> LexicalScope<'a> {
     ) -> Diagnosed<MethodImplementation> {
         match implementation {
             MethodImplementation::Body(patterns, body) => {
+                let mut diagnostics = vec![];
                 let mut method_scope = self.inner();
                 for pattern in patterns.iter() {
                     method_scope.register_pattern(pattern);
                 }
                 method_scope.register_expression(&body);
 
-                Just(MethodImplementation::Body(
-                    diagnose!(Diagnosed::extract_flat_map(patterns, |pattern| {
-                        method_scope.resolve_pattern(pattern)
-                    })),
-                    diagnose!(method_scope.resolve_expression(body)),
-                ))
+                let body = MethodImplementation::Body(
+                    diagnose!(
+                        diagnostics,
+                        Diagnosed::extract_flat_map(patterns, |pattern| {
+                            method_scope.resolve_pattern(pattern)
+                        })
+                    ),
+                    diagnose!(diagnostics, method_scope.resolve_expression(body)),
+                );
+                Diagnosed::maybe_diagnosis(body, diagnostics)
             }
             m => Just(m),
         }
@@ -285,16 +313,20 @@ impl<'a> LexicalScope<'a> {
     pub fn register_expression(&mut self, _expression: &Arc<Expression>) {}
 
     pub fn resolve_expression(&self, expression: Arc<Expression>) -> Diagnosed<Arc<Expression>> {
-        Just(match &*expression {
+        let mut diagnostics = vec![];
+        let exp = match &*expression {
             Expression::Integer(_) => expression,
             Expression::MessageSend(rcv, message) => Arc::new(Expression::MessageSend(
-                diagnose!(self.resolve_expression(rcv.clone())),
-                diagnose!(self.resolve_message(message.clone())),
+                diagnose!(diagnostics, self.resolve_expression(rcv.clone())),
+                diagnose!(diagnostics, self.resolve_message(message.clone())),
             )),
             Expression::Reference(reference) => Arc::new(Expression::Reference(diagnose!(
+                diagnostics,
                 self.resolve_reference(reference.clone())
             ))),
-        })
+            Expression::SelfExpression(_, _) => expression,
+        };
+        Diagnosed::maybe_diagnosis(exp, diagnostics)
     }
 
     pub fn resolve_message(&self, mut message: Message) -> Diagnosed<Message> {
@@ -313,7 +345,10 @@ impl<'a> LexicalScope<'a> {
                         return Just(Reference::Binding(*binding));
                     }
                 }
-                return Failure(vec![Diagnostic::UndefinedSymbol(s)]);
+                return Diagnosis(
+                    Reference::Unresolved(s.clone()),
+                    vec![Diagnostic::UndefinedSymbol(s)],
+                );
             }
             r => Just(r),
         }

@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use std::fmt;
+use std::path::PathBuf;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum URI {
     #[cfg(test)]
     Test,

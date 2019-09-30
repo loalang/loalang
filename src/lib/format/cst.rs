@@ -28,6 +28,27 @@ impl Format for Identifier {
     }
 }
 
+impl Format for NamespaceDirective {
+    fn write(&self, ctx: &mut FormattingContext) {
+        ctx.putstr("namespace ");
+        self.1.write(ctx);
+        ctx.putchar('.');
+        ctx.break_line();
+        ctx.break_line();
+    }
+}
+
+impl Format for QualifiedIdentifier {
+    fn write(&self, ctx: &mut FormattingContext) {
+        for (i, id) in self.0.iter().enumerate() {
+            if i > 0 {
+                ctx.putchar('/');
+            }
+            id.write(ctx);
+        }
+    }
+}
+
 impl<T: Format> Format for Keyworded<T> {
     fn write(&self, ctx: &mut FormattingContext) {
         for (i, (keyword, value)) in self.iter().enumerate() {
@@ -112,6 +133,7 @@ impl Format for Keyword {
 impl Format for Expression {
     fn write(&self, ctx: &mut FormattingContext) {
         match self {
+            Expression::SelfExpression(_) => ctx.putstr("self"),
             Expression::Integer(i) => i.write(ctx),
             Expression::MessageSend(i) => i.write(ctx),
             Expression::Reference(i) => i.write(ctx),

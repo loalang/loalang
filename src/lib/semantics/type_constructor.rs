@@ -5,6 +5,7 @@ use crate::*;
 pub enum TypeConstructor {
     Unresolved(Symbol),
 
+    SelfType(*const Class),
     Class(*const Class),
     TypeParameter(*const TypeParameter),
 
@@ -14,6 +15,7 @@ pub enum TypeConstructor {
 impl TypeConstructor {
     pub fn name(&self) -> &Symbol {
         match self {
+            TypeConstructor::SelfType(class) => unsafe { &(**class).name },
             TypeConstructor::Unresolved(s) => &s,
 
             TypeConstructor::Class(class) => unsafe { &(**class).name },
@@ -25,6 +27,7 @@ impl TypeConstructor {
 
     pub fn type_parameters(&self) -> Cow<Vec<Arc<TypeParameter>>> {
         match self {
+            TypeConstructor::SelfType(_) => Cow::Owned(vec![]),
             TypeConstructor::Unresolved(_) => Cow::Owned(vec![]),
 
             TypeConstructor::Class(class) => Cow::Borrowed(unsafe { &(**class).type_parameters }),

@@ -3,6 +3,7 @@ use crate::*;
 
 pub struct Class {
     pub name: Symbol,
+    pub qualified_name: String,
     pub type_parameters: Vec<Arc<TypeParameter>>,
     pub super_types: Vec<Type>,
     pub variables: Vec<Arc<Variable>>,

@@ -33,24 +33,54 @@ pub struct Parser {
 }
 
 impl Parser {
+    pub fn parse_modules(sources: Vec<Arc<Source>>) -> Diagnosed<Vec<Module>> {
+        Diagnosed::extract_flat_map(sources, |s| Parser::new(&s).parse_module())
+    }
+
     pub fn new(source: &Arc<Source>) -> Parser {
+        Parser::from_tokens(
+            tokenize(source.clone())
+                .into_iter()
+                .filter(|t| !matches!(t.kind, LineComment(_) | Whitespace(_)))
+                .collect(),
+        )
+    }
+
+    pub fn from_tokens(tokens: Vec<Token>) -> Parser {
         Parser {
             offset: 0,
-            tokens: Arc::new(
-                tokenize(source.clone())
-                    .into_iter()
-                    .filter(|t| !matches!(t.kind, LineComment(_) | Whitespace(_)))
-                    .collect(),
-            ),
+            tokens: Arc::new(tokens),
         }
     }
 
     pub fn parse_module(&mut self) -> Diagnosed<Module> {
+        let namespace_directive = diagnose!(self.parse_namespace_directive());
         let mut classes = vec![];
         while !sees!(self, EOF) {
             classes.push(diagnose!(self.parse_class()));
         }
-        Just(Module(classes))
+        Just(Module(namespace_directive, classes))
+    }
+
+    pub fn parse_namespace_directive(&mut self) -> Diagnosed<NamespaceDirective> {
+        Just(NamespaceDirective(
+            consume!(self, NamespaceKeyword),
+            diagnose!(self.parse_qualified_identifier()),
+            consume!(self, Period),
+        ))
+    }
+
+    pub fn parse_qualified_identifier(&mut self) -> Diagnosed<QualifiedIdentifier> {
+        let mut identifiers = vec![];
+        loop {
+            identifiers.push(diagnose!(self.parse_identifier()));
+            if sees!(self, Slash) {
+                consume!(self, Slash);
+                continue;
+            }
+            break;
+        }
+        Just(QualifiedIdentifier(identifiers))
     }
 
     pub fn parse_integer(&mut self) -> Diagnosed<Integer> {
@@ -66,7 +96,9 @@ impl Parser {
     }
 
     fn parse_leaf_expression(&mut self) -> Diagnosed<Expression> {
-        if sees!(self, SimpleSymbol(_)) {
+        if sees!(self, SelfKeyword) {
+            Just(Expression::SelfExpression(consume!(self, SelfKeyword)))
+        } else if sees!(self, SimpleSymbol(_)) {
             Just(Expression::Reference(diagnose!(self.parse_identifier())))
         } else {
             Just(Expression::Integer(diagnose!(self.parse_integer())))

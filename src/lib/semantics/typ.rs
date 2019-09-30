@@ -10,6 +10,8 @@ pub struct Type {
 impl Type {
     pub fn callable_methods(&self) -> HashMap<Symbol, Method> {
         match self.constructor {
+            TypeConstructor::SelfType(ref class) => unsafe { &**class }.callable_methods(),
+
             TypeConstructor::Class(ref class) => unsafe { &**class }
                 .callable_methods()
                 .into_iter()

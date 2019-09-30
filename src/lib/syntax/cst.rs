@@ -2,7 +2,13 @@ use crate::syntax::*;
 use crate::*;
 
 #[derive(Debug)]
-pub struct Module(pub Vec<Class>);
+pub struct Module(pub NamespaceDirective, pub Vec<Class>);
+
+#[derive(Debug)]
+pub struct NamespaceDirective(pub Token, pub QualifiedIdentifier, pub Token);
+
+#[derive(Debug)]
+pub struct QualifiedIdentifier(pub Vec<Identifier>);
 
 #[derive(Debug)]
 pub struct Integer(pub Token);
@@ -53,6 +59,7 @@ pub enum Expression {
     Integer(Integer),
     MessageSend(Box<MessageSend>),
     Reference(Identifier),
+    SelfExpression(Token),
 }
 
 impl Expression {
@@ -61,6 +68,7 @@ impl Expression {
             Expression::Integer(i) => i.span(),
             Expression::MessageSend(s) => s.span(),
             Expression::Reference(i) => i.span(),
+            Expression::SelfExpression(t) => t.span.clone(),
         }
     }
 }

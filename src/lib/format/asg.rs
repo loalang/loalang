@@ -13,6 +13,7 @@ impl Format for Program {
 impl Format for Expression {
     fn write(&self, ctx: &mut FormattingContext) {
         match self {
+            Expression::SelfExpression(_, _) => ctx.putstr("self"),
             Expression::Integer(i) => ctx.putstr(if i < &100000.into() {
                 format!("{}", i.to_str_radix(10))
             } else {

@@ -14,11 +14,14 @@ pub enum TokenKind {
     ClassKeyword,
     PrivateKeyword,
     PublicKeyword,
+    NamespaceKeyword,
+    SelfKeyword,
 
     Plus,
     Colon,
     Comma,
     Period,
+    Slash,
 
     Arrow,
     FatArrow,
@@ -52,11 +55,14 @@ impl Token {
             ClassKeyword => "class".into(),
             PrivateKeyword => "private".into(),
             PublicKeyword => "public".into(),
+            NamespaceKeyword => "namespace".into(),
+            SelfKeyword => "self".into(),
 
             Plus => "+".into(),
             Colon => ":".into(),
             Comma => ",".into(),
             Period => ".".into(),
+            Slash => "/".into(),
 
             Arrow => "->".into(),
             FatArrow => "=>".into(),

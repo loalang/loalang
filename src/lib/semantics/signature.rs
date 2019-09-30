@@ -1,5 +1,5 @@
-use crate::*;
 use crate::semantics::*;
+use crate::*;
 
 #[derive(Clone)]
 pub struct Signature {
@@ -14,7 +14,11 @@ impl Signature {
         Signature {
             selector: self.selector.clone(),
             type_parameters: self.type_parameters.clone(),
-            parameters: self.parameters.iter().map(|t| t.apply_type_arguments(arguments)).collect(),
+            parameters: self
+                .parameters
+                .iter()
+                .map(|t| t.apply_type_arguments(arguments))
+                .collect(),
             return_type: self.return_type.apply_type_arguments(arguments),
         }
     }
@@ -25,4 +29,3 @@ impl fmt::Display for Signature {
         write!(f, "{} -> {}", self.selector, self.return_type)
     }
 }
-

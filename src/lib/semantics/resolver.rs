@@ -1,19 +1,29 @@
 use crate::*;
+use std::ptr::null;
 
-pub struct Resolver;
+pub struct Resolver {
+    namespace: String,
+    closest_class: *const semantics::Class,
+}
 
 impl Resolver {
     pub fn new() -> Resolver {
-        Resolver
+        Resolver {
+            namespace: String::new(),
+            closest_class: null(),
+        }
     }
 
     pub fn resolve_modules(&mut self, modules: &Vec<syntax::Module>) -> semantics::Program {
         let mut program = semantics::Program { classes: vec![] };
 
-        for syntax::Module(classes) in modules.iter() {
+        for syntax::Module(syntax::NamespaceDirective(_, namespace, _), classes) in modules.iter() {
+            self.namespace
+                .extend(format!("{}", namespace as &dyn format::Format).chars());
             for class in classes.iter() {
                 program.classes.push(self.resolve_class(class));
             }
+            self.namespace.clear()
         }
 
         program
@@ -31,6 +41,10 @@ impl Resolver {
                         vec![0],
                     )),
                 }
+            }
+
+            syntax::Expression::SelfExpression(t) => {
+                semantics::Expression::SelfExpression(t.span.clone(), self.closest_class)
             }
 
             syntax::Expression::Reference(id) => semantics::Expression::Reference(
@@ -198,35 +212,45 @@ impl Resolver {
         &mut self,
         syntax::Class(_, id, tp, body): &syntax::Class,
     ) -> Arc<semantics::Class> {
-        let mut class = semantics::Class {
+        let mut class = Arc::new(semantics::Class {
             name: self.resolve_identifier(id),
-            type_parameters: tp
-                .as_ref()
-                .map(|syntax::TypeParameterList(_, tps, _)| {
-                    tps.iter()
-                        .map(|tp| self.resolve_type_parameter(tp))
-                        .collect()
-                })
-                .unwrap_or(vec![]),
+            qualified_name: format!("{}/{}", self.namespace, id as &dyn format::Format),
+            type_parameters: vec![],
 
             // Class members
             super_types: vec![],
             variables: vec![],
             methods: vec![],
-        };
+        });
+
+        let outer_class = self.closest_class;
+        self.closest_class = class.as_ref() as *const _;
+
+        let mut class_ref = Arc::get_mut(&mut class).unwrap();
+
+        class_ref.type_parameters = tp
+            .as_ref()
+            .map(|syntax::TypeParameterList(_, tps, _)| {
+                tps.iter()
+                    .map(|tp| self.resolve_type_parameter(tp))
+                    .collect()
+            })
+            .unwrap_or(vec![]);
 
         if let syntax::ClassBody::Braced(_, members, _) = body {
             for member in members.iter() {
                 match member {
                     syntax::ClassMember::Method(v, m, _) => {
                         let v = self.resolve_visibility(v);
-                        class.methods.push(self.resolve_method(v, m));
+                        class_ref.methods.push(self.resolve_method(v, m));
                     }
                 }
             }
         }
 
-        Arc::new(class)
+        self.closest_class = outer_class;
+
+        class
     }
 
     pub fn resolve_visibility(&mut self, token: &syntax::Token) -> semantics::Visibility {

@@ -1,0 +1,7 @@
+namespace Fixtures/Self.
+
+class X {
+  public a -> X => self.
+
+  public b -> X => self z. // `X` doesn't respond to `z`.
+}
