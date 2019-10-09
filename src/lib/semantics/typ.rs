@@ -8,6 +8,13 @@ pub struct Type {
 }
 
 impl Type {
+    pub fn unknown() -> Type {
+        Type {
+            constructor: TypeConstructor::Unresolved(Symbol(None, "unknown".into())),
+            arguments: vec![],
+        }
+    }
+
     pub fn callable_methods(&self) -> HashMap<Symbol, Method> {
         match self.constructor {
             TypeConstructor::SelfType(ref class) => unsafe { &**class }.callable_methods(),

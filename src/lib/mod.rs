@@ -34,6 +34,10 @@ pub mod semantics;
 
 pub mod format;
 
+mod compiler;
+
+pub use compiler::*;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,6 +112,8 @@ mod tests {
                 .flat_map(|p| {
                     let mut resolver = semantics::TypeResolver::new();
                     resolver.resolve_program(&p);
+                    let validator = semantics::TypeValidator::from_resolver(&resolver);
+                    diagnose!(resolver.diagnostics, validator.validate_program(&p));
                     Diagnosed::Diagnosis(p, resolver.diagnostics)
                 })
                 .diagnostics(|diagnostics| {

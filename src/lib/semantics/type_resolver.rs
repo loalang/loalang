@@ -3,7 +3,7 @@ use crate::*;
 
 pub struct TypeResolver {
     pub diagnostics: Vec<Diagnostic>,
-    types: HashMap<*const Expression, Type>,
+    pub types: HashMap<*const Expression, Type>,
 }
 
 impl TypeResolver {
@@ -59,6 +59,7 @@ impl TypeResolver {
                     }
                     self.diagnostics
                         .push(Diagnostic::MissingBehaviour(t.clone(), m.selector.clone()));
+                    self.types.insert(expression.as_ref() as *const _, Type::unknown());
                     return;
                 }
             }

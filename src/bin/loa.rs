@@ -1,23 +1,23 @@
 use loa;
-use loa::format::Format;
 
 fn main() -> std::io::Result<()> {
-    loa::syntax::Parser::parse_modules(loa::Source::files("**/*.loa")?)
-        .map(|m| loa::semantics::Resolver::new().resolve_modules(&m))
-        .flat_map(|p| {
-            let mut global_scope = loa::semantics::LexicalScope::new();
-            global_scope.register_program(&p);
-            global_scope.resolve_program(p)
-        })
-        .flat_map(|p| {
-            let mut resolver = loa::semantics::TypeResolver::new();
-            resolver.resolve_program(&p);
-            loa::Diagnosed::Diagnosis(p, resolver.diagnostics)
-        })
-        .map(|p| {
-            println!("{}", &p as &dyn Format);
-            p
-        })
-        .report(&loa::BasicReporter);
-    Ok(())
+    let mut compiler = loa::Compiler::new();
+    let mut sources = vec![];
+    for arg in std::env::args().skip(1) {
+        sources.extend(loa::Source::files(arg)?);
+    }
+    if sources.len() == 0 {
+        println!("No sources.");
+        return Ok(());
+    }
+    match compiler
+        .compile_modules(sources)
+        .report(&loa::BasicReporter)
+    {
+        None => Ok(()),
+        Some(()) => {
+            println!("{}", &compiler.program as &dyn loa::format::Format);
+            Ok(())
+        }
+    }
 }

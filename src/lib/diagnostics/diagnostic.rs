@@ -5,6 +5,7 @@ pub enum Diagnostic {
     UnexpectedToken(syntax::Token, String),
     UndefinedSymbol(semantics::Symbol),
     MissingBehaviour(semantics::Type, semantics::Symbol),
+    UnassignableType(Span, semantics::Type, semantics::Type),
 }
 
 impl Diagnostic {
@@ -15,6 +16,7 @@ impl Diagnostic {
             UnexpectedToken(t, _) => Some(t.span.clone()),
             UndefinedSymbol(semantics::Symbol(s, _)) => s.clone(),
             MissingBehaviour(_, semantics::Symbol(s, _)) => s.clone(),
+            UnassignableType(s, _, _) => s.clone(),
         }
     }
 }
@@ -38,6 +40,10 @@ impl fmt::Debug for Diagnostic {
 
             MissingBehaviour(typ, symbol) => {
                 write!(f, "`{}` doesn't respond to `{}`.", typ, symbol)
+            }
+
+            UnassignableType(_, from, to) => {
+                write!(f, "`{}` cannot act as `{}`.", from, to)
             }
         }
     }

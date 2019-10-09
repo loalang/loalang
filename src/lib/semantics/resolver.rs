@@ -17,16 +17,25 @@ impl Resolver {
     pub fn resolve_modules(&mut self, modules: &Vec<syntax::Module>) -> semantics::Program {
         let mut program = semantics::Program { classes: vec![] };
 
-        for syntax::Module(syntax::NamespaceDirective(_, namespace, _), classes) in modules.iter() {
-            self.namespace
-                .extend(format!("{}", namespace as &dyn format::Format).chars());
-            for class in classes.iter() {
-                program.classes.push(self.resolve_class(class));
-            }
-            self.namespace.clear()
+        for module in modules.iter() {
+            self.resolve_module_into_program(&mut program, module);
         }
 
         program
+    }
+
+    pub fn resolve_module_into_program(
+        &mut self,
+        program: &mut semantics::Program,
+        module: &syntax::Module,
+    ) -> () {
+        let syntax::Module(syntax::NamespaceDirective(_, namespace, _), classes) = module;
+        self.namespace
+            .extend(format!("{}", namespace as &dyn format::Format).chars());
+        for class in classes.iter() {
+            program.classes.push(self.resolve_class(class));
+        }
+        self.namespace.clear()
     }
 
     pub fn resolve_expression(&mut self, cst: &syntax::Expression) -> Arc<semantics::Expression> {

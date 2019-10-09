@@ -19,6 +19,12 @@ impl<T> Diagnosed<T> {
     }
 }
 
+impl Diagnosed<()> {
+    pub fn flush(diagnostics: &mut Vec<Diagnostic>) -> Self {
+        Diagnosed::maybe_diagnosis((), std::mem::replace(diagnostics, vec![]))
+    }
+}
+
 macro_rules! diagnose {
     ($diagnosed: expr) => {
         match $diagnosed {

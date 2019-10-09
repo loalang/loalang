@@ -50,3 +50,6 @@ pub use self::lexical_scope::*;
 
 mod type_resolver;
 pub use self::type_resolver::*;
+
+mod type_validator;
+pub use self::type_validator::*;
