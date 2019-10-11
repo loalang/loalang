@@ -28,14 +28,18 @@ impl Span {
     pub fn through(&self, other: &Span) -> Span {
         Span::over(self.clone(), other.clone())
     }
+
+    pub fn contains_location(&self, location: &Location) -> bool {
+        if self.start.uri != location.uri {
+            return false;
+        }
+
+        self.start.offset <= location.offset && self.end.offset >= location.offset
+    }
 }
 
 impl fmt::Display for Span {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}:{}:{}",
-            self.start.source.uri, self.start.line, self.start.character
-        )
+        write!(f, "{}", self.start)
     }
 }
