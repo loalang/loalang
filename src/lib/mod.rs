@@ -1,5 +1,6 @@
 #![feature(box_patterns, try_trait)]
 
+pub use std::any::Any;
 pub use std::borrow::Cow;
 pub use std::collections::HashMap;
 pub use std::collections::HashSet;
@@ -8,6 +9,10 @@ pub use std::fmt;
 pub use std::future::Future;
 pub use std::slice::Iter;
 pub use std::sync::Arc;
+
+extern crate log;
+
+pub use log::*;
 
 extern crate matches;
 
@@ -37,3 +42,7 @@ pub mod syntax;
 mod program_cell;
 
 pub use self::program_cell::*;
+
+mod references;
+
+pub use self::references::*;

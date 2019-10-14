@@ -6,6 +6,7 @@ pub enum URI {
     #[cfg(test)]
     Test,
 
+    Exact(String),
     File(PathBuf),
     Stdin,
 }
@@ -16,6 +17,7 @@ impl fmt::Display for URI {
             #[cfg(test)]
             URI::Test => write!(f, "test:"),
 
+            URI::Exact(s) => write!(f, "{}", s),
             URI::File(path) => write!(f, "file://{}", path.display()),
             URI::Stdin => write!(f, "stdin:"),
         }

@@ -107,6 +107,7 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
                 }
             }
             match chars.iter().collect::<String>().as_str() {
+                "as" => kind = TokenKind::AsKeyword,
                 "in" => kind = TokenKind::InKeyword,
                 "out" => kind = TokenKind::OutKeyword,
                 "inout" => kind = TokenKind::InoutKeyword,
@@ -115,6 +116,8 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
                 "public" => kind = TokenKind::PublicKeyword,
                 "namespace" => kind = TokenKind::NamespaceKeyword,
                 "self" => kind = TokenKind::SelfKeyword,
+                "import" => kind = TokenKind::ImportKeyword,
+                "export" => kind = TokenKind::ExportKeyword,
 
                 lexeme => kind = TokenKind::SimpleSymbol(lexeme.into()),
             }

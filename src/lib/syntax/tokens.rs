@@ -8,6 +8,7 @@ pub enum TokenKind {
     Whitespace(String),
     LineComment(String),
 
+    AsKeyword,
     InKeyword,
     OutKeyword,
     InoutKeyword,
@@ -16,6 +17,8 @@ pub enum TokenKind {
     PublicKeyword,
     NamespaceKeyword,
     SelfKeyword,
+    ImportKeyword,
+    ExportKeyword,
 
     Plus,
     Colon,
@@ -49,6 +52,7 @@ impl Token {
             EOF => "\0".into(),
             Unknown(c) => c.to_string(),
 
+            AsKeyword => "as".into(),
             InKeyword => "in".into(),
             OutKeyword => "out".into(),
             InoutKeyword => "inout".into(),
@@ -57,6 +61,8 @@ impl Token {
             PublicKeyword => "public".into(),
             NamespaceKeyword => "namespace".into(),
             SelfKeyword => "self".into(),
+            ImportKeyword => "import".into(),
+            ExportKeyword => "export".into(),
 
             Plus => "+".into(),
             Colon => ":".into(),

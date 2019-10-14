@@ -20,6 +20,43 @@ impl Location {
             character: lines.last().unwrap().len() + 1,
         }
     }
+
+    pub fn at_position(source: &Arc<Source>, line: usize, character: usize) -> Location {
+        let mut chars: Vec<char> = source.code.chars().collect();
+        let mut lines: Vec<&mut [char]> = chars.split_mut(|c| *c == '\n').collect();
+        let lines_before = &mut lines[..line];
+        if lines_before.len() == 0 {
+            return Location {
+                uri: source.uri.clone(),
+                offset: 0,
+                line: 1,
+                character: 1,
+            };
+        }
+        let mut new_last_line: Vec<_> = lines_before[lines_before.len() - 1][..character - 1]
+            .iter()
+            .cloned()
+            .collect();
+        lines_before[lines_before.len() - 1] = new_last_line.as_mut_slice();
+
+        let mut offset = 0;
+        for line in lines_before.iter() {
+            for _ in line.iter() {
+                offset += 1;
+            }
+            offset += 1;
+        }
+        if offset > 0 {
+            offset -= 1;
+        }
+
+        Location {
+            uri: source.uri.clone(),
+            offset,
+            line,
+            character,
+        }
+    }
 }
 
 impl fmt::Display for Location {

@@ -25,6 +25,7 @@ impl Diagnosed<()> {
     }
 }
 
+/*
 macro_rules! diagnose {
     ($diagnosed: expr) => {
         match $diagnosed {
@@ -51,6 +52,7 @@ macro_rules! diagnose {
         }
     };
 }
+*/
 
 impl<T> Diagnosed<T> {
     pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Diagnosed<U> {
