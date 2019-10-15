@@ -1,3 +1,4 @@
+use loa::syntax::{MessagePattern, Node, ParameterPattern};
 use loa::Diagnostic;
 use loa::Location;
 use loa::*;
@@ -37,7 +38,9 @@ where
                 document_formatting_provider: None,
                 document_range_formatting_provider: None,
                 document_on_type_formatting_provider: None,
-                rename_provider: Some(RenameProviderCapability::Simple(true)),
+                rename_provider: Some(RenameProviderCapability::Options(RenameOptions {
+                    prepare_provider: Some(true),
+                })),
                 color_provider: None,
                 folding_range_provider: None,
                 execute_command_provider: None,
@@ -103,6 +106,12 @@ where
             "textDocument/definition",
             TextDocumentPositionParams,
             get_definition
+        );
+
+        handle_request!(
+            "textDocument/prepareRename",
+            TextDocumentPositionParams,
+            prepare_rename
         );
 
         handle_request!("textDocument/rename", RenameParams, rename);
@@ -244,21 +253,8 @@ where
             .collect())
     }
 
-    fn location_from_text_document_position_params(
-        &self,
-        params: TextDocumentPositionParams,
-    ) -> Option<Location> {
-        let uri = Self::uri_from_url(&params.text_document.uri);
-        let module_cell = self.program_cell.get(&uri)?;
-        Some(Self::location_from_position(
-            &module_cell.source,
-            params.position,
-        ))
-    }
-
     pub fn rename(&mut self, params: RenameParams) -> Result<WorkspaceEdit, ServerError> {
-        let location =
-            self.location_from_text_document_position_params(params.text_document_position)?;
+        let location = self.location_from_position_params(params.text_document_position)?;
 
         let mut edits = HashMap::new();
         let new_name = params.new_name.clone();
@@ -276,6 +272,22 @@ where
                 });
             }
         };
+
+        {
+            let selection = self.program_cell.pierce(location.clone());
+
+            if let Some(_message_pattern) = selection.first::<MessagePattern>() {
+                if let None = selection.first::<ParameterPattern>() {
+                    return Err(ServerError::Unimplemented(
+                        "Renaming messages are not yet implemented".into(),
+                    ));
+                }
+            }
+        }
+
+        if !syntax::is_valid_symbol(&new_name) {
+            return Err(ServerError::IllegalName(new_name));
+        }
 
         let declaration_selection = self.program_cell.declaration(location.clone());
         let declaration_location = declaration_selection.span()?.start.clone();
@@ -303,14 +315,63 @@ where
             )),
         })
     }
+
+    pub fn prepare_rename(
+        &mut self,
+        params: TextDocumentPositionParams,
+    ) -> Result<PrepareRenameResponse, ServerError> {
+        let location = self.location_from_position_params(params)?;
+        let selection = self.program_cell.pierce(location);
+
+        if let Some(message_pattern) = selection.first::<syntax::MessagePattern>() {
+            if let None = selection.first::<syntax::ParameterPattern>() {
+                return Ok(PrepareRenameResponse::RangeWithPlaceholder {
+                    range: Self::range_from_span(message_pattern.span()?),
+                    placeholder: message_pattern.selector(),
+                });
+            }
+        }
+
+        let symbol = selection.first::<syntax::Symbol>()?;
+        Ok(PrepareRenameResponse::RangeWithPlaceholder {
+            range: Self::range_from_span(symbol.token.span.clone()),
+            placeholder: symbol.to_string(),
+        })
+    }
 }
 
 #[derive(Debug)]
-pub struct ServerError(pub i32, pub String);
+pub enum ServerError {
+    Empty,
+    SerializationFailure,
+    Unimplemented(String),
+
+    IllegalName(String),
+}
 
 impl ServerError {
     pub fn none() -> ServerError {
-        std::option::NoneError.into()
+        ServerError::Empty
+    }
+
+    pub fn code(&self) -> i32 {
+        match self {
+            ServerError::Empty => -1,
+            ServerError::SerializationFailure => -2,
+            ServerError::Unimplemented(_) => -3,
+
+            ServerError::IllegalName(_) => 1,
+        }
+    }
+
+    pub fn message(&self) -> String {
+        match self {
+            ServerError::Empty => "No response available.".into(),
+            ServerError::SerializationFailure => "Failed (de)serialization.".into(),
+            ServerError::Unimplemented(ref s) => s.clone(),
+
+            ServerError::IllegalName(ref s) => format!("`{}` is not a legal name.", s),
+        }
     }
 }
 
@@ -318,18 +379,18 @@ impl Error for ServerError {}
 
 impl fmt::Display for ServerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.1)
+        write!(f, "{}", self.message())
     }
 }
 
 impl From<std::option::NoneError> for ServerError {
     fn from(_: std::option::NoneError) -> Self {
-        ServerError(0, "Empty result".into())
+        ServerError::Empty
     }
 }
 
 impl From<serde_json::Error> for ServerError {
     fn from(_: serde_json::Error) -> Self {
-        ServerError(1, "Failed (un)serialization".into())
+        ServerError::SerializationFailure
     }
 }

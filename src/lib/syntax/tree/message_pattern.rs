@@ -8,6 +8,20 @@ pub enum MessagePattern {
     Keyword(Id, Keyworded<ParameterPattern>),
 }
 
+impl MessagePattern {
+    pub fn selector(&self) -> String {
+        match self {
+            MessagePattern::Unary(_, ref s) => s.to_string(),
+            MessagePattern::Binary(_, ref t, _) => t.lexeme(),
+            MessagePattern::Keyword(_, ref kw) => kw
+                .keywords
+                .iter()
+                .map(|(s, _, _)| s.to_string() + ":")
+                .collect(),
+        }
+    }
+}
+
 impl Node for MessagePattern {
     fn id(&self) -> Option<Id> {
         match self {

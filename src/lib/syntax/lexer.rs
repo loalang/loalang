@@ -5,6 +5,50 @@ use std::str::Chars;
 
 type CharStream<'a> = Peekable<Enumerate<Chars<'a>>>;
 
+pub fn is_valid_symbol(string: &String) -> bool {
+    let source = Source::new(URI::Exact("tmp".into()), string.clone());
+    let tokens = tokenize(source);
+
+    tokens.len() == 1 && matches!(tokens[0].kind, TokenKind::SimpleSymbol(_))
+}
+
+pub fn is_valid_selector(string: &String) -> bool {
+    is_valid_symbol(string) || is_valid_binary_selector(string) || is_valid_keyword_selector(string)
+}
+
+pub fn is_valid_binary_selector(string: &String) -> bool {
+    let source = Source::new(URI::Exact("tmp".into()), string.clone());
+    let tokens = tokenize(source);
+
+    use TokenKind::*;
+
+    tokens.len() == 1 && matches!(tokens[0].kind, Plus | Slash | EqualSign | OpenAngle | CloseAngle)
+}
+
+pub fn is_valid_keyword_selector(string: &String, length: usize) -> bool {
+    let source = Source::new(URI::Exact("tmp".into()), string.clone());
+    let tokens = tokenize(source);
+
+    if tokens.len() != length * 2 {
+        return false;
+    }
+
+    for i in 0..length-1 {
+        let kw_index = i * 2;
+        let colon_index = kw_index + 1;
+
+        if !matches!(tokens[kw_index], SimpleSymbol(_)) {
+            return false;
+        }
+
+        if !matches!(tokens[colon_index], Colon) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 pub fn tokenize(source: Arc<Source>) -> Vec<Token> {
     let mut chars = source.code.chars().enumerate().peekable();
     let mut end_offset = 0;
