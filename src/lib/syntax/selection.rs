@@ -31,6 +31,10 @@ impl<'a> Selection<'a> {
     pub fn span(&self) -> Option<Span> {
         self.nodes.first()?.span()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
 }
 
 impl fmt::Debug for Selection<'_> {

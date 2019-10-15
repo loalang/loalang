@@ -2,13 +2,15 @@ use crate::syntax::*;
 use crate::*;
 
 #[derive(Debug)]
-pub struct MethodBody {
+pub struct Keyworded<T> {
     pub id: Id,
-    pub fat_arrow: Option<Token>,
-    pub expression: Option<Expression>,
+    pub keywords: Vec<(Symbol, Token, T)>,
 }
 
-impl Node for MethodBody {
+impl<T> Node for Keyworded<T>
+where
+    T: 'static + Node,
+{
     fn id(&self) -> Option<Id> {
         Some(self.id)
     }
@@ -21,17 +23,13 @@ impl Node for MethodBody {
         let first_node: &dyn Node;
         let last_node: &dyn Node;
 
-        if let Some(ref n) = self.fat_arrow {
-            first_node = n;
-        } else if let Some(ref n) = self.expression {
+        if let Some((n, _, _)) = self.keywords.first() {
             first_node = n;
         } else {
             return None;
         }
 
-        if let Some(ref n) = self.expression {
-            last_node = n;
-        } else if let Some(ref n) = self.fat_arrow {
+        if let Some((_, _, n)) = self.keywords.last() {
             last_node = n;
         } else {
             last_node = first_node;
@@ -43,8 +41,11 @@ impl Node for MethodBody {
     fn children(&self) -> Vec<&dyn Node> {
         let mut children: Vec<&dyn Node> = vec![];
 
-        push!(children, self.fat_arrow);
-        push!(children, self.expression);
+        for (symbol, token, t) in self.keywords.iter() {
+            children.push(symbol);
+            children.push(token);
+            children.push(t);
+        }
 
         children
     }

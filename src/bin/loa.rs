@@ -10,6 +10,7 @@ extern crate simple_logging;
 use loa::Error;
 use lsp_server::*;
 use lsp_types::*;
+use serde_json::Value;
 
 mod server_handler;
 
@@ -24,7 +25,11 @@ fn main() {
 
     let (conn, _threads) = Connection::stdio();
 
-    let mut handler = server_handler::ServerHandler::new();
+    let mut handler = server_handler::ServerHandler::new(|method, params| {
+        conn.sender
+            .send(Message::Notification(Notification { method, params }))
+            .unwrap();
+    });
     let _initialize_params = init(&conn, &handler.capabilities).unwrap();
 
     loop {
@@ -44,8 +49,8 @@ fn init(
     )?)
 }
 
-fn next(
-    handler: &mut server_handler::ServerHandler,
+fn next<F: Fn(String, Value) -> ()>(
+    handler: &mut server_handler::ServerHandler<F>,
     conn: &Connection,
 ) -> Result<(), Box<dyn Error>> {
     let message = conn.receiver.recv()?;

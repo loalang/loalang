@@ -4,6 +4,7 @@ use crate::*;
 #[derive(Debug)]
 pub struct Class {
     pub id: Id,
+    pub partial_keyword: Option<Token>,
     pub class_keyword: Option<Token>,
     pub symbol: Option<Symbol>,
     pub body: Option<ClassBody>,

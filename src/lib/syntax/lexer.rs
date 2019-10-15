@@ -7,18 +7,22 @@ type CharStream<'a> = Peekable<Enumerate<Chars<'a>>>;
 
 pub fn tokenize(source: Arc<Source>) -> Vec<Token> {
     let mut chars = source.code.chars().enumerate().peekable();
+    let mut end_offset = 0;
     let mut tokens = vec![];
 
     loop {
         match next_token(&source, &mut chars) {
             None => break,
-            Some(token) => tokens.push(token),
+            Some(token) => {
+                end_offset = token.span.end.offset;
+                tokens.push(token)
+            }
         }
     }
 
     tokens.push(Token {
         kind: TokenKind::EOF,
-        span: Span::at_range(&source, 0..0),
+        span: Span::at_range(&source, end_offset..end_offset),
     });
 
     tokens
@@ -84,7 +88,7 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
         }
 
         // SimpleSymbol
-        (n, _) if n.is_alphabetic() => {
+        (n, _) if n.is_alphabetic() || n == '_' => {
             let mut chars = vec![ch];
             loop {
                 match stream.peek() {
@@ -107,8 +111,11 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
                 }
             }
             match chars.iter().collect::<String>().as_str() {
+                "_" => kind = TokenKind::Underscore,
+
                 "as" => kind = TokenKind::AsKeyword,
                 "in" => kind = TokenKind::InKeyword,
+                "is" => kind = TokenKind::IsKeyword,
                 "out" => kind = TokenKind::OutKeyword,
                 "inout" => kind = TokenKind::InoutKeyword,
                 "class" => kind = TokenKind::ClassKeyword,
@@ -118,6 +125,7 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
                 "self" => kind = TokenKind::SelfKeyword,
                 "import" => kind = TokenKind::ImportKeyword,
                 "export" => kind = TokenKind::ExportKeyword,
+                "partial" => kind = TokenKind::PartialKeyword,
 
                 lexeme => kind = TokenKind::SimpleSymbol(lexeme.into()),
             }
@@ -151,6 +159,9 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
             end_offset = o;
             kind = TokenKind::FatArrow;
         }
+
+        // EqualSign
+        ('=', _) => kind = TokenKind::EqualSign,
 
         // (Open/Close)Angle
         ('<', _) => kind = TokenKind::OpenAngle,

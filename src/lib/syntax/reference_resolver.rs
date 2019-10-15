@@ -140,19 +140,76 @@ fn resolve_signature(signature: &Signature, scope: &Scope, references: &mut Refe
     }
 }
 
-fn register_message_pattern(message_pattern: &MessagePattern, _scope: &mut Scope) {
+fn register_message_pattern(message_pattern: &MessagePattern, scope: &mut Scope) {
     match message_pattern {
         MessagePattern::Unary(_, _) => (),
+        MessagePattern::Binary(_, _, p) => register_parameter_pattern(p, scope),
+        MessagePattern::Keyword(_, kw) => register_keyworded(kw, register_parameter_pattern, scope),
     }
 }
 
 fn resolve_message_pattern(
     message_pattern: &MessagePattern,
-    _scope: &Scope,
-    _references: &mut References,
+    scope: &Scope,
+    references: &mut References,
 ) {
     match message_pattern {
         MessagePattern::Unary(_, _) => (),
+        MessagePattern::Binary(_, _, p) => resolve_parameter_pattern(p, scope, references),
+        MessagePattern::Keyword(_, kw) => {
+            resolve_keyworded(kw, resolve_parameter_pattern, scope, references)
+        }
+    }
+}
+
+fn register_keyworded<T, F: Fn(&T, &mut Scope)>(
+    keyworded: &Keyworded<T>,
+    register_item: F,
+    scope: &mut Scope,
+) {
+    for (_, _, item) in keyworded.keywords.iter() {
+        register_item(item, scope);
+    }
+}
+
+fn resolve_keyworded<T, F: Fn(&T, &Scope, &mut References)>(
+    keyworded: &Keyworded<T>,
+    resolve_item: F,
+    scope: &Scope,
+    references: &mut References,
+) {
+    for (_, _, item) in keyworded.keywords.iter() {
+        resolve_item(item, scope, references);
+    }
+}
+
+fn register_parameter_pattern(pattern: &ParameterPattern, scope: &mut Scope) {
+    match pattern {
+        ParameterPattern::Nothing(_, _) => (),
+        ParameterPattern::Parameter(_, t, s) => {
+            if let Some(t) = t {
+                register_type_expression(t, scope);
+            }
+
+            if let Some(s) = s {
+                scope.declare(s);
+            }
+        }
+    }
+}
+
+fn resolve_parameter_pattern(
+    pattern: &ParameterPattern,
+    scope: &Scope,
+    references: &mut References,
+) {
+    match pattern {
+        ParameterPattern::Nothing(_, _) => (),
+        ParameterPattern::Parameter(_, t, _) => {
+            if let Some(t) = t {
+                resolve_type_expression(t, scope, references);
+            }
+        }
     }
 }
 
@@ -168,9 +225,17 @@ fn resolve_return_type(return_type: &ReturnType, scope: &Scope, references: &mut
     }
 }
 
-fn register_method_body(_method_body: &MethodBody, _scope: &mut Scope) {}
+fn register_method_body(method_body: &MethodBody, scope: &mut Scope) {
+    if let Some(ref expression) = method_body.expression {
+        register_expression(expression, scope);
+    }
+}
 
-fn resolve_method_body(_method_body: &MethodBody, _scope: &Scope, _references: &mut References) {}
+fn resolve_method_body(method_body: &MethodBody, scope: &Scope, references: &mut References) {
+    if let Some(ref expression) = method_body.expression {
+        resolve_expression(expression, scope, references);
+    }
+}
 
 fn register_type_expression(type_expression: &TypeExpression, _scope: &mut Scope) {
     match type_expression {
@@ -191,5 +256,17 @@ fn resolve_type_expression(
 fn resolve_reference(symbol: &Symbol, scope: &Scope, references: &mut References) {
     if let Some(d) = scope.refer(symbol) {
         references.register_reference(symbol.id, d);
+    }
+}
+
+fn register_expression(expression: &Expression, _scope: &mut Scope) {
+    match expression {
+        Expression::Reference(_, _) => (),
+    }
+}
+
+fn resolve_expression(expression: &Expression, scope: &Scope, references: &mut References) {
+    match expression {
+        Expression::Reference(_, ref s) => resolve_reference(s, scope, references),
     }
 }

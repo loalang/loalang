@@ -1,6 +1,7 @@
 use crate::*;
 use std::fmt;
 
+#[derive(Clone)]
 pub enum Diagnostic {
     SyntaxError(Span, String),
 }

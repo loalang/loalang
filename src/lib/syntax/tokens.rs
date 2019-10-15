@@ -10,6 +10,7 @@ pub enum TokenKind {
 
     AsKeyword,
     InKeyword,
+    IsKeyword,
     OutKeyword,
     InoutKeyword,
     ClassKeyword,
@@ -19,12 +20,14 @@ pub enum TokenKind {
     SelfKeyword,
     ImportKeyword,
     ExportKeyword,
+    PartialKeyword,
 
     Plus,
     Colon,
     Comma,
     Period,
     Slash,
+    EqualSign,
 
     Arrow,
     FatArrow,
@@ -36,6 +39,8 @@ pub enum TokenKind {
 
     SimpleInteger(String),
     SimpleSymbol(String),
+
+    Underscore,
 }
 
 #[derive(Clone)]
@@ -54,6 +59,7 @@ impl Token {
 
             AsKeyword => "as".into(),
             InKeyword => "in".into(),
+            IsKeyword => "is".into(),
             OutKeyword => "out".into(),
             InoutKeyword => "inout".into(),
             ClassKeyword => "class".into(),
@@ -63,12 +69,14 @@ impl Token {
             SelfKeyword => "self".into(),
             ImportKeyword => "import".into(),
             ExportKeyword => "export".into(),
+            PartialKeyword => "partial".into(),
 
             Plus => "+".into(),
             Colon => ":".into(),
             Comma => ",".into(),
             Period => ".".into(),
             Slash => "/".into(),
+            EqualSign => "=".into(),
 
             Arrow => "->".into(),
             FatArrow => "=>".into(),
@@ -77,6 +85,8 @@ impl Token {
             CloseAngle => ">".into(),
             OpenCurly => "{".into(),
             CloseCurly => "}".into(),
+
+            Underscore => "_".into(),
 
             Whitespace(s) | LineComment(s) | SimpleInteger(s) | SimpleSymbol(s) => s.clone(),
         }

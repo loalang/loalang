@@ -193,11 +193,16 @@ impl Parser {
     pub fn parse_class(&mut self) -> Class {
         let mut class = Class {
             id: Id::new(),
+            partial_keyword: None,
             class_keyword: None,
             symbol: None,
             body: None,
             period: None,
         };
+
+        if sees!(self, PartialKeyword) {
+            class.partial_keyword = Some(self.next());
+        }
 
         if sees!(self, ClassKeyword) {
             class.class_keyword = Some(self.next());
@@ -211,6 +216,10 @@ impl Parser {
             self.syntax_error("Classes must have names.");
         }
 
+        if !sees!(self, OpenCurly | Period) {
+            self.syntax_error("Expected a class body or a period.");
+        }
+
         if sees!(self, OpenCurly) {
             class.body = Some(self.parse_class_body());
         }
@@ -220,10 +229,6 @@ impl Parser {
                 self.syntax_error("A class with a body doesn't need to end with a period.");
             }
             class.period = Some(self.next());
-        }
-
-        if class.body.is_none() && class.period.is_none() {
-            self.syntax_error("Expected a class body or a period.");
         }
 
         class
@@ -271,6 +276,8 @@ impl Parser {
 
         if sees!(self, PublicKeyword | PrivateKeyword) {
             visibility = Some(self.next());
+        } else {
+            self.syntax_error("Methods must be designated as public or private.");
         }
 
         let mut method = Method {
@@ -287,6 +294,8 @@ impl Parser {
 
         if sees!(self, Period) {
             method.period = Some(self.next());
+        } else {
+            self.syntax_error("Methods must be terminated with a period.");
         }
 
         method
@@ -299,7 +308,7 @@ impl Parser {
             return_type: None,
         };
 
-        if sees!(self, SimpleSymbol(_)) {
+        if sees!(self, SimpleSymbol(_)) || self.sees_operator() {
             signature.message_pattern = self.parse_message_pattern();
         } else {
             self.syntax_error("Expected message pattern.");
@@ -338,18 +347,94 @@ impl Parser {
         }
     }
 
+    fn sees_operator(&self) -> bool {
+        sees!(self, Plus | Slash | EqualSign | OpenAngle | CloseAngle)
+    }
+
     pub fn parse_message_pattern(&mut self) -> Option<MessagePattern> {
         if sees!(self, SimpleSymbol(_)) {
-            Some(MessagePattern::Unary(Id::new(), self.parse_symbol()))
+            let symbol = self.parse_symbol();
+            if sees!(self, Colon) {
+                let mut keyworded = Keyworded {
+                    id: Id::new(),
+                    keywords: vec![(symbol, self.next(), self.parse_parameter_pattern())],
+                };
+
+                while sees!(self, SimpleSymbol(_)) {
+                    keyworded.keywords.push((
+                        self.parse_symbol(),
+                        {
+                            if !sees!(self, Colon) {
+                                self.syntax_error("Expected colon.");
+                            }
+                            self.next()
+                        },
+                        self.parse_parameter_pattern(),
+                    ));
+                }
+
+                Some(MessagePattern::Keyword(Id::new(), keyworded))
+            } else {
+                Some(MessagePattern::Unary(Id::new(), symbol))
+            }
+        } else if self.sees_operator() {
+            Some(MessagePattern::Binary(
+                Id::new(),
+                self.next(),
+                self.parse_parameter_pattern(),
+            ))
         } else {
             None
         }
     }
 
     pub fn parse_method_body(&mut self) -> MethodBody {
-        let method_body = MethodBody { id: Id::new() };
+        let mut method_body = MethodBody {
+            id: Id::new(),
+            fat_arrow: None,
+            expression: None,
+        };
+
+        if sees!(self, FatArrow) {
+            method_body.fat_arrow = Some(self.next());
+        } else {
+            self.syntax_error("Expected a method body.");
+        }
+
+        if self.sees_expression() {
+            method_body.expression = self.parse_expression();
+        } else {
+            self.syntax_error("Expected an expression.");
+        }
 
         method_body
+    }
+
+    fn sees_expression(&self) -> bool {
+        sees!(self, SimpleSymbol(_))
+    }
+
+    pub fn parse_expression(&mut self) -> Option<Expression> {
+        if sees!(self, SimpleSymbol(_)) {
+            Some(Expression::Reference(Id::new(), self.parse_symbol()))
+        } else {
+            None
+        }
+    }
+
+    pub fn parse_parameter_pattern(&mut self) -> ParameterPattern {
+        if sees!(self, Underscore) {
+            ParameterPattern::Nothing(Id::new(), self.next())
+        } else if sees!(self, SimpleSymbol(_)) {
+            ParameterPattern::Parameter(
+                Id::new(),
+                self.parse_type_expression(),
+                Some(self.parse_symbol()),
+            )
+        } else {
+            self.syntax_error("Expected a parameter");
+            ParameterPattern::Nothing(Id::new(), self.next())
+        }
     }
 }
 

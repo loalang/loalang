@@ -1,16 +1,22 @@
+use loa::Diagnostic;
 use loa::Location;
 use loa::*;
 use lsp_types::*;
 use serde_json::Value;
 
-pub struct ServerHandler {
+pub struct ServerHandler<F> {
     program_cell: ProgramCell,
     pub capabilities: ServerCapabilities,
+    notify: F,
 }
 
-impl ServerHandler {
-    pub fn new() -> ServerHandler {
+impl<F> ServerHandler<F>
+where
+    F: Fn(String, Value) -> (),
+{
+    pub fn new(notify: F) -> ServerHandler<F> {
         ServerHandler {
+            notify,
             program_cell: ProgramCell::new(),
             capabilities: ServerCapabilities {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
@@ -22,7 +28,7 @@ impl ServerHandler {
                 definition_provider: Some(true),
                 type_definition_provider: None,
                 implementation_provider: None,
-                references_provider: None,
+                references_provider: Some(true),
                 document_highlight_provider: None,
                 document_symbol_provider: None,
                 workspace_symbol_provider: None,
@@ -31,7 +37,7 @@ impl ServerHandler {
                 document_formatting_provider: None,
                 document_range_formatting_provider: None,
                 document_on_type_formatting_provider: None,
-                rename_provider: None,
+                rename_provider: Some(RenameProviderCapability::Simple(true)),
                 color_provider: None,
                 folding_range_provider: None,
                 execute_command_provider: None,
@@ -88,10 +94,20 @@ impl ServerHandler {
         );
 
         handle_request!(
+            "textDocument/declaration",
+            TextDocumentPositionParams,
+            get_definition
+        );
+
+        handle_request!(
             "textDocument/definition",
             TextDocumentPositionParams,
             get_definition
         );
+
+        handle_request!("textDocument/rename", RenameParams, rename);
+
+        handle_request!("textDocument/references", ReferenceParams, get_references);
 
         warn!("UNKNOWN MESSAGE: {}", method);
 
@@ -156,8 +172,9 @@ impl ServerHandler {
 
     pub fn did_open_text_document(&mut self, params: DidOpenTextDocumentParams) {
         let uri = Self::uri_from_url(&params.text_document.uri);
-        let source = Source::new(uri, params.text_document.text);
+        let source = Source::new(uri.clone(), params.text_document.text);
         self.program_cell.set(source);
+        self.publish_updated_diagnostics(&uri).unwrap();
     }
 
     pub fn did_change_text_document(&mut self, params: DidChangeTextDocumentParams) {
@@ -170,6 +187,39 @@ impl ServerHandler {
                 }
             }
         }
+        self.publish_updated_diagnostics(&uri).unwrap();
+    }
+
+    pub fn publish_updated_diagnostics<'a>(&'a self, uri: &'a URI) -> Option<()> {
+        let module_cell = self.program_cell.get(uri)?;
+        let diagnostics = module_cell.diagnostics.iter();
+        let diagnostics = Self::lsp_diagnostics_from_diagnostics::<'a>(diagnostics);
+        let params = PublishDiagnosticsParams {
+            uri: Self::url_from_uri(uri),
+            diagnostics,
+        };
+
+        (self.notify)(
+            "textDocument/publishDiagnostics".into(),
+            serde_json::to_value(params).unwrap(),
+        );
+
+        Some(())
+    }
+
+    pub fn lsp_diagnostics_from_diagnostics<'a, I: Iterator<Item = &'a Diagnostic>>(
+        diagnostics: I,
+    ) -> Vec<lsp_types::Diagnostic> {
+        diagnostics
+            .map(|d| lsp_types::Diagnostic {
+                range: Self::range_from_span(d.span().clone()),
+                severity: None,
+                code: None,
+                source: None,
+                message: d.to_string(),
+                related_information: None,
+            })
+            .collect()
     }
 
     pub fn get_definition(
@@ -179,6 +229,79 @@ impl ServerHandler {
         let location = self.location_from_position_params(params)?;
         let selection = self.program_cell.declaration(location);
         Ok(Self::location_from_span(selection.span()?))
+    }
+
+    pub fn get_references(
+        &mut self,
+        params: ReferenceParams,
+    ) -> Result<Vec<lsp_types::Location>, ServerError> {
+        let location = self.location_from_position_params(params.text_document_position)?;
+        let selections = self.program_cell.references(location);
+        Ok(selections
+            .iter()
+            .filter_map(syntax::Selection::span)
+            .map(Self::location_from_span)
+            .collect())
+    }
+
+    fn location_from_text_document_position_params(
+        &self,
+        params: TextDocumentPositionParams,
+    ) -> Option<Location> {
+        let uri = Self::uri_from_url(&params.text_document.uri);
+        let module_cell = self.program_cell.get(&uri)?;
+        Some(Self::location_from_position(
+            &module_cell.source,
+            params.position,
+        ))
+    }
+
+    pub fn rename(&mut self, params: RenameParams) -> Result<WorkspaceEdit, ServerError> {
+        let location =
+            self.location_from_text_document_position_params(params.text_document_position)?;
+
+        let mut edits = HashMap::new();
+        let new_name = params.new_name.clone();
+
+        let mut add_selection = |selection: syntax::Selection| {
+            if let Some(symbol) = selection.first::<syntax::Symbol>() {
+                let uri = symbol.token.span.start.uri.clone();
+                if !edits.contains_key(&uri) {
+                    edits.insert(uri.clone(), vec![]);
+                }
+                let edits = edits.get_mut(&uri).unwrap();
+                edits.push(TextEdit {
+                    range: Self::range_from_span(symbol.token.span.clone()),
+                    new_text: new_name.clone(),
+                });
+            }
+        };
+
+        let declaration_selection = self.program_cell.declaration(location.clone());
+        let declaration_location = declaration_selection.span()?.start.clone();
+        add_selection(declaration_selection);
+
+        for selection in self.program_cell.references(declaration_location) {
+            add_selection(selection)
+        }
+
+        Ok(WorkspaceEdit {
+            changes: None,
+            document_changes: Some(DocumentChanges::Operations(
+                edits
+                    .into_iter()
+                    .map(|(uri, edits)| {
+                        DocumentChangeOperation::Edit(TextDocumentEdit {
+                            text_document: VersionedTextDocumentIdentifier {
+                                version: None,
+                                uri: Self::url_from_uri(&uri),
+                            },
+                            edits,
+                        })
+                    })
+                    .collect(),
+            )),
+        })
     }
 }
 

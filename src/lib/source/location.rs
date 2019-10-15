@@ -65,6 +65,12 @@ impl fmt::Display for Location {
     }
 }
 
+impl PartialEq for Location {
+    fn eq(&self, other: &Self) -> bool {
+        self.uri == other.uri && self.offset == other.offset
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

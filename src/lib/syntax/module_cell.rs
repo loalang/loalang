@@ -3,7 +3,7 @@ use crate::*;
 
 pub struct ModuleCell {
     pub source: Arc<Source>,
-    diagnostics: Vec<Diagnostic>,
+    pub diagnostics: Vec<Diagnostic>,
     pub module: Module,
     references: Option<References>,
 }

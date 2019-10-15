@@ -13,6 +13,10 @@ impl ProgramCell {
         }
     }
 
+    pub fn uris(&self) -> Vec<URI> {
+        self.modules.keys().cloned().collect()
+    }
+
     pub fn set(&mut self, source: Arc<Source>) {
         let uri = source.uri.clone();
         self.modules.insert(uri, ModuleCell::new(source));

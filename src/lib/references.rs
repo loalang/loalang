@@ -13,7 +13,14 @@ impl References {
     }
 
     pub fn declaration_of(&self, reference: Id) -> Option<Id> {
-        self.references.get(&reference).cloned()
+        self.references.get(&reference).cloned().or_else(|| {
+            for (_, d) in self.references.iter() {
+                if *d == reference {
+                    return Some(*d);
+                }
+            }
+            None
+        })
     }
 
     pub fn references_of(&self, declaration: Id) -> Vec<Id> {

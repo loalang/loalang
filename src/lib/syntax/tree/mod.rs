@@ -45,3 +45,12 @@ pub use self::return_type::*;
 
 mod type_expression;
 pub use self::type_expression::*;
+
+mod parameter_pattern;
+pub use self::parameter_pattern::*;
+
+mod keyworded;
+pub use self::keyworded::*;
+
+mod expression;
+pub use self::expression::*;
