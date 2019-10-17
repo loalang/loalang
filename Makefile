@@ -6,7 +6,7 @@ build:
 	cargo build --release
 
 test:
-	cargo test
+	cargo test --lib
 
 install:
 	cp target/release/loa /usr/local/bin/loa

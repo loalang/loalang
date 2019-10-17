@@ -3,21 +3,14 @@ use crate::*;
 
 pub struct ModuleCell {
     pub source: Arc<Source>,
-    pub diagnostics: Vec<Diagnostic>,
     pub module: Module,
-    references: Option<References>,
 }
 
 impl ModuleCell {
-    pub fn new(source: Arc<Source>) -> ModuleCell {
+    pub fn new(source: Arc<Source>) -> (ModuleCell, Vec<Diagnostic>) {
         let (diagnostics, module) = Self::parse(&source);
 
-        ModuleCell {
-            source,
-            diagnostics,
-            module,
-            references: None,
-        }
+        (ModuleCell { source, module }, diagnostics)
     }
 
     fn parse(source: &Arc<Source>) -> (Vec<Diagnostic>, Module) {
@@ -27,23 +20,22 @@ impl ModuleCell {
         (parser.diagnostics, module)
     }
 
-    fn update(&mut self) {
+    fn update(&mut self) -> Vec<Diagnostic> {
         let (diagnostics, module) = Self::parse(&self.source);
-        self.diagnostics = diagnostics;
         self.module = module;
-        self.references = None;
+        diagnostics
     }
 
-    pub fn replace(&mut self, code: String) {
+    pub fn replace(&mut self, code: String) -> Vec<Diagnostic> {
         self.source = Source::new(self.source.uri.clone(), code);
-        self.update();
+        self.update()
     }
 
-    pub fn change(&mut self, span: Span, new_text: &str) {
+    pub fn change(&mut self, span: Span, new_text: String) -> Vec<Diagnostic> {
         let mut code = self.source.code.clone();
-        code.replace_range(span.start.offset..span.end.offset, new_text);
+        code.replace_range(span.start.offset..span.end.offset, new_text.as_ref());
         self.source = Source::new(self.source.uri.clone(), code);
-        self.update();
+        self.update()
     }
 
     pub fn pierce(&self, location: Location) -> Selection {
@@ -58,16 +50,6 @@ impl ModuleCell {
             }
         }
         Selection::new(nodes)
-    }
-
-    pub fn references(&mut self) -> References {
-        match self.references {
-            Some(ref r) => r.clone(),
-            None => {
-                self.references = Some(reference_resolver::get_references(&self.module));
-                self.references()
-            }
-        }
     }
 
     pub fn find_node(&self, id: Id) -> Option<&dyn Node> {

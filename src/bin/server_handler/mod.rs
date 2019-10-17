@@ -175,11 +175,8 @@ where
         params: TextDocumentPositionParams,
     ) -> Option<Location> {
         let uri = Self::uri_from_url(&params.text_document.uri);
-        let module_cell = self.program_cell.get(&uri)?;
-        Some(Self::location_from_position(
-            &module_cell.source,
-            params.position,
-        ))
+        let source = self.program_cell.get_source(&uri)?;
+        Some(Self::location_from_position(source, params.position))
     }
 
     pub fn did_open_text_document(&mut self, params: DidOpenTextDocumentParams) {
@@ -191,21 +188,21 @@ where
 
     pub fn did_change_text_document(&mut self, params: DidChangeTextDocumentParams) {
         let uri = Self::uri_from_url(&params.text_document.uri);
-        if let Some(module_cell) = self.program_cell.get_mut(&uri) {
+        if let Some(source) = self.program_cell.get_source(&uri).cloned() {
+            #[allow(unused_must_use)]
             for change in params.content_changes {
-                match Self::maybe_span_from_range(&module_cell.source, change.range) {
-                    None => module_cell.replace(change.text),
-                    Some(span) => module_cell.change(span, change.text.as_ref()),
-                }
+                match Self::maybe_span_from_range(&source, change.range) {
+                    None => self.program_cell.replace(&source.uri, change.text),
+                    Some(span) => self.program_cell.change(span, change.text),
+                };
             }
         }
         self.publish_updated_diagnostics(&uri).unwrap();
     }
 
     pub fn publish_updated_diagnostics<'a>(&'a self, uri: &'a URI) -> Option<()> {
-        let module_cell = self.program_cell.get(uri)?;
-        let diagnostics = module_cell.diagnostics.iter();
-        let diagnostics = Self::lsp_diagnostics_from_diagnostics::<'a>(diagnostics);
+        let diagnostics = self.program_cell.diagnostics();
+        let diagnostics = Self::lsp_diagnostics_from_diagnostics::<'a>(diagnostics.into_iter());
         let params = PublishDiagnosticsParams {
             uri: Self::url_from_uri(uri),
             diagnostics,

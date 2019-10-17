@@ -150,6 +150,7 @@ impl<T> Diagnosed<T> {
     }
 }
 
+/*
 #[cfg(test)]
 macro_rules! assert_diagnose {
     ($diagnosed: expr) => {
@@ -160,3 +161,4 @@ macro_rules! assert_diagnose {
         }
     };
 }
+*/
