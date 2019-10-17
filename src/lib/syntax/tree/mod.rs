@@ -54,3 +54,6 @@ pub use self::keyworded::*;
 
 mod expression;
 pub use self::expression::*;
+
+mod message;
+pub use self::message::*;

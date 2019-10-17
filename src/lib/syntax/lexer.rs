@@ -9,11 +9,7 @@ pub fn is_valid_symbol(string: &String) -> bool {
     let source = Source::new(URI::Exact("tmp".into()), string.clone());
     let tokens = tokenize(source);
 
-    tokens.len() == 1 && matches!(tokens[0].kind, TokenKind::SimpleSymbol(_))
-}
-
-pub fn is_valid_selector(string: &String) -> bool {
-    is_valid_symbol(string) || is_valid_binary_selector(string) || is_valid_keyword_selector(string)
+    tokens.len() == 2 && matches!(tokens[0].kind, TokenKind::SimpleSymbol(_))
 }
 
 pub fn is_valid_binary_selector(string: &String) -> bool {
@@ -22,26 +18,32 @@ pub fn is_valid_binary_selector(string: &String) -> bool {
 
     use TokenKind::*;
 
-    tokens.len() == 1 && matches!(tokens[0].kind, Plus | Slash | EqualSign | OpenAngle | CloseAngle)
+    tokens.len() == 1
+        && matches!(
+            tokens[0].kind,
+            Plus | Slash | EqualSign | OpenAngle | CloseAngle
+        )
 }
 
 pub fn is_valid_keyword_selector(string: &String, length: usize) -> bool {
     let source = Source::new(URI::Exact("tmp".into()), string.clone());
     let tokens = tokenize(source);
 
-    if tokens.len() != length * 2 {
+    if tokens.len() != length * 2 + 1 {
         return false;
     }
 
-    for i in 0..length-1 {
+    use TokenKind::*;
+
+    for i in 0..length - 1 {
         let kw_index = i * 2;
         let colon_index = kw_index + 1;
 
-        if !matches!(tokens[kw_index], SimpleSymbol(_)) {
+        if !matches!(tokens[kw_index].kind, SimpleSymbol(_)) {
             return false;
         }
 
-        if !matches!(tokens[colon_index], Colon) {
+        if !matches!(tokens[colon_index].kind, Colon) {
             return false;
         }
     }

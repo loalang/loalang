@@ -442,11 +442,6 @@ impl Parser {
 mod tests {
     use super::*;
 
-    fn parse<R, F: FnOnce(&mut Parser) -> R>(f: F, code: &str) -> R {
-        let mut parser = Parser::new(Source::test(code));
-        f(&mut parser)
-    }
-
     fn assert_parses_to_end<R, F: FnOnce(&mut Parser) -> R>(f: F, code: &str) {
         let mut parser = Parser::new(Source::test(code));
         f(&mut parser);

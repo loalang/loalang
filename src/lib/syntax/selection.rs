@@ -35,6 +35,15 @@ impl<'a> Selection<'a> {
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
+
+    pub fn selects_message_pattern_selector(&self) -> bool {
+        if let Some(_) = self.first::<MessagePattern>() {
+            if let None = self.first::<ParameterPattern>() {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 impl fmt::Debug for Selection<'_> {

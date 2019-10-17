@@ -68,20 +68,16 @@ fn next<F: Fn(String, Value) -> ()>(
 
             match handler.handle(method.as_ref(), params) {
                 Ok(r) => result = Some(r),
-                Err(err) => {
-                    match err {
-                        server_handler::ServerError::Empty => {
-                            result = Some(serde_json::Value::Null)
-                        }
-                        err => {
-                            error = Some(ResponseError {
-                                code: err.code(),
-                                message: err.message(),
-                                data: None,
-                            })
-                        }
+                Err(err) => match err {
+                    server_handler::ServerError::Empty => result = Some(serde_json::Value::Null),
+                    err => {
+                        error = Some(ResponseError {
+                            code: err.code(),
+                            message: err.message(),
+                            data: None,
+                        })
                     }
-                }
+                },
             }
 
             conn.sender

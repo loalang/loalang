@@ -259,14 +259,38 @@ fn resolve_reference(symbol: &Symbol, scope: &Scope, references: &mut References
     }
 }
 
-fn register_expression(expression: &Expression, _scope: &mut Scope) {
+fn register_expression(expression: &Expression, scope: &mut Scope) {
     match expression {
         Expression::Reference(_, _) => (),
+        Expression::MessageSend(_, box receiver, box message) => {
+            register_expression(receiver, scope);
+            register_message(message, scope);
+        }
     }
 }
 
 fn resolve_expression(expression: &Expression, scope: &Scope, references: &mut References) {
     match expression {
         Expression::Reference(_, ref s) => resolve_reference(s, scope, references),
+        Expression::MessageSend(_, box receiver, box message) => {
+            resolve_expression(receiver, scope, references);
+            resolve_message(message, scope, references);
+        }
+    }
+}
+
+fn register_message(message: &Message, scope: &mut Scope) {
+    match message {
+        Message::Unary(_, _) => (),
+        Message::Binary(_, _, ref e) => register_expression(e, scope),
+        Message::Keyword(_, ref kw) => register_keyworded(kw, register_expression, scope),
+    }
+}
+
+fn resolve_message(message: &Message, scope: &Scope, references: &mut References) {
+    match message {
+        Message::Unary(_, _) => (),
+        Message::Binary(_, _, ref e) => resolve_expression(e, scope, references),
+        Message::Keyword(_, ref kw) => resolve_keyworded(kw, resolve_expression, scope, references),
     }
 }

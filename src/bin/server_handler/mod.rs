@@ -1,4 +1,7 @@
-use loa::syntax::{MessagePattern, Node, ParameterPattern};
+use loa::syntax::{
+    is_valid_binary_selector, is_valid_keyword_selector, is_valid_symbol, MessagePattern, Node,
+    ParameterPattern,
+};
 use loa::Diagnostic;
 use loa::Location;
 use loa::*;
@@ -276,8 +279,36 @@ where
         {
             let selection = self.program_cell.pierce(location.clone());
 
-            if let Some(_message_pattern) = selection.first::<MessagePattern>() {
+            if let Some(message_pattern) = selection.first::<MessagePattern>() {
                 if let None = selection.first::<ParameterPattern>() {
+                    match message_pattern {
+                        MessagePattern::Unary(_, _) => {
+                            if !is_valid_symbol(&new_name) {
+                                return Err(ServerError::IllegalMessageRename(
+                                    new_name,
+                                    message_pattern.selector(),
+                                ));
+                            }
+                        }
+                        MessagePattern::Binary(_, _, _) => {
+                            if !is_valid_binary_selector(&new_name)
+                                && !is_valid_keyword_selector(&new_name, 1)
+                            {
+                                return Err(ServerError::IllegalMessageRename(
+                                    new_name,
+                                    message_pattern.selector(),
+                                ));
+                            }
+                        }
+                        MessagePattern::Keyword(_, kw) => {
+                            if !is_valid_keyword_selector(&new_name, kw.keywords.len()) {
+                                return Err(ServerError::IllegalMessageRename(
+                                    new_name,
+                                    message_pattern.selector(),
+                                ));
+                            }
+                        }
+                    }
                     return Err(ServerError::Unimplemented(
                         "Renaming messages are not yet implemented".into(),
                     ));
@@ -347,6 +378,7 @@ pub enum ServerError {
     Unimplemented(String),
 
     IllegalName(String),
+    IllegalMessageRename(String, String),
 }
 
 impl ServerError {
@@ -361,6 +393,7 @@ impl ServerError {
             ServerError::Unimplemented(_) => -3,
 
             ServerError::IllegalName(_) => 1,
+            ServerError::IllegalMessageRename(_, _) => 2,
         }
     }
 
@@ -371,6 +404,7 @@ impl ServerError {
             ServerError::Unimplemented(ref s) => s.clone(),
 
             ServerError::IllegalName(ref s) => format!("`{}` is not a legal name.", s),
+            ServerError::IllegalMessageRename(ref from, ref to) => format!("Cannot rename `{}` to `{}`. It's either illegal or changes the arity of the message.", from, to),
         }
     }
 }

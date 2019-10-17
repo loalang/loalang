@@ -68,7 +68,7 @@ impl ProgramCell {
     fn get_references(&mut self, location: Location) -> Option<Vec<Selection>> {
         let module_cell = self.modules.get_mut(&location.uri)?;
         let references = module_cell.references();
-        let selection = module_cell.pierce(location);
+        let selection = module_cell.pierce(location.clone());
         let declaration = selection.first::<Symbol>()?;
 
         let mut selections = vec![];
@@ -182,5 +182,27 @@ mod tests {
         let type_expression = first_selection.first::<TypeExpression>().unwrap();
 
         assert_matches!(type_expression, TypeExpression::Reference(_, Symbol { .. }));
+    }
+
+    #[test]
+    fn method_references() {
+        let (mut cell, source) = test_cell(
+            r#"
+                class A {
+                  public b -> A.
+                  public a: A a -> A => a b.
+                }
+            "#,
+        );
+
+        let location = Location::at_offset(&source, 50);
+        let selections = cell.references(location);
+
+        assert_eq!(selections.len(), 1);
+
+        let first_selection = selections.first().unwrap();
+        let message = first_selection.first::<Message>().unwrap();
+
+        assert_matches!(message, Message::Unary(_, _));
     }
 }
