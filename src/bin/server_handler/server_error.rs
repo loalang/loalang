@@ -7,10 +7,6 @@ pub enum ServerError {
 }
 
 impl ServerError {
-    pub fn none() -> ServerError {
-        ServerError::Empty
-    }
-
     pub fn code(&self) -> i32 {
         match self {
             ServerError::Empty => -1,

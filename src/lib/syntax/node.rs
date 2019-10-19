@@ -49,15 +49,13 @@ impl Node {
 
     pub fn as_declaration(&self, tree: Arc<Tree>) -> Option<(Id, String)> {
         match self.kind {
-            Class { symbol, .. } => {
-                tree.get(symbol).and_then(|s| {
-                    if let Symbol(ref t) = s.kind {
-                        Some((symbol, t.lexeme()))
-                    } else {
-                        None
-                    }
-                })
-            }
+            Class { symbol, .. } => tree.get(symbol).and_then(|s| {
+                if let Symbol(ref t) = s.kind {
+                    Some((symbol, t.lexeme()))
+                } else {
+                    None
+                }
+            }),
             _ => None,
         }
     }

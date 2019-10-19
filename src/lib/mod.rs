@@ -39,6 +39,4 @@ pub use self::diagnostics::*;
 
 pub mod syntax;
 
-mod program;
-
-pub use self::program::*;
+pub mod program;
