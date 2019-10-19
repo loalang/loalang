@@ -12,6 +12,10 @@ impl Id {
     }
 
     pub const NULL: Id = Id(0);
+
+    pub fn is_null(&self) -> bool {
+        *self == Self::NULL
+    }
 }
 
 impl fmt::Display for Id {

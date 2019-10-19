@@ -14,25 +14,26 @@ macro_rules! sees {
 pub struct Parser {
     tokens: Vec<Token>,
     pub diagnostics: Vec<Diagnostic>,
+    last_token_span: Span,
 }
 
 impl Parser {
     pub fn new(source: Arc<Source>) -> Parser {
+        let start = Location::at_offset(&source, 0);
         Parser {
             tokens: tokenize(source)
                 .into_iter()
                 .filter(|token| !matches!(token.kind, Whitespace(_)))
                 .collect(),
             diagnostics: vec![],
+            last_token_span: Span::new(start.clone(), start),
         }
     }
 
     fn next(&mut self) -> Token {
-        self.tokens.remove(0)
-    }
-
-    pub fn is_at_end(&self) -> bool {
-        matches!(self.tokens[0].kind, TokenKind::EOF)
+        let token = self.tokens.remove(0);
+        self.last_token_span = token.span.clone();
+        token
     }
 
     fn syntax_error(&mut self, message: &str) {
@@ -43,29 +44,51 @@ impl Parser {
             .push(Diagnostic::SyntaxError(span, message));
     }
 
-    pub fn parse_module(&mut self) -> Module {
-        let mut module = Module {
-            id: Id::new(),
-            namespace_directive: None,
-            import_directives: vec![],
-            module_declarations: vec![],
-        };
+    fn syntax_error_end(&mut self, message: &str) {
+        let message = String::from(message);
+
+        self.diagnostics.push(Diagnostic::SyntaxError(
+            self.last_token_span.clone(),
+            message,
+        ));
+    }
+
+    #[inline]
+    fn finalize(&self, builder: NodeBuilder, kind: NodeKind) -> Id {
+        builder.finalize(self.last_token_span.end.clone(), kind)
+    }
+
+    pub fn parse(mut self) -> (Arc<Tree>, Vec<Diagnostic>) {
+        let mut tree = Tree::new();
+        self.parse_module(&mut tree);
+        (Arc::new(tree), self.diagnostics)
+    }
+
+    #[inline]
+    fn child<'a>(&self, builder: &'a mut NodeBuilder) -> NodeBuilder<'a> {
+        builder.child(self.tokens[0].span.start.clone())
+    }
+
+    fn parse_module(&mut self, tree: &mut Tree) -> Id {
+        let mut builder = NodeBuilder::new(tree, self.tokens[0].span.start.clone());
+
+        let mut namespace_directive = Id::NULL;
+        let mut import_directives = vec![];
+        let mut module_declarations = vec![];
 
         if sees!(self, NamespaceKeyword) {
-            module.namespace_directive = Some(self.parse_namespace_directive());
+            namespace_directive = self.parse_namespace_directive(self.child(&mut builder));
         } else {
             self.syntax_error("Each module must start with a namespace directive.")
         }
 
         while sees!(self, ImportKeyword) {
-            module.import_directives.push(self.parse_import_directive());
+            import_directives.push(self.parse_import_directive(self.child(&mut builder)));
         }
 
         while !sees!(self, EOF) {
             let before = self.tokens.len();
-            module
-                .module_declarations
-                .push(self.parse_module_declaration());
+            module_declarations.push(self.parse_module_declaration(self.child(&mut builder)));
             let after = self.tokens.len();
 
             if before == after {
@@ -74,394 +97,435 @@ impl Parser {
             }
         }
 
-        module
+        self.finalize(
+            builder,
+            Module {
+                namespace_directive,
+                import_directives,
+                module_declarations,
+            },
+        )
     }
 
-    pub fn parse_namespace_directive(&mut self) -> NamespaceDirective {
-        let mut directive = NamespaceDirective {
-            id: Id::new(),
-            namespace_keyword: None,
-            qualified_symbol: None,
-            period: None,
-        };
+    fn parse_namespace_directive(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut namespace_keyword = None;
+        let mut qualified_symbol = Id::NULL;
+        let mut period = None;
 
         if sees!(self, NamespaceKeyword) {
-            directive.namespace_keyword = Some(self.next());
+            namespace_keyword = Some(self.next());
         } else {
-            self.syntax_error("Expected keyword `namespace`.");
+            self.syntax_error("Expected namespace keyword.");
         }
 
         if sees!(self, SimpleSymbol(_)) {
-            directive.qualified_symbol = Some(self.parse_qualified_symbol());
+            qualified_symbol = self.parse_qualified_symbol(self.child(&mut builder));
         } else {
-            self.syntax_error("Expected a qualified symbol.");
+            self.syntax_error_end("Expected qualified symbol.");
         }
 
         if sees!(self, Period) {
-            directive.period = Some(self.next());
+            period = Some(self.next());
         } else {
-            self.syntax_error("Namespace directive must end with a period.");
+            self.syntax_error_end("Namespace directive must end with period.");
         }
 
-        directive
+        self.finalize(
+            builder,
+            NamespaceDirective {
+                namespace_keyword,
+                qualified_symbol,
+                period,
+            },
+        )
     }
 
-    pub fn parse_qualified_symbol(&mut self) -> QualifiedSymbol {
-        let mut symbol = QualifiedSymbol {
-            id: Id::new(),
-            symbols: vec![],
-        };
-
-        while sees!(self, SimpleSymbol(_)) {
-            symbol.symbols.push(self.parse_symbol());
-
-            if sees!(self, Slash) {
-                self.next();
-            } else if sees!(self, Comma) {
-                self.next();
-                self.syntax_error("Each symbol must be separated by a slash.")
-            } else if sees!(self, SimpleSymbol(_)) {
-                self.syntax_error("Each symbol must be separated by a slash.")
-            }
-        }
-
-        if symbol.symbols.len() == 0 {
-            self.syntax_error("Expected a symbol.")
-        }
-
-        symbol
-    }
-
-    pub fn parse_symbol(&mut self) -> Symbol {
-        Symbol {
-            id: Id::new(),
-            token: self.next(),
-        }
-    }
-
-    pub fn parse_import_directive(&mut self) -> ImportDirective {
-        let mut directive = ImportDirective {
-            id: Id::new(),
-            import_keyword: None,
-            qualified_symbol: None,
-            as_keyword: None,
-            symbol: None,
-            period: None,
-        };
+    fn parse_import_directive(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut import_keyword = None;
+        let mut qualified_symbol = Id::NULL;
+        let mut as_keyword = None;
+        let mut symbol = Id::NULL;
+        let mut period = None;
 
         if sees!(self, ImportKeyword) {
-            directive.import_keyword = Some(self.next());
+            import_keyword = Some(self.next());
         } else {
             self.syntax_error("Expected import keyword.");
         }
 
         if sees!(self, SimpleSymbol(_)) {
-            directive.qualified_symbol = Some(self.parse_qualified_symbol());
+            qualified_symbol = self.parse_qualified_symbol(self.child(&mut builder));
         } else {
-            self.syntax_error("Expected qualified symbol to import.");
+            self.syntax_error_end("Expected qualified symbol.");
         }
 
         if sees!(self, AsKeyword) {
-            directive.as_keyword = Some(self.next());
+            as_keyword = Some(self.next());
 
             if sees!(self, SimpleSymbol(_)) {
-                directive.symbol = Some(self.parse_symbol());
+                symbol = self.parse_symbol(self.child(&mut builder));
+            } else {
+                self.syntax_error_end("Expected import alias.");
             }
         }
 
         if sees!(self, Period) {
-            directive.period = Some(self.next());
+            period = Some(self.next());
         } else {
-            self.syntax_error("Import directive must end with a period.");
+            self.syntax_error_end("Import directive must end with period.");
         }
 
-        directive
+        self.finalize(
+            builder,
+            ImportDirective {
+                import_keyword,
+                qualified_symbol,
+                as_keyword,
+                symbol,
+                period,
+            },
+        )
     }
 
-    pub fn parse_module_declaration(&mut self) -> ModuleDeclaration {
+    fn parse_qualified_symbol(&mut self, mut builder: NodeBuilder) -> Id {
+        if !sees!(self, SimpleSymbol(_)) {
+            self.syntax_error("Expected qualified symbol.");
+        }
+
+        let mut symbols = vec![];
+        while sees!(self, SimpleSymbol(_)) {
+            symbols.push(self.parse_symbol(self.child(&mut builder)));
+            if sees!(self, Slash) {
+                self.next();
+                if !sees!(self, SimpleSymbol(_)) {
+                    self.syntax_error_end("Expected a symbol.");
+                }
+                continue;
+            }
+            break;
+        }
+
+        self.finalize(builder, QualifiedSymbol { symbols })
+    }
+
+    fn parse_symbol(&mut self, builder: NodeBuilder) -> Id {
+        let token = self.next();
+        self.finalize(builder, Symbol(token))
+    }
+
+    fn parse_module_declaration(&mut self, mut builder: NodeBuilder) -> Id {
         if sees!(self, ExportKeyword) {
-            ModuleDeclaration::Exported(self.next(), self.parse_declaration())
+            let export_keyword = self.next();
+            let class = self.parse_class(self.child(&mut builder));
+            self.finalize(builder, Exported(export_keyword, class))
         } else {
-            ModuleDeclaration::NotExported(self.parse_declaration())
+            self.parse_class(builder)
         }
     }
 
-    pub fn parse_declaration(&mut self) -> Declaration {
-        Declaration::Class(self.parse_class())
-    }
-
-    pub fn parse_class(&mut self) -> Class {
-        let mut class = Class {
-            id: Id::new(),
-            partial_keyword: None,
-            class_keyword: None,
-            symbol: None,
-            body: None,
-            period: None,
-        };
-
-        if sees!(self, PartialKeyword) {
-            class.partial_keyword = Some(self.next());
-        }
+    fn parse_class(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut class_keyword = None;
+        let mut symbol = Id::NULL;
+        let mut class_body = Id::NULL;
+        let mut period = None;
 
         if sees!(self, ClassKeyword) {
-            class.class_keyword = Some(self.next());
+            class_keyword = Some(self.next());
         } else {
             self.syntax_error("Expected class keyword.");
         }
 
         if sees!(self, SimpleSymbol(_)) {
-            class.symbol = Some(self.parse_symbol());
+            symbol = self.parse_symbol(self.child(&mut builder));
         } else {
-            self.syntax_error("Classes must have names.");
-        }
-
-        if !sees!(self, OpenCurly | Period) {
-            self.syntax_error("Expected a class body or a period.");
-        }
-
-        if sees!(self, OpenCurly) {
-            class.body = Some(self.parse_class_body());
+            self.syntax_error("Every class must have a name.");
         }
 
         if sees!(self, Period) {
-            if class.body.is_some() {
+            period = Some(self.next());
+        } else if sees!(self, OpenCurly) {
+            class_body = self.parse_class_body(self.child(&mut builder));
+
+            if sees!(self, Period) {
                 self.syntax_error("A class with a body doesn't need to end with a period.");
+                self.next();
             }
-            class.period = Some(self.next());
+        } else {
+            self.syntax_error_end("Class must have a body or end with a period.");
         }
 
-        class
+        self.finalize(
+            builder,
+            Class {
+                class_keyword,
+                symbol,
+                class_body,
+                period,
+            },
+        )
     }
 
-    pub fn parse_class_body(&mut self) -> ClassBody {
-        let mut class_body = ClassBody {
-            id: Id::new(),
-            open_curly: None,
-            class_members: vec![],
-            close_curly: None,
-        };
+    fn parse_class_body(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut open_curly = None;
+        let mut close_curly = None;
+        let mut class_members = vec![];
 
         if sees!(self, OpenCurly) {
-            class_body.open_curly = Some(self.next());
+            open_curly = Some(self.next());
         } else {
-            self.syntax_error("Expected a class body.");
+            self.syntax_error("Expected class body.");
         }
 
-        while !sees!(self, EOF | CloseCurly) {
-            let before = self.tokens.len();
-            class_body.class_members.push(self.parse_class_member());
-            let after = self.tokens.len();
-
-            if before == after {
-                break;
+        while !sees!(self, CloseCurly | EOF) {
+            if sees!(self, PublicKeyword | PrivateKeyword) {
+                class_members.push(self.parse_method(self.child(&mut builder)));
+                continue;
+            }
+            self.syntax_error("Expected a class member.");
+            while !sees!(self, CloseCurly | EOF | PrivateKeyword | PublicKeyword) {
+                self.next();
             }
         }
 
         if sees!(self, CloseCurly) {
-            class_body.close_curly = Some(self.next());
+            close_curly = Some(self.next());
         } else {
-            self.syntax_error("Unterminated class body.")
+            self.syntax_error("Expected end of class body.");
         }
 
-        class_body
+        self.finalize(
+            builder,
+            ClassBody {
+                open_curly,
+                class_members,
+                close_curly,
+            },
+        )
     }
 
-    pub fn parse_class_member(&mut self) -> ClassMember {
-        ClassMember::Method(self.parse_method())
-    }
-
-    pub fn parse_method(&mut self) -> Method {
+    fn parse_method(&mut self, mut builder: NodeBuilder) -> Id {
         let mut visibility = None;
+        let mut signature = Id::NULL;
+        let mut method_body = Id::NULL;
+        let mut period = None;
 
-        if sees!(self, PublicKeyword | PrivateKeyword) {
+        if sees!(self, PrivateKeyword | PublicKeyword) {
             visibility = Some(self.next());
-        } else {
-            self.syntax_error("Methods must be designated as public or private.");
         }
 
-        let mut method = Method {
-            id: Id::new(),
-            visibility,
-            signature: self.parse_signature(),
-            body: None,
-            period: None,
-        };
+        signature = self.parse_signature(self.child(&mut builder));
 
         if sees!(self, FatArrow) {
-            method.body = Some(self.parse_method_body());
+            method_body = self.parse_method_body(self.child(&mut builder));
         }
 
         if sees!(self, Period) {
-            method.period = Some(self.next());
+            period = Some(self.next());
         } else {
-            self.syntax_error("Methods must be terminated with a period.");
+            self.syntax_error_end("Methods must end with a period.");
         }
 
-        method
+        self.finalize(
+            builder,
+            Method {
+                visibility,
+                signature,
+                method_body,
+                period,
+            },
+        )
     }
 
-    pub fn parse_signature(&mut self) -> Signature {
-        let mut signature = Signature {
-            id: Id::new(),
-            message_pattern: None,
-            return_type: None,
-        };
+    fn parse_signature(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut message_pattern = Id::NULL;
+        let mut return_type = Id::NULL;
 
-        if sees!(self, SimpleSymbol(_)) || self.sees_operator() {
-            signature.message_pattern = self.parse_message_pattern();
-        } else {
-            self.syntax_error("Expected message pattern.");
-        }
+        message_pattern = self.parse_message_pattern(self.child(&mut builder));
 
         if sees!(self, Arrow) {
-            signature.return_type = Some(self.parse_return_type());
+            return_type = self.parse_return_type(self.child(&mut builder));
         }
 
-        signature
+        self.finalize(
+            builder,
+            Signature {
+                message_pattern,
+                return_type,
+            },
+        )
     }
 
-    pub fn parse_return_type(&mut self) -> ReturnType {
-        let mut return_type = ReturnType {
-            id: Id::new(),
-            arrow: None,
-            type_expression: None,
-        };
+    fn parse_message_pattern(&mut self, builder: NodeBuilder) -> Id {
+        if sees!(self, SimpleSymbol(_)) {
+            if matches!(self.tokens[1].kind, Colon) {
+                self.parse_keyword_message_pattern(builder)
+            } else {
+                self.parse_unary_message_pattern(builder)
+            }
+        } else if sees!(self, Plus | Slash | EqualSign | OpenAngle | CloseAngle) {
+            self.parse_binary_message_pattern(builder)
+        } else {
+            self.syntax_error_end("Expected symbol or operator.");
+            Id::NULL
+        }
+    }
+
+    fn parse_unary_message_pattern(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut symbol = Id::NULL;
+
+        if sees!(self, SimpleSymbol(_)) {
+            symbol = self.parse_symbol(self.child(&mut builder));
+        } else {
+            self.syntax_error("Expected symbol.");
+        }
+
+        self.finalize(builder, UnaryMessagePattern { symbol })
+    }
+
+    fn parse_binary_message_pattern(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut operator = Id::NULL;
+        let mut parameter_pattern = Id::NULL;
+
+        if sees!(self, Plus | Slash | EqualSign | OpenAngle | CloseAngle) {
+            operator = self.parse_operator(self.child(&mut builder));
+        } else {
+            self.syntax_error("Expected operator.");
+        }
+
+        if sees!(self, SimpleSymbol(_)) {
+            parameter_pattern = self.parse_parameter_pattern(self.child(&mut builder));
+        } else {
+            self.syntax_error("Expected parameter pattern.");
+        }
+
+        self.finalize(
+            builder,
+            BinaryMessagePattern {
+                operator,
+                parameter_pattern,
+            },
+        )
+    }
+
+    fn parse_keyword_message_pattern(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut keyword_pairs = vec![];
+
+        if !sees!(self, SimpleSymbol(_)) {
+            self.syntax_error("Expected keywords.");
+            return Id::NULL;
+        }
+
+        while sees!(self, SimpleSymbol(_)) {
+            keyword_pairs.push(
+                self.parse_keyword_pair(self.child(&mut builder), Self::parse_parameter_pattern),
+            );
+        }
+
+        self.finalize(builder, KeywordMessagePattern { keyword_pairs })
+    }
+
+    #[inline]
+    fn parse_keyword_pair<F: FnOnce(&mut Self, NodeBuilder) -> Id>(
+        &mut self,
+        mut builder: NodeBuilder,
+        f: F,
+    ) -> Id {
+        let mut keyword = Id::NULL;
+        let mut colon = None;
+        let mut value = Id::NULL;
+
+        if sees!(self, SimpleSymbol(_)) {
+            keyword = self.parse_symbol(self.child(&mut builder));
+        } else {
+            self.syntax_error("Expected symbol.");
+            return Id::NULL;
+        }
+
+        if sees!(self, Colon) {
+            colon = Some(self.next());
+        } else {
+            self.syntax_error_end("Expected colon.");
+        }
+
+        let child_builder = self.child(&mut builder);
+        value = f(self, child_builder);
+
+        self.finalize(
+            builder,
+            KeywordPair {
+                keyword,
+                colon,
+                value,
+            },
+        )
+    }
+
+    fn parse_method_body(&mut self, mut builder: NodeBuilder) -> Id {
+        Id::NULL
+    }
+
+    fn parse_return_type(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut arrow = None;
+        let mut type_expression = Id::NULL;
 
         if sees!(self, Arrow) {
-            return_type.arrow = Some(self.next());
-
-            return_type.type_expression = self.parse_type_expression();
+            arrow = Some(self.next());
         } else {
             self.syntax_error("Expected return type.");
         }
 
-        return_type
+        type_expression = self.parse_type_expression(self.child(&mut builder));
+
+        self.finalize(
+            builder,
+            ReturnType {
+                arrow,
+                type_expression,
+            },
+        )
     }
 
-    pub fn parse_type_expression(&mut self) -> Option<TypeExpression> {
+    fn parse_type_expression(&mut self, mut builder: NodeBuilder) -> Id {
         if sees!(self, SimpleSymbol(_)) {
-            Some(TypeExpression::Reference(Id::new(), self.parse_symbol()))
+            self.parse_reference_type_expression(builder)
         } else {
-            None
+            self.syntax_error("Expected type expression.");
+            Id::NULL
         }
     }
 
-    fn sees_operator(&self) -> bool {
-        sees!(self, Plus | Slash | EqualSign | OpenAngle | CloseAngle)
-    }
+    fn parse_reference_type_expression(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut symbol = Id::NULL;
 
-    pub fn parse_message_pattern(&mut self) -> Option<MessagePattern> {
         if sees!(self, SimpleSymbol(_)) {
-            let symbol = self.parse_symbol();
-            if sees!(self, Colon) {
-                let mut keyworded = Keyworded {
-                    id: Id::new(),
-                    keywords: vec![(symbol, self.next(), self.parse_parameter_pattern())],
-                };
-
-                while sees!(self, SimpleSymbol(_)) {
-                    keyworded.keywords.push((
-                        self.parse_symbol(),
-                        {
-                            if !sees!(self, Colon) {
-                                self.syntax_error("Expected colon.");
-                            }
-                            self.next()
-                        },
-                        self.parse_parameter_pattern(),
-                    ));
-                }
-
-                Some(MessagePattern::Keyword(Id::new(), keyworded))
-            } else {
-                Some(MessagePattern::Unary(Id::new(), symbol))
-            }
-        } else if self.sees_operator() {
-            Some(MessagePattern::Binary(
-                Id::new(),
-                self.next(),
-                self.parse_parameter_pattern(),
-            ))
+            symbol = self.parse_symbol(self.child(&mut builder));
         } else {
-            None
-        }
-    }
-
-    pub fn parse_method_body(&mut self) -> MethodBody {
-        let mut method_body = MethodBody {
-            id: Id::new(),
-            fat_arrow: None,
-            expression: None,
-        };
-
-        if sees!(self, FatArrow) {
-            method_body.fat_arrow = Some(self.next());
-        } else {
-            self.syntax_error("Expected a method body.");
+            self.syntax_error("Expected type name.");
         }
 
-        if self.sees_expression() {
-            method_body.expression = self.parse_expression();
-        } else {
-            self.syntax_error("Expected an expression.");
+        self.finalize(builder, ReferenceTypeExpression { symbol })
+    }
+
+    fn parse_operator(&mut self, mut builder: NodeBuilder) -> Id {
+        if !sees!(self, Plus | Slash | EqualSign | OpenAngle | CloseAngle) {
+            return Id::NULL;
         }
 
-        method_body
+        let token = self.next();
+
+        self.finalize(builder, Operator(token))
     }
 
-    fn sees_expression(&self) -> bool {
-        sees!(self, SimpleSymbol(_))
-    }
+    fn parse_parameter_pattern(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut type_expression = Id::NULL;
+        let mut symbol = Id::NULL;
 
-    pub fn parse_expression(&mut self) -> Option<Expression> {
-        if sees!(self, SimpleSymbol(_)) {
-            Some(Expression::Reference(Id::new(), self.parse_symbol()))
-        } else {
-            None
-        }
-    }
-
-    pub fn parse_parameter_pattern(&mut self) -> ParameterPattern {
-        if sees!(self, Underscore) {
-            ParameterPattern::Nothing(Id::new(), self.next())
-        } else if sees!(self, SimpleSymbol(_)) {
-            ParameterPattern::Parameter(
-                Id::new(),
-                self.parse_type_expression(),
-                Some(self.parse_symbol()),
-            )
-        } else {
-            self.syntax_error("Expected a parameter");
-            ParameterPattern::Nothing(Id::new(), self.next())
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn assert_parses_to_end<R, F: FnOnce(&mut Parser) -> R>(f: F, code: &str) {
-        let mut parser = Parser::new(Source::test(code));
-        f(&mut parser);
-        assert!(parser.is_at_end());
-    }
-
-    #[test]
-    fn parses_any_module() {
-        assert_parses_to_end(Parser::parse_module, "");
-        assert_parses_to_end(Parser::parse_module, "lkjhasdf");
-        assert_parses_to_end(Parser::parse_module, "namespace X.");
-    }
-
-    #[test]
-    fn parses_any_namespace_directive() {
-        assert_parses_to_end(Parser::parse_namespace_directive, "");
-        assert_parses_to_end(Parser::parse_namespace_directive, "A/B/C");
-        assert_parses_to_end(Parser::parse_namespace_directive, "namespace A/B/C");
-        assert_parses_to_end(Parser::parse_namespace_directive, "namespace A/B/C.");
-        assert_parses_to_end(Parser::parse_namespace_directive, "namespace A/B C.");
-        assert_parses_to_end(Parser::parse_namespace_directive, "namespace A/B,C.");
+        self.finalize(
+            builder,
+            ParameterPattern {
+                type_expression,
+                symbol,
+            },
+        )
     }
 }

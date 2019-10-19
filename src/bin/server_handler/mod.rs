@@ -1,15 +1,15 @@
-use loa::syntax::{
-    is_valid_binary_selector, is_valid_keyword_selector, is_valid_symbol, MessagePattern, Node,
-    ParameterPattern,
-};
 use loa::Diagnostic;
 use loa::Location;
 use loa::*;
 use lsp_types::*;
 use serde_json::Value;
 
+mod server_error;
+
+pub use self::server_error::*;
+
 pub struct ServerHandler<F> {
-    program_cell: ProgramCell,
+    program: Program,
     pub capabilities: ServerCapabilities,
     notify: F,
 }
@@ -21,7 +21,7 @@ where
     pub fn new(notify: F) -> ServerHandler<F> {
         ServerHandler {
             notify,
-            program_cell: ProgramCell::new(),
+            program: Program::new(),
             capabilities: ServerCapabilities {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::Incremental,
@@ -100,30 +100,61 @@ where
         );
 
         handle_request!(
-            "textDocument/declaration",
-            TextDocumentPositionParams,
-            get_definition
-        );
-
-        handle_request!(
             "textDocument/definition",
             TextDocumentPositionParams,
-            get_definition
+            definition
         );
-
-        handle_request!(
-            "textDocument/prepareRename",
-            TextDocumentPositionParams,
-            prepare_rename
-        );
-
-        handle_request!("textDocument/rename", RenameParams, rename);
-
-        handle_request!("textDocument/references", ReferenceParams, get_references);
 
         warn!("UNKNOWN MESSAGE: {}", method);
 
         Err(ServerError::none())
+    }
+
+    fn did_open_text_document(&mut self, params: DidOpenTextDocumentParams) {
+        let uri = Self::uri_from_url(&params.text_document.uri);
+        let source = Source::new(uri.clone(), params.text_document.text);
+        self.program.set(source);
+        self.publish_updated_diagnostics(&uri).unwrap();
+    }
+
+    fn did_change_text_document(&mut self, params: DidChangeTextDocumentParams) {
+        let uri = Self::uri_from_url(&params.text_document.uri);
+        if let Some(source) = self.program.get(&uri).cloned() {
+            for change in params.content_changes {
+                match Self::maybe_span_from_range(&source, change.range) {
+                    None => self.program.replace(&source.uri, change.text),
+                    Some(span) => match self.program.change(span, change.text) {
+                        _ => (),
+                    },
+                };
+            }
+        }
+        self.publish_updated_diagnostics(&uri).unwrap();
+    }
+
+    fn definition(
+        &mut self,
+        params: TextDocumentPositionParams,
+    ) -> Result<lsp_types::Location, ServerError> {
+        let location = self.location_from_position_params(params)?;
+        let definition_span = self.program.definition(location)?;
+        Ok(Self::location_from_span(definition_span))
+    }
+
+    fn publish_updated_diagnostics<'a>(&'a self, uri: &'a URI) -> Option<()> {
+        let diagnostics = self.program.diagnostics();
+        let diagnostics = Self::lsp_diagnostics_from_diagnostics::<'a>(diagnostics.into_iter());
+        let params = PublishDiagnosticsParams {
+            uri: Self::url_from_uri(uri),
+            diagnostics,
+        };
+
+        (self.notify)(
+            "textDocument/publishDiagnostics".into(),
+            serde_json::to_value(params).unwrap(),
+        );
+
+        Some(())
     }
 
     fn uri_from_url(url: &Url) -> URI {
@@ -175,48 +206,11 @@ where
         params: TextDocumentPositionParams,
     ) -> Option<Location> {
         let uri = Self::uri_from_url(&params.text_document.uri);
-        let source = self.program_cell.get_source(&uri)?;
+        let source = self.program.get(&uri)?;
         Some(Self::location_from_position(source, params.position))
     }
 
-    pub fn did_open_text_document(&mut self, params: DidOpenTextDocumentParams) {
-        let uri = Self::uri_from_url(&params.text_document.uri);
-        let source = Source::new(uri.clone(), params.text_document.text);
-        self.program_cell.set(source);
-        self.publish_updated_diagnostics(&uri).unwrap();
-    }
-
-    pub fn did_change_text_document(&mut self, params: DidChangeTextDocumentParams) {
-        let uri = Self::uri_from_url(&params.text_document.uri);
-        if let Some(source) = self.program_cell.get_source(&uri).cloned() {
-            #[allow(unused_must_use)]
-            for change in params.content_changes {
-                match Self::maybe_span_from_range(&source, change.range) {
-                    None => self.program_cell.replace(&source.uri, change.text),
-                    Some(span) => self.program_cell.change(span, change.text),
-                };
-            }
-        }
-        self.publish_updated_diagnostics(&uri).unwrap();
-    }
-
-    pub fn publish_updated_diagnostics<'a>(&'a self, uri: &'a URI) -> Option<()> {
-        let diagnostics = self.program_cell.diagnostics();
-        let diagnostics = Self::lsp_diagnostics_from_diagnostics::<'a>(diagnostics.into_iter());
-        let params = PublishDiagnosticsParams {
-            uri: Self::url_from_uri(uri),
-            diagnostics,
-        };
-
-        (self.notify)(
-            "textDocument/publishDiagnostics".into(),
-            serde_json::to_value(params).unwrap(),
-        );
-
-        Some(())
-    }
-
-    pub fn lsp_diagnostics_from_diagnostics<'a, I: Iterator<Item = &'a Diagnostic>>(
+    fn lsp_diagnostics_from_diagnostics<'a, I: Iterator<Item = &'a Diagnostic>>(
         diagnostics: I,
     ) -> Vec<lsp_types::Diagnostic> {
         diagnostics
@@ -229,199 +223,5 @@ where
                 related_information: None,
             })
             .collect()
-    }
-
-    pub fn get_definition(
-        &mut self,
-        params: TextDocumentPositionParams,
-    ) -> Result<lsp_types::Location, ServerError> {
-        let location = self.location_from_position_params(params)?;
-        let selection = self.program_cell.declaration(location);
-        Ok(Self::location_from_span(selection.span()?))
-    }
-
-    pub fn get_references(
-        &mut self,
-        params: ReferenceParams,
-    ) -> Result<Vec<lsp_types::Location>, ServerError> {
-        let location = self.location_from_position_params(params.text_document_position)?;
-        let selections = self.program_cell.references(location);
-        Ok(selections
-            .iter()
-            .filter_map(syntax::Selection::span)
-            .map(Self::location_from_span)
-            .collect())
-    }
-
-    pub fn rename(&mut self, params: RenameParams) -> Result<WorkspaceEdit, ServerError> {
-        let location = self.location_from_position_params(params.text_document_position)?;
-
-        let mut edits = HashMap::new();
-        let new_name = params.new_name.clone();
-
-        let mut add_selection = |selection: syntax::Selection| {
-            if let Some(symbol) = selection.first::<syntax::Symbol>() {
-                let uri = symbol.token.span.start.uri.clone();
-                if !edits.contains_key(&uri) {
-                    edits.insert(uri.clone(), vec![]);
-                }
-                let edits = edits.get_mut(&uri).unwrap();
-                edits.push(TextEdit {
-                    range: Self::range_from_span(symbol.token.span.clone()),
-                    new_text: new_name.clone(),
-                });
-            }
-        };
-
-        {
-            let selection = self.program_cell.pierce(location.clone());
-
-            if let Some(message_pattern) = selection.first::<MessagePattern>() {
-                if let None = selection.first::<ParameterPattern>() {
-                    match message_pattern {
-                        MessagePattern::Unary(_, _) => {
-                            if !is_valid_symbol(&new_name) {
-                                return Err(ServerError::IllegalMessageRename(
-                                    new_name,
-                                    message_pattern.selector(),
-                                ));
-                            }
-                        }
-                        MessagePattern::Binary(_, _, _) => {
-                            if !is_valid_binary_selector(&new_name)
-                                && !is_valid_keyword_selector(&new_name, 1)
-                            {
-                                return Err(ServerError::IllegalMessageRename(
-                                    new_name,
-                                    message_pattern.selector(),
-                                ));
-                            }
-                        }
-                        MessagePattern::Keyword(_, kw) => {
-                            if !is_valid_keyword_selector(&new_name, kw.keywords.len()) {
-                                return Err(ServerError::IllegalMessageRename(
-                                    new_name,
-                                    message_pattern.selector(),
-                                ));
-                            }
-                        }
-                    }
-                    return Err(ServerError::Unimplemented(
-                        "Renaming messages are not yet implemented".into(),
-                    ));
-                }
-            }
-        }
-
-        if !syntax::is_valid_symbol(&new_name) {
-            return Err(ServerError::IllegalName(new_name));
-        }
-
-        let declaration_selection = self.program_cell.declaration(location.clone());
-        let declaration_location = declaration_selection.span()?.start.clone();
-        add_selection(declaration_selection);
-
-        for selection in self.program_cell.references(declaration_location) {
-            add_selection(selection)
-        }
-
-        Ok(WorkspaceEdit {
-            changes: None,
-            document_changes: Some(DocumentChanges::Operations(
-                edits
-                    .into_iter()
-                    .map(|(uri, edits)| {
-                        DocumentChangeOperation::Edit(TextDocumentEdit {
-                            text_document: VersionedTextDocumentIdentifier {
-                                version: None,
-                                uri: Self::url_from_uri(&uri),
-                            },
-                            edits,
-                        })
-                    })
-                    .collect(),
-            )),
-        })
-    }
-
-    pub fn prepare_rename(
-        &mut self,
-        params: TextDocumentPositionParams,
-    ) -> Result<PrepareRenameResponse, ServerError> {
-        let location = self.location_from_position_params(params)?;
-        let selection = self.program_cell.pierce(location);
-
-        if let Some(message_pattern) = selection.first::<syntax::MessagePattern>() {
-            if let None = selection.first::<syntax::ParameterPattern>() {
-                return Ok(PrepareRenameResponse::RangeWithPlaceholder {
-                    range: Self::range_from_span(message_pattern.span()?),
-                    placeholder: message_pattern.selector(),
-                });
-            }
-        }
-
-        let symbol = selection.first::<syntax::Symbol>()?;
-        Ok(PrepareRenameResponse::RangeWithPlaceholder {
-            range: Self::range_from_span(symbol.token.span.clone()),
-            placeholder: symbol.to_string(),
-        })
-    }
-}
-
-#[derive(Debug)]
-pub enum ServerError {
-    Empty,
-    SerializationFailure,
-    Unimplemented(String),
-
-    IllegalName(String),
-    IllegalMessageRename(String, String),
-}
-
-impl ServerError {
-    pub fn none() -> ServerError {
-        ServerError::Empty
-    }
-
-    pub fn code(&self) -> i32 {
-        match self {
-            ServerError::Empty => -1,
-            ServerError::SerializationFailure => -2,
-            ServerError::Unimplemented(_) => -3,
-
-            ServerError::IllegalName(_) => 1,
-            ServerError::IllegalMessageRename(_, _) => 2,
-        }
-    }
-
-    pub fn message(&self) -> String {
-        match self {
-            ServerError::Empty => "No response available.".into(),
-            ServerError::SerializationFailure => "Failed (de)serialization.".into(),
-            ServerError::Unimplemented(ref s) => s.clone(),
-
-            ServerError::IllegalName(ref s) => format!("`{}` is not a legal name.", s),
-            ServerError::IllegalMessageRename(ref from, ref to) => format!("Cannot rename `{}` to `{}`. It's either illegal or changes the arity of the message.", from, to),
-        }
-    }
-}
-
-impl Error for ServerError {}
-
-impl fmt::Display for ServerError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.message())
-    }
-}
-
-impl From<std::option::NoneError> for ServerError {
-    fn from(_: std::option::NoneError) -> Self {
-        ServerError::Empty
-    }
-}
-
-impl From<serde_json::Error> for ServerError {
-    fn from(_: serde_json::Error) -> Self {
-        ServerError::SerializationFailure
     }
 }

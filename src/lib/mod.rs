@@ -39,10 +39,6 @@ pub use self::diagnostics::*;
 
 pub mod syntax;
 
-mod program_cell;
+mod program;
 
-pub use self::program_cell::*;
-
-mod references;
-
-pub use self::references::*;
+pub use self::program::*;
