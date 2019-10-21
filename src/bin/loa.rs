@@ -1,6 +1,7 @@
 #![feature(try_trait)]
 
 extern crate jsonrpc_stdio_server;
+extern crate log;
 extern crate log_panics;
 extern crate lsp_server;
 extern crate lsp_types;
@@ -25,18 +26,29 @@ fn main() {
 
     let (conn, _threads) = Connection::stdio();
 
-    let mut handler = server_handler::ServerHandler::new(|method, params| {
-        conn.sender
-            .send(Message::Notification(Notification { method, params }))
-            .unwrap();
-    });
-    let _initialize_params = init(&conn, &handler.capabilities).unwrap();
+    let sender = NotificationSender { conn: &conn };
+    let mut handler =
+        server_handler::ServerHandler::new(server_handler::ServerContext::new(&sender));
+    let _initialize_params = init(&conn, &server_handler::ServerHandler::CAPABILITIES).unwrap();
 
     loop {
         match next(&mut handler, &conn) {
             Err(_) => break,
             Ok(()) => (),
         }
+    }
+}
+
+struct NotificationSender<'a> {
+    conn: &'a Connection,
+}
+
+impl<'a> server_handler::NotificationSender for NotificationSender<'a> {
+    fn send(&self, method: &str, params: Value) {
+        let _ = self.conn.sender.send(Message::Notification(Notification {
+            method: method.into(),
+            params,
+        }));
     }
 }
 
@@ -49,8 +61,8 @@ fn init(
     )?)
 }
 
-fn next<F: Fn(String, Value) -> ()>(
-    handler: &mut server_handler::ServerHandler<F>,
+fn next(
+    handler: &mut server_handler::ServerHandler,
     conn: &Connection,
 ) -> Result<(), Box<dyn Error>> {
     let message = conn.receiver.recv()?;

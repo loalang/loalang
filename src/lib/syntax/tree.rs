@@ -14,8 +14,8 @@ impl Tree {
         }
     }
 
-    pub fn get(&self, id: Id) -> Option<&Node> {
-        self.nodes.get(&id)
+    pub fn get(&self, id: Id) -> Option<Node> {
+        self.nodes.get(&id).cloned()
     }
 
     pub fn add(&mut self, node: Node) {

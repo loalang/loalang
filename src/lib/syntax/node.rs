@@ -1,6 +1,7 @@
 use crate::syntax::*;
 use crate::*;
 
+#[derive(Clone)]
 pub struct Node {
     pub id: Id,
     pub parent_id: Option<Id>,
@@ -13,7 +14,7 @@ impl Node {
         self.kind.children()
     }
 
-    pub fn child_nodes<'a>(&self, tree: &'a Tree) -> Vec<&'a Node> {
+    pub fn child_nodes(&self, tree: Arc<Tree>) -> Vec<Node> {
         let mut out = vec![];
         for child_id in self.children() {
             if let Some(n) = tree.get(child_id) {
@@ -23,41 +24,103 @@ impl Node {
         out
     }
 
-    pub fn is_message_selector(&self, tree: &Tree) -> bool {
-        if let Symbol(_) = self.kind {
-            match self.parent_id.and_then(|p| tree.get(p)).map(|n| &n.kind) {
-                Some(UnaryMessagePattern { .. }) => true,
-                Some(KeywordPair { .. }) => true,
-                _ => false,
-            }
-        } else if let Operator(_) = self.kind {
-            match self.parent_id.and_then(|p| tree.get(p)).map(|n| &n.kind) {
-                Some(BinaryMessagePattern { .. }) => true,
-                _ => false,
-            }
-        } else {
-            false
+    pub fn symbol_id(&self) -> Option<Id> {
+        match self.kind {
+            Class { symbol, .. } | ReferenceTypeExpression { symbol, .. } => Some(symbol),
+            _ => None,
         }
     }
 
-    pub fn is_top_of_scope(&self) -> bool {
+    /// Traverses all nodes in the tree below this point.
+    /// If the callback returns true for a given node, the
+    /// traversal will continue down its children. Otherwise,
+    /// the traversal will not traverse down that path.
+    pub fn traverse<F: FnMut(&Node) -> bool>(&self, tree: Arc<Tree>, f: &mut F) {
+        if !f(self) {
+            return;
+        }
+
+        for child in self.child_nodes(tree.clone()) {
+            child.traverse(tree.clone(), f);
+        }
+    }
+
+    pub fn closest_upwards<F: Fn(&Node) -> bool>(&self, tree: Arc<Tree>, f: F) -> Option<Node> {
+        if f(self) {
+            return Some(self.clone());
+        }
+        let mut parent = self.parent_id?;
+        loop {
+            let parent_node = tree.get(parent)?;
+            if f(&parent_node) {
+                return Some(parent_node.clone());
+            }
+            for child in parent_node.child_nodes(tree.clone()) {
+                if f(&child) {
+                    return Some(child.clone());
+                }
+            }
+            parent = parent_node.parent_id?;
+        }
+    }
+
+    pub fn all_downwards<F: Fn(&Node) -> bool>(&self, tree: Arc<Tree>, f: &F) -> Vec<Node> {
+        let mut nodes = vec![];
+
+        if f(self) {
+            nodes.push(self.clone());
+        }
+
+        for child in self.child_nodes(tree.clone()) {
+            nodes.extend(child.all_downwards(tree.clone(), f));
+        }
+
+        nodes
+    }
+
+    pub fn is_scope_root(&self) -> bool {
         match self.kind {
-            Class { .. } | Module { .. } | Method { .. } => true,
+            Module { .. } | ClassBody { .. } | Method { .. } => true,
             _ => false,
         }
     }
 
-    pub fn as_declaration(&self, tree: Arc<Tree>) -> Option<(Id, String)> {
+    pub fn closest_scope_root_upwards(&self, tree: Arc<Tree>) -> Option<Node> {
+        self.closest_upwards(tree, |n| n.is_scope_root())
+    }
+
+    pub fn all_scope_roots_downwards(&self, tree: Arc<Tree>) -> Vec<Node> {
+        self.all_downwards(tree, &|n| n.is_scope_root())
+    }
+
+    pub fn is_declaration(&self) -> bool {
         match self.kind {
-            Class { symbol, .. } => tree.get(symbol).and_then(|s| {
-                if let Symbol(ref t) = s.kind {
-                    Some((symbol, t.lexeme()))
-                } else {
-                    None
-                }
-            }),
-            _ => None,
+            Class { .. } | ParameterPattern { .. } => true,
+            _ => false,
         }
+    }
+
+    pub fn closest_declaration_upwards(&self, tree: Arc<Tree>) -> Option<Node> {
+        self.closest_upwards(tree, |n| n.is_declaration())
+    }
+
+    pub fn all_declarations_downwards(&self, tree: Arc<Tree>) -> Vec<Node> {
+        self.all_downwards(tree, &|n| n.is_declaration())
+    }
+
+    pub fn is_reference(&self) -> bool {
+        match self.kind {
+            ReferenceTypeExpression { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn closest_references_upwards(&self, tree: Arc<Tree>) -> Option<Node> {
+        self.closest_upwards(tree, |n| n.is_reference())
+    }
+
+    pub fn all_references_downwards(&self, tree: Arc<Tree>) -> Vec<Node> {
+        self.all_downwards(tree, &|n| n.is_reference())
     }
 }
 
@@ -67,7 +130,7 @@ impl fmt::Debug for Node {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NodeKind {
     /// ```bnf
     /// Module ::=
@@ -269,7 +332,6 @@ pub enum NodeKind {
     ReferenceTypeExpression { symbol: Id },
 }
 
-use crate::fmt::Formatter;
 pub use NodeKind::*;
 
 impl NodeKind {

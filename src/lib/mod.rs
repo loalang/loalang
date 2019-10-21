@@ -29,8 +29,10 @@ mod source;
 pub use self::source::*;
 
 mod id;
-
 pub use self::id::*;
+
+mod cache;
+pub use self::cache::*;
 
 #[macro_use]
 mod diagnostics;
@@ -39,4 +41,6 @@ pub use self::diagnostics::*;
 
 pub mod syntax;
 
-pub mod program;
+pub mod semantics;
+
+pub mod server;

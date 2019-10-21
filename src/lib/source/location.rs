@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Location {
     pub uri: URI,
     pub offset: usize,
@@ -21,23 +21,39 @@ impl Location {
         }
     }
 
-    pub fn at_position(source: &Arc<Source>, line: usize, character: usize) -> Location {
+    pub fn at_position(source: &Arc<Source>, line: usize, character: usize) -> Option<Location> {
         let mut chars: Vec<char> = source.code.chars().collect();
         let mut lines: Vec<&mut [char]> = chars.split_mut(|c| *c == '\n').collect();
+
+        if lines.len() < line {
+            warn!(
+                "Tried to get position on line {} but the source had {} lines.",
+                line,
+                lines.len()
+            );
+            return None;
+        }
+
         let lines_before = &mut lines[..line];
         if lines_before.len() == 0 {
-            return Location {
+            return Some(Location {
                 uri: source.uri.clone(),
                 offset: 0,
                 line: 1,
                 character: 1,
-            };
+            });
         }
-        let mut new_last_line: Vec<_> = lines_before[lines_before.len() - 1][..character - 1]
-            .iter()
-            .cloned()
-            .collect();
-        lines_before[lines_before.len() - 1] = new_last_line.as_mut_slice();
+        let last_line_before = &mut lines_before[lines_before.len() - 1];
+        if last_line_before.len() < character - 1 {
+            warn!(
+                "Tried to get position on character {} but the line had {} characters.",
+                character,
+                last_line_before.len()
+            );
+            return None;
+        }
+        let mut new_last_line: Vec<_> = last_line_before[..character - 1].iter().cloned().collect();
+        *last_line_before = new_last_line.as_mut_slice();
 
         let mut offset = 0;
         for line in lines_before.iter() {
@@ -50,12 +66,12 @@ impl Location {
             offset -= 1;
         }
 
-        Location {
+        Some(Location {
             uri: source.uri.clone(),
             offset,
             line,
             character,
-        }
+        })
     }
 }
 

@@ -56,12 +56,14 @@ pub mod from_lsp {
 
     pub fn position_params(params: lsp::TextDocumentPositionParams) -> (loa::URI, (usize, usize)) {
         let uri = url_to_uri(&params.text_document.uri);
-        (
-            uri,
-            (
-                params.position.line as usize,
-                params.position.character as usize,
-            ),
-        )
+        (uri, position(params.position))
+    }
+
+    pub fn range(range: lsp::Range) -> ((usize, usize), (usize, usize)) {
+        (position(range.start), position(range.end))
+    }
+
+    pub fn position(position: lsp::Position) -> (usize, usize) {
+        (position.line as usize + 1, position.character as usize + 1)
     }
 }
