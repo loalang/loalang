@@ -15,3 +15,6 @@ pub use self::rename::*;
 
 mod references;
 pub use self::references::*;
+
+mod code_action;
+pub use self::code_action::*;

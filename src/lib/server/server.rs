@@ -17,10 +17,22 @@ impl Server {
     /// Sweep the entire program for all diagnostics,
     /// syntax errors and semantics.
     pub fn diagnostics(&mut self) -> HashMap<URI, Vec<Diagnostic>> {
-        self.module_cells
+        let mut all: HashMap<URI, Vec<Diagnostic>> = self
+            .module_cells
             .iter()
-            .map(|(uri, cell)| (uri.clone(), cell.diagnostics.clone()))
-            .collect()
+            .map(|(uri, _)| (uri.clone(), vec![]))
+            .collect();
+        for (uri, cell) in self.module_cells.iter() {
+            all.get_mut(uri)
+                .unwrap()
+                .extend(cell.diagnostics.iter().cloned());
+        }
+        for diagnostic in self.analysis.check() {
+            if let Some(d) = all.get_mut(&diagnostic.span().start.uri) {
+                d.push(diagnostic);
+            }
+        }
+        all
     }
 
     // SOURCE CODE MANIPULATION
@@ -62,6 +74,15 @@ impl Server {
     }
 
     // RESOLVE LOCATION
+    pub fn source(&self, uri: &URI) -> Option<Arc<Source>> {
+        let cell = self.module_cells.get(uri)?;
+        Some(cell.source.clone())
+    }
+
+    pub fn tree(&self, uri: &URI) -> Option<Arc<syntax::Tree>> {
+        let cell = self.module_cells.get(uri)?;
+        Some(cell.tree.clone())
+    }
 
     pub fn span(&self, uri: &URI, (from, to): ((usize, usize), (usize, usize))) -> Option<Span> {
         Some(Span::new(

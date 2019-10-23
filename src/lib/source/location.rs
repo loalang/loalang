@@ -21,6 +21,10 @@ impl Location {
         }
     }
 
+    pub fn at_end_of(source: &Arc<Source>) -> Location {
+        Self::at_offset(source, source.code.len())
+    }
+
     pub fn at_position(source: &Arc<Source>, line: usize, character: usize) -> Option<Location> {
         let mut chars: Vec<char> = source.code.chars().collect();
         let mut lines: Vec<&mut [char]> = chars.split_mut(|c| *c == '\n').collect();

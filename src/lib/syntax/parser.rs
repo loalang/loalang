@@ -12,6 +12,7 @@ macro_rules! sees {
 }
 
 pub struct Parser {
+    source: Arc<Source>,
     tokens: Vec<Token>,
     pub diagnostics: Vec<Diagnostic>,
     last_token_span: Span,
@@ -21,6 +22,7 @@ impl Parser {
     pub fn new(source: Arc<Source>) -> Parser {
         let start = Location::at_offset(&source, 0);
         Parser {
+            source: source.clone(),
             tokens: tokenize(source)
                 .into_iter()
                 .filter(|token| !matches!(token.kind, Whitespace(_)))
@@ -59,7 +61,7 @@ impl Parser {
     }
 
     pub fn parse(mut self) -> (Arc<Tree>, Vec<Diagnostic>) {
-        let mut tree = Tree::new();
+        let mut tree = Tree::new(self.source.clone());
         self.parse_module(&mut tree);
         (Arc::new(tree), self.diagnostics)
     }

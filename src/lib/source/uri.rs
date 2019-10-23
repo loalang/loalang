@@ -11,6 +11,25 @@ pub enum URI {
     Stdin,
 }
 
+impl URI {
+    pub fn neighboring_file(&self, name: &str) -> Option<URI> {
+        match self {
+            URI::Exact(s) => {
+                let mut segments: Vec<_> = s.split("/").collect();
+                segments.pop();
+                segments.push(name.as_ref());
+                Some(URI::Exact(segments.join("/")))
+            }
+            URI::File(path) => {
+                let mut path = path.clone();
+                path.pop();
+                Some(URI::File(path))
+            }
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for URI {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

@@ -14,6 +14,16 @@ impl Analysis {
         }
     }
 
+    pub fn check(&mut self) -> Vec<Diagnostic> {
+        let mut diagnostics = vec![];
+
+        for checker in checkers::checkers().iter() {
+            checker.check(self, &mut diagnostics);
+        }
+
+        diagnostics
+    }
+
     pub fn usage(&mut self, node: &syntax::Node) -> Option<Arc<Usage>> {
         let tree = self.modules.get(&node.span.start.uri)?.clone();
         if let syntax::Symbol(ref t) = node.kind {
@@ -33,6 +43,30 @@ impl Analysis {
         } else {
             None
         }
+    }
+
+    pub fn all_reference_symbols(&self) -> Vec<syntax::Node> {
+        let mut references = vec![];
+        for (_, tree) in self.modules.iter() {
+            if let Some(root) = tree.root() {
+                references.extend(
+                    root.all_references_downwards(tree.clone())
+                        .into_iter()
+                        .filter_map(|n| tree.get(n.symbol_id()?)),
+                );
+            }
+        }
+        references
+    }
+
+    pub fn all_references(&self) -> Vec<syntax::Node> {
+        let mut references = vec![];
+        for (_, tree) in self.modules.iter() {
+            if let Some(root) = tree.root() {
+                references.extend(root.all_references_downwards(tree.clone()));
+            }
+        }
+        references
     }
 }
 

@@ -25,6 +25,11 @@ impl Span {
         )
     }
 
+    pub fn at_end_of(source: &Arc<Source>) -> Span {
+        let end = Location::at_end_of(source);
+        Span::new(end.clone(), end)
+    }
+
     pub fn through(&self, other: &Span) -> Span {
         Span::over(self.clone(), other.clone())
     }

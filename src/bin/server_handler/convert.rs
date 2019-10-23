@@ -37,11 +37,19 @@ pub mod from_loa {
     pub fn diagnostic_to_diagnostic(diagnostic: loa::Diagnostic) -> lsp::Diagnostic {
         lsp::Diagnostic {
             range: span_to_range(diagnostic.span().clone()),
-            severity: None,
-            code: None,
+            severity: Some(level_to_severity(diagnostic.level())),
+            code: Some(lsp::NumberOrString::Number(diagnostic.code() as u64)),
             source: None,
             message: diagnostic.to_string(),
             related_information: None,
+        }
+    }
+
+    pub fn level_to_severity(level: loa::DiagnosticLevel) -> lsp::DiagnosticSeverity {
+        match level {
+            loa::DiagnosticLevel::Error => lsp::DiagnosticSeverity::Error,
+            loa::DiagnosticLevel::Warning => lsp::DiagnosticSeverity::Warning,
+            loa::DiagnosticLevel::Info => lsp::DiagnosticSeverity::Information,
         }
     }
 }
@@ -65,5 +73,18 @@ pub mod from_lsp {
 
     pub fn position(position: lsp::Position) -> (usize, usize) {
         (position.line as usize + 1, position.character as usize + 1)
+    }
+
+    pub fn diagnostic_to_diagnostic(
+        span: loa::Span,
+        diagnostic: lsp::Diagnostic,
+    ) -> Option<loa::Diagnostic> {
+        match diagnostic.code {
+            Some(lsp::NumberOrString::Number(2)) => Some(loa::Diagnostic::UndefinedTypeReference(
+                span,
+                diagnostic.message[1..diagnostic.message.len() - 15].into(),
+            )),
+            _ => None,
+        }
     }
 }

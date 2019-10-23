@@ -4,6 +4,7 @@ use std::fmt;
 #[derive(Clone)]
 pub enum Diagnostic {
     SyntaxError(Span, String),
+    UndefinedTypeReference(Span, String),
 }
 
 impl Diagnostic {
@@ -12,6 +13,25 @@ impl Diagnostic {
 
         match self {
             SyntaxError(ref s, _) => s,
+            UndefinedTypeReference(ref s, _) => s,
+        }
+    }
+
+    pub fn level(&self) -> DiagnosticLevel {
+        use Diagnostic::*;
+
+        match self {
+            SyntaxError(_, _) => DiagnosticLevel::Error,
+            UndefinedTypeReference(_, _) => DiagnosticLevel::Error,
+        }
+    }
+
+    pub fn code(&self) -> usize {
+        use Diagnostic::*;
+
+        match self {
+            SyntaxError(_, _) => 1,
+            UndefinedTypeReference(_, _) => 2,
         }
     }
 }
@@ -28,6 +48,13 @@ impl fmt::Debug for Diagnostic {
 
         match self {
             SyntaxError(_, s) => write!(f, "{}", s),
+            UndefinedTypeReference(_, s) => write!(f, "`{}` is undefined.", s),
         }
     }
+}
+
+pub enum DiagnosticLevel {
+    Error,
+    Warning,
+    Info,
 }

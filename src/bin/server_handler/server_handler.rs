@@ -20,7 +20,7 @@ impl<'a> ServerHandler<'a> {
         document_highlight_provider: None,
         document_symbol_provider: None,
         workspace_symbol_provider: None,
-        code_action_provider: None,
+        code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
         code_lens_provider: None,
         document_formatting_provider: None,
         document_range_formatting_provider: None,
@@ -85,6 +85,7 @@ impl<'a> ServerHandler<'a> {
         handle_request!(PrepareRenameRequestHandler);
         handle_request!(GotoDefinitionRequestHandler);
         handle_request!(ReferencesRequestHandler);
+        handle_request!(CodeActionRequestHandler);
 
         warn!("UNKNOWN MESSAGE: {}", method);
 
