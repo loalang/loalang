@@ -53,3 +53,9 @@ impl fmt::Display for Source {
         write!(f, "{}", self.uri)
     }
 }
+
+impl fmt::Debug for Source {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Source({})", self.uri)
+    }
+}

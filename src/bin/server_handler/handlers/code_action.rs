@@ -67,9 +67,7 @@ impl RequestHandler for CodeActionRequestHandler {
                         )),
                         new_text: match namespace {
                             None => format!("\nimport {}.", s),
-                            Some(ref namespace) => {
-                                format!("\nimport {}/{}.", namespace, s)
-                            }
+                            Some(ref namespace) => format!("\nimport {}/{}.", namespace, s),
                         },
                     }],
                 });

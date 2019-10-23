@@ -9,7 +9,7 @@ pub struct Server {
 impl Server {
     pub fn new() -> Server {
         Server {
-            analysis: semantics::Analysis::new(HashMap::new()),
+            analysis: semantics::Analysis::new(Arc::new(HashMap::new())),
             module_cells: HashMap::new(),
         }
     }
@@ -42,7 +42,7 @@ impl Server {
         for (uri, cell) in self.module_cells.iter() {
             modules.insert(uri.clone(), cell.tree.clone());
         }
-        self.analysis = Analysis::new(modules);
+        self.analysis = Analysis::new(Arc::new(modules));
     }
 
     pub fn set(&mut self, uri: URI, code: String) {

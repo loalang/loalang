@@ -1,11 +1,11 @@
 use crate::semantics::Checker;
 
-mod undefined_direct_reference;
-pub use self::undefined_direct_reference::*;
+mod undefined_type_reference;
+pub use self::undefined_type_reference::*;
 
-const UNDEFINED_DIRECT_REFERENCE: UndefinedDirectReference = UndefinedDirectReference;
+const UNDEFINED_TYPE_REFERENCE: UndefinedTypeReference = UndefinedTypeReference;
 
 #[inline]
 pub fn checkers() -> Vec<&'static dyn Checker> {
-    vec![&UNDEFINED_DIRECT_REFERENCE]
+    vec![&UNDEFINED_TYPE_REFERENCE]
 }

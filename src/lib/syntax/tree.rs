@@ -1,6 +1,7 @@
 use crate::syntax::*;
 use crate::*;
 
+#[derive(Debug)]
 pub struct Tree {
     source: Arc<Source>,
     nodes: HashMap<Id, Node>,
@@ -100,7 +101,7 @@ impl Tree {
         } = self.get(self.root)?.kind
         {
             if import_directives.len() > 0 {
-                return Some(self.get(*import_directives.last()?)?.span.end)
+                return Some(self.get(*import_directives.last()?)?.span.end);
             }
 
             Some(self.get(namespace_directive)?.span.end)

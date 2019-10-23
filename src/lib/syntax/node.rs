@@ -100,6 +100,13 @@ impl Node {
         }
     }
 
+    pub fn is_import_directive(&self) -> bool {
+        match self.kind {
+            ImportDirective { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn closest_declaration_upwards(&self, tree: Arc<Tree>) -> Option<Node> {
         self.closest_upwards(tree, |n| n.is_declaration())
     }
