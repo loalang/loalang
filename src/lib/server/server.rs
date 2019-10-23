@@ -63,9 +63,7 @@ impl Server {
                 loa_edits.insert(span.start.uri.clone(), vec![]);
             }
             let edits = loa_edits.get_mut(&span.start.uri).unwrap();
-            if let Some(cell) = self.module_cells.get(&span.start.uri) {
-                edits.push((span, code));
-            }
+            edits.push((span, code));
         }
         for (uri, edits) in loa_edits {
             self.module_cells.get_mut(&uri).map(|cell| cell.edit(edits));
@@ -129,7 +127,7 @@ impl Server {
         self.module_cells.get(uri)?.tree.get(id)
     }
 
-    pub fn completion(&mut self, location: Location) -> Option<server::Completion> {
+    pub fn completion(&mut self, _location: Location) -> Option<server::Completion> {
         None
     }
 }

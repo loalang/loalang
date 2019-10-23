@@ -14,7 +14,6 @@ impl RequestHandler for CodeActionRequestHandler {
         let span = context
             .server
             .span(&uri, convert::from_lsp::range(params.range))?;
-        let source = context.server.source(&uri)?;
         let tree = context.server.tree(&uri)?;
         let namespace = tree.namespace();
         let end_of_import_list = tree.end_of_import_list_location();

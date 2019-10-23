@@ -27,9 +27,31 @@ fn main() {
     let (conn, _threads) = Connection::stdio();
 
     let sender = NotificationSender { conn: &conn };
-    let mut handler =
-        server_handler::ServerHandler::new(server_handler::ServerContext::new(&sender));
-    let _initialize_params = init(&conn, &server_handler::ServerHandler::CAPABILITIES).unwrap();
+    let mut context = server_handler::ServerContext::new(&sender);
+    let initialize_params = init(&conn, &server_handler::ServerHandler::CAPABILITIES).unwrap();
+
+    if let Some(mut root_path) = initialize_params.root_path.map(std::path::PathBuf::from) {
+        root_path.push("**");
+        root_path.push("*.loa");
+
+        match root_path.to_str().map(glob::glob) {
+            Some(Ok(sources)) => {
+                for source in sources.filter_map(|r| r.ok()) {
+                    if let Ok(code) = std::fs::read_to_string(&source) {
+                        if let Ok(uri) = lsp_types::Url::from_file_path(source)
+                            .as_ref()
+                            .map(server_handler::convert::from_lsp::url_to_uri)
+                        {
+                            context.server.set(uri, code);
+                        }
+                    }
+                }
+            }
+            _ => (),
+        }
+    }
+
+    let mut handler = server_handler::ServerHandler::new(context);
 
     loop {
         match next(&mut handler, &conn) {

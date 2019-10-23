@@ -1,5 +1,4 @@
 use crate::syntax::*;
-use crate::*;
 
 #[derive(Debug)]
 pub struct Usage {

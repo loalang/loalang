@@ -124,7 +124,10 @@ fn find_declaration(
                                     if let Some(imported_symbol) = tree.get(imported_symbol) {
                                         if let syntax::Symbol(t) = imported_symbol.kind {
                                             if t.lexeme() == name {
-                                                match find_declaration_from_import(node, modules.clone()) {
+                                                match find_declaration_from_import(
+                                                    node,
+                                                    modules.clone(),
+                                                ) {
                                                     Some(n) => {
                                                         result = Some(n);
                                                     }
@@ -179,15 +182,18 @@ fn find_declaration_from_import(
                 .and_then(symbol_to_string)?;
             let namespace = qualified_symbol_to_string(&tree, symbols);
 
-            for (uri, other_tree) in modules_with_namespace(modules.clone(), namespace) {
+            for (_uri, other_tree) in modules_with_namespace(modules.clone(), namespace) {
                 if Arc::ptr_eq(&tree, &other_tree) {
                     continue;
                 }
 
                 if let Some(root) = other_tree.root().cloned() {
-                    if let Some(n) =
-                        find_declaration(modules.clone(), other_tree, root, declaration_symbol.clone())
-                    {
+                    if let Some(n) = find_declaration(
+                        modules.clone(),
+                        other_tree,
+                        root,
+                        declaration_symbol.clone(),
+                    ) {
                         return Some(n);
                     }
                 }

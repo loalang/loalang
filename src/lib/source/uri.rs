@@ -1,7 +1,7 @@
 use std::fmt;
 use std::path::PathBuf;
 
-#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[derive(Eq, Debug, Clone, Hash)]
 pub enum URI {
     #[cfg(test)]
     Test,
@@ -27,6 +27,12 @@ impl URI {
             }
             _ => None,
         }
+    }
+}
+
+impl PartialEq for URI {
+    fn eq(&self, other: &Self) -> bool {
+        format!("{}", self) == format!("{}", other)
     }
 }
 

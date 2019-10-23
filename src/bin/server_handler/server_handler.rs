@@ -31,7 +31,14 @@ impl<'a> ServerHandler<'a> {
         color_provider: None,
         folding_range_provider: None,
         execute_command_provider: None,
-        workspace: None,
+        workspace: Some(WorkspaceCapability {
+            workspace_folders: Some(WorkspaceFolderCapability {
+                change_notifications: Some(WorkspaceFolderCapabilityChangeNotifications::Bool(
+                    true,
+                )),
+                supported: Some(true),
+            }),
+        }),
     };
 
     pub fn new(context: ServerContext<'a>) -> ServerHandler<'a> {

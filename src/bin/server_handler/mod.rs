@@ -5,7 +5,7 @@ pub use lsp_types::*;
 mod server_error;
 pub use self::server_error::*;
 
-mod convert;
+pub mod convert;
 
 mod request_handler;
 pub use self::request_handler::*;

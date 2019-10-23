@@ -307,7 +307,7 @@ impl Parser {
 
     fn parse_method(&mut self, mut builder: NodeBuilder) -> Id {
         let mut visibility = None;
-        let mut signature = Id::NULL;
+        let signature;
         let mut method_body = Id::NULL;
         let mut period = None;
 
@@ -339,7 +339,7 @@ impl Parser {
     }
 
     fn parse_signature(&mut self, mut builder: NodeBuilder) -> Id {
-        let mut message_pattern = Id::NULL;
+        let message_pattern;
         let mut return_type = Id::NULL;
 
         message_pattern = self.parse_message_pattern(self.child(&mut builder));
@@ -432,9 +432,9 @@ impl Parser {
         mut builder: NodeBuilder,
         f: F,
     ) -> Id {
-        let mut keyword = Id::NULL;
+        let keyword;
         let mut colon = None;
-        let mut value = Id::NULL;
+        let value;
 
         if sees!(self, SimpleSymbol(_)) {
             keyword = self.parse_symbol(self.child(&mut builder));
@@ -462,13 +462,13 @@ impl Parser {
         )
     }
 
-    fn parse_method_body(&mut self, mut builder: NodeBuilder) -> Id {
+    fn parse_method_body(&mut self, _builder: NodeBuilder) -> Id {
         Id::NULL
     }
 
     fn parse_return_type(&mut self, mut builder: NodeBuilder) -> Id {
         let mut arrow = None;
-        let mut type_expression = Id::NULL;
+        let type_expression;
 
         if sees!(self, Arrow) {
             arrow = Some(self.next());
@@ -487,7 +487,7 @@ impl Parser {
         )
     }
 
-    fn parse_type_expression(&mut self, mut builder: NodeBuilder) -> Id {
+    fn parse_type_expression(&mut self, builder: NodeBuilder) -> Id {
         if sees!(self, SimpleSymbol(_)) {
             self.parse_reference_type_expression(builder)
         } else {
@@ -508,7 +508,7 @@ impl Parser {
         self.finalize(builder, ReferenceTypeExpression { symbol })
     }
 
-    fn parse_operator(&mut self, mut builder: NodeBuilder) -> Id {
+    fn parse_operator(&mut self, builder: NodeBuilder) -> Id {
         if !sees!(self, Plus | Slash | EqualSign | OpenAngle | CloseAngle) {
             return Id::NULL;
         }
@@ -518,9 +518,9 @@ impl Parser {
         self.finalize(builder, Operator(token))
     }
 
-    fn parse_parameter_pattern(&mut self, mut builder: NodeBuilder) -> Id {
-        let mut type_expression = Id::NULL;
-        let mut symbol = Id::NULL;
+    fn parse_parameter_pattern(&mut self, builder: NodeBuilder) -> Id {
+        let type_expression = Id::NULL;
+        let symbol = Id::NULL;
 
         self.finalize(
             builder,

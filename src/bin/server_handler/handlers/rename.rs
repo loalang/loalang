@@ -13,6 +13,7 @@ impl RequestHandler for RenameRequestHandler {
         let mut edits = HashMap::new();
 
         for node in usage.named_nodes() {
+            let uri = node.name_span.start.uri.clone();
             if !edits.contains_key(&uri) {
                 edits.insert(uri.clone(), vec![]);
             }
