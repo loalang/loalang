@@ -1,4 +1,4 @@
-use crate::semantics::Analysis;
+use crate::semantics::{Analysis, Navigator};
 use crate::*;
 
 pub struct Server {
@@ -72,6 +72,7 @@ impl Server {
     }
 
     // RESOLVE LOCATION
+
     pub fn source(&self, uri: &URI) -> Option<Arc<Source>> {
         let cell = self.module_cells.get(uri)?;
         Some(cell.source.clone())
@@ -95,36 +96,82 @@ impl Server {
 
     // SEMANTIC QUERIES
 
+    pub fn declaration_is_exported(&self, declaration: &syntax::Node) -> bool {
+        self.analysis.declaration_is_exported(declaration)
+    }
+
     pub fn usage(&mut self, location: Location) -> Option<server::Usage> {
         let symbol = self.module_cells.get(&location.uri)?;
         let node = symbol.tree.node_at(location)?;
+        if !node.is_symbol() {
+            return None;
+        }
+        let navigator = self.analysis.navigator();
+        if let Some(qs) = navigator.parent(&node) {
+            if let syntax::QualifiedSymbol { ref symbols } = qs.kind {
+                if symbols.last() != Some(&node.id) {
+                    return None;
+                }
+            }
+        }
         let usage = self.analysis.usage(node)?;
         Some(server::Usage {
+            handle: self.create_named_node(&node)?,
             declaration: self.create_named_node(&usage.declaration)?,
             references: usage
                 .references
                 .iter()
                 .filter_map(|n| self.create_named_node(n))
                 .collect(),
+            imports: usage
+                .import_directives
+                .iter()
+                .flat_map(|import| {
+                    let mut named_nodes = vec![];
+                    if let syntax::ImportDirective {
+                        qualified_symbol,
+                        symbol,
+                        ..
+                    } = import.kind
+                    {
+                        if let Some(symbol) = navigator.find_node(symbol) {
+                            if let Some(mut named_node) = self.create_named_node(&symbol) {
+                                named_node.node = import.clone();
+                                named_nodes.push(named_node);
+                            }
+                        }
+
+                        if let Some(qs) = navigator.find_node(qualified_symbol) {
+                            if let syntax::QualifiedSymbol { symbols } = qs.kind {
+                                if let Some(last_symbol) =
+                                    symbols.last().cloned().and_then(|i| navigator.find_node(i))
+                                {
+                                    if let Some(mut named_node) =
+                                        self.create_named_node(&last_symbol)
+                                    {
+                                        named_node.node = import.clone();
+                                        named_nodes.push(named_node);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    named_nodes
+                })
+                .collect(),
         })
     }
 
     fn create_named_node(&self, node: &syntax::Node) -> Option<server::NamedNode> {
-        let symbol = self.find_node(&node.span.start.uri, node.symbol_id()?)?;
-        if let syntax::Symbol(ref t) = symbol.kind {
-            Some(server::NamedNode {
-                name_span: t.span.clone(),
-                name: t.lexeme(),
-                node: node.clone(),
-            })
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    fn find_node(&self, uri: &URI, id: Id) -> Option<syntax::Node> {
-        self.module_cells.get(uri)?.tree.get(id)
+        let navigator = semantics::ModuleNavigator::new(
+            self.module_cells.get(&node.span.start.uri)?.tree.clone(),
+        );
+        let (name, symbol) = navigator.symbol_of(node)?;
+        Some(server::NamedNode {
+            name_span: symbol.span.clone(),
+            name,
+            node: node.clone(),
+        })
     }
 
     pub fn completion(&mut self, _location: Location) -> Option<server::Completion> {

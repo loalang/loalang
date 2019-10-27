@@ -46,6 +46,8 @@ impl<'a> ServerHandler<'a> {
     }
 
     pub fn handle(&mut self, method: &str, params: Value) -> Result<Value, ServerError> {
+        info!("-> {:?} {:#}", method, params);
+
         macro_rules! handle_notification {
             ($notification:ty) => {
                 if method == <<$notification as NotificationHandler>::N as notification::Notification>::METHOD {
@@ -87,6 +89,7 @@ impl<'a> ServerHandler<'a> {
 
         handle_notification!(DidOpenTextDocumentNotificationHandler);
         handle_notification!(DidChangeTextDocumentNotificationHandler);
+        handle_notification!(DidChangeWatchedFilesNotificationHandler);
 
         handle_request!(RenameRequestHandler);
         handle_request!(PrepareRenameRequestHandler);

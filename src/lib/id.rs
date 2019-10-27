@@ -16,6 +16,10 @@ impl Id {
     pub fn is_null(&self) -> bool {
         *self == Self::NULL
     }
+
+    pub fn as_usize(&self) -> usize {
+        self.0
+    }
 }
 
 impl fmt::Display for Id {
@@ -29,5 +33,17 @@ impl fmt::Debug for Id {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Id(value) = self;
         write!(f, "#{:X}", value)
+    }
+}
+
+impl From<usize> for Id {
+    fn from(n: usize) -> Self {
+        Id(n)
+    }
+}
+
+impl Into<usize> for Id {
+    fn into(self) -> usize {
+        self.0
     }
 }

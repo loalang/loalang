@@ -30,6 +30,28 @@ fn main() {
     let mut context = server_handler::ServerContext::new(&sender);
     let initialize_params = init(&conn, &server_handler::ServerHandler::CAPABILITIES).unwrap();
 
+    conn.sender
+        .send(Message::Request(Request::new(
+            RequestId::from(loa::Id::new().as_usize() as u64),
+            "client/registerCapability".into(),
+            RegistrationParams {
+                registrations: vec![Registration {
+                    id: "workspace-files".into(),
+                    method: "workspace/didChangeWatchedFiles".into(),
+                    register_options: Some(
+                        serde_json::to_value(DidChangeWatchedFilesRegistrationOptions {
+                            watchers: vec![FileSystemWatcher {
+                                kind: None,
+                                glob_pattern: "**/*.loa".into(),
+                            }],
+                        })
+                        .unwrap(),
+                    ),
+                }],
+            },
+        )))
+        .unwrap();
+
     if let Some(mut root_path) = initialize_params.root_path.map(std::path::PathBuf::from) {
         root_path.push("**");
         root_path.push("*.loa");

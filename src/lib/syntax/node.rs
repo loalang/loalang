@@ -14,88 +14,16 @@ impl Node {
         self.kind.children()
     }
 
-    pub fn child_nodes(&self, tree: Arc<Tree>) -> Vec<Node> {
-        let mut out = vec![];
-        for child_id in self.children() {
-            if let Some(n) = tree.get(child_id) {
-                out.push(n);
-            }
-        }
-        out
-    }
-
-    pub fn symbol_id(&self) -> Option<Id> {
+    pub fn is_symbol(&self) -> bool {
         match self.kind {
-            Class { symbol, .. } | ReferenceTypeExpression { symbol, .. } => Some(symbol),
-            _ => None,
+            Symbol(_) => true,
+            _ => false,
         }
-    }
-
-    /// Traverses all nodes in the tree below this point.
-    /// If the callback returns true for a given node, the
-    /// traversal will continue down its children. Otherwise,
-    /// the traversal will not traverse down that path.
-    pub fn traverse<F: FnMut(&Node) -> bool>(&self, tree: Arc<Tree>, f: &mut F) {
-        if !f(self) {
-            return;
-        }
-
-        for child in self.child_nodes(tree.clone()) {
-            child.traverse(tree.clone(), f);
-        }
-    }
-
-    pub fn closest_upwards<F: Fn(&Node) -> bool>(&self, tree: Arc<Tree>, f: F) -> Option<Node> {
-        if f(self) {
-            return Some(self.clone());
-        }
-        let mut parent = self.parent_id?;
-        loop {
-            let parent_node = tree.get(parent)?;
-            if f(&parent_node) {
-                return Some(parent_node.clone());
-            }
-            for child in parent_node.child_nodes(tree.clone()) {
-                if f(&child) {
-                    return Some(child.clone());
-                }
-            }
-            parent = parent_node.parent_id?;
-        }
-    }
-
-    pub fn all_downwards<F: Fn(&Node) -> bool>(&self, tree: Arc<Tree>, f: &F) -> Vec<Node> {
-        let mut nodes = vec![];
-
-        if f(self) {
-            nodes.push(self.clone());
-        }
-
-        for child in self.child_nodes(tree.clone()) {
-            nodes.extend(child.all_downwards(tree.clone(), f));
-        }
-
-        nodes
     }
 
     pub fn is_scope_root(&self) -> bool {
         match self.kind {
             Module { .. } | ClassBody { .. } | Method { .. } => true,
-            _ => false,
-        }
-    }
-
-    pub fn closest_scope_root_upwards(&self, tree: Arc<Tree>) -> Option<Node> {
-        self.closest_upwards(tree, |n| n.is_scope_root())
-    }
-
-    pub fn all_scope_roots_downwards(&self, tree: Arc<Tree>) -> Vec<Node> {
-        self.all_downwards(tree, &|n| n.is_scope_root())
-    }
-
-    pub fn is_declaration(&self) -> bool {
-        match self.kind {
-            Class { .. } | ParameterPattern { .. } => true,
             _ => false,
         }
     }
@@ -107,12 +35,18 @@ impl Node {
         }
     }
 
-    pub fn closest_declaration_upwards(&self, tree: Arc<Tree>) -> Option<Node> {
-        self.closest_upwards(tree, |n| n.is_declaration())
+    pub fn is_qualified_symbol(&self) -> bool {
+        match self.kind {
+            QualifiedSymbol { .. } => true,
+            _ => false,
+        }
     }
 
-    pub fn all_declarations_downwards(&self, tree: Arc<Tree>) -> Vec<Node> {
-        self.all_downwards(tree, &|n| n.is_declaration())
+    pub fn is_declaration(&self) -> bool {
+        match self.kind {
+            Class { .. } | ParameterPattern { .. } => true,
+            _ => false,
+        }
     }
 
     pub fn is_reference(&self) -> bool {
@@ -120,14 +54,6 @@ impl Node {
             ReferenceTypeExpression { .. } => true,
             _ => false,
         }
-    }
-
-    pub fn closest_references_upwards(&self, tree: Arc<Tree>) -> Option<Node> {
-        self.closest_upwards(tree, |n| n.is_reference())
-    }
-
-    pub fn all_references_downwards(&self, tree: Arc<Tree>) -> Vec<Node> {
-        self.all_downwards(tree, &|n| n.is_reference())
     }
 }
 

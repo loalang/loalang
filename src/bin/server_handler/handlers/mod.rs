@@ -4,6 +4,9 @@ pub use self::did_open_text_document::*;
 mod did_change_text_document;
 pub use self::did_change_text_document::*;
 
+mod did_change_watched_files;
+pub use self::did_change_watched_files::*;
+
 mod goto_definition;
 pub use self::goto_definition::*;
 

@@ -13,8 +13,8 @@ impl RequestHandler for PrepareRenameRequestHandler {
         let location = context.server.location(&uri, location)?;
         let usage = context.server.usage(location)?;
         Some(PrepareRenameResponse::RangeWithPlaceholder {
-            range: convert::from_loa::span_to_range(usage.declaration.name_span),
-            placeholder: usage.declaration.name,
+            range: convert::from_loa::span_to_range(usage.handle.name_span),
+            placeholder: usage.handle.name,
         })
     }
 }

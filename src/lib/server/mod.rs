@@ -6,19 +6,28 @@ pub use self::module_cell::*;
 mod server;
 pub use self::server::*;
 
+#[derive(Debug)]
 pub struct Usage {
+    pub handle: NamedNode,
     pub declaration: NamedNode,
     pub references: Vec<NamedNode>,
+    pub imports: Vec<NamedNode>,
 }
 
 impl Usage {
-    pub fn named_nodes(self) -> Vec<NamedNode> {
-        let mut nodes = self.references;
-        nodes.push(self.declaration);
+    pub fn named_nodes(&self) -> Vec<NamedNode> {
+        let mut nodes = self.references.clone();
+        nodes.push(self.declaration.clone());
+        nodes.extend(self.imports.iter().cloned());
         nodes
+    }
+
+    pub fn handle_is_aliased(&self) -> bool {
+        self.handle.name != self.declaration.name
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct NamedNode {
     pub name: String,
     pub name_span: Span,

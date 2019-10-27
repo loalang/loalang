@@ -14,6 +14,10 @@ impl Analysis {
         }
     }
 
+    pub fn navigator(&self) -> ProgramNavigator {
+        ProgramNavigator::new(self.modules.clone())
+    }
+
     pub fn check(&mut self) -> Vec<Diagnostic> {
         let mut diagnostics = vec![];
 
@@ -25,148 +29,37 @@ impl Analysis {
     }
 
     pub fn usage(&mut self, node: &syntax::Node) -> Option<Arc<Usage>> {
-        let tree = self.modules.get(&node.span.start.uri)?.clone();
-        let modules = self.modules.clone();
-        if let syntax::Symbol(ref t) = node.kind {
-            self.usage
-                .cache(node.id, |cache| {
-                    let name = t.lexeme();
-                    let node = tree.get(node.parent_id?)?;
-                    let usage = Arc::new(find_usage(modules, tree, node.clone(), name)?);
+        let navigator = self.navigator();
+        self.usage
+            .cache(node.id, move |cache| {
+                let usage = navigator.find_usage(node)?;
 
-                    cache.set(usage.declaration.id, Some(usage.clone()));
-                    for n in usage.references.iter() {
-                        cache.set(n.id, Some(usage.clone()));
-                    }
-                    Some(usage)
-                })
-                .clone()
-        } else {
-            None
-        }
+                cache.set(usage.declaration.id, Some(usage.clone()));
+                for n in usage.references.iter() {
+                    cache.set(n.id, Some(usage.clone()));
+                }
+                for n in usage.import_directives.iter() {
+                    cache.set(n.id, Some(usage.clone()));
+                }
+                Some(usage)
+            })
+            .clone()
     }
 
     pub fn all_reference_symbols(&self) -> Vec<syntax::Node> {
-        let mut references = vec![];
-        for (_, tree) in self.modules.iter() {
-            if let Some(root) = tree.root() {
-                references.extend(
-                    root.all_references_downwards(tree.clone())
-                        .into_iter()
-                        .filter_map(|n| tree.get(n.symbol_id()?)),
-                );
-            }
-        }
-        references
+        self.navigator().all_reference_symbols()
     }
 
     pub fn all_references(&self) -> Vec<syntax::Node> {
-        let mut references = vec![];
-        for (_, tree) in self.modules.iter() {
-            if let Some(root) = tree.root() {
-                references.extend(root.all_references_downwards(tree.clone()));
-            }
-        }
-        references
+        self.navigator().all_references()
+    }
+
+    pub fn declaration_is_exported(&self, declaration: &syntax::Node) -> bool {
+        self.navigator().declaration_is_exported(declaration)
     }
 }
 
-fn find_usage(
-    modules: Arc<HashMap<URI, Arc<syntax::Tree>>>,
-    tree: Arc<syntax::Tree>,
-    from: syntax::Node,
-    name: String,
-) -> Option<semantics::Usage> {
-    if from.is_declaration() || from.is_import_directive() {
-        Some(semantics::Usage {
-            declaration: from.clone(),
-            references: find_references(tree, from, name),
-        })
-    } else if from.is_reference() {
-        find_declaration(modules.clone(), tree.clone(), from, name.clone())
-            .and_then(|d| find_usage(modules, tree, d, name))
-    } else {
-        None
-    }
-}
-
-fn find_declaration(
-    modules: Arc<HashMap<URI, Arc<syntax::Tree>>>,
-    tree: Arc<syntax::Tree>,
-    from: syntax::Node,
-    name: String,
-) -> Option<syntax::Node> {
-    match from.closest_scope_root_upwards(tree.clone()) {
-        None => None,
-        Some(scope_root) => {
-            let mut result = None;
-            scope_root.traverse(tree.clone(), &mut |node| {
-                // We do not traverse down scope roots, since
-                // declarations declared there is not reachable
-                // to the original reference.
-                if node.id != scope_root.id && node.is_scope_root() {
-                    return false;
-                }
-
-                if node.is_import_directive() {
-                    if let syntax::ImportDirective {
-                        qualified_symbol,
-                        symbol,
-                        ..
-                    } = node.kind
-                    {
-                        if let Some(qualified_symbol) = tree.get(qualified_symbol) {
-                            if let syntax::QualifiedSymbol { symbols, .. } = qualified_symbol.kind {
-                                if let Some(mut imported_symbol) = symbols.last().cloned() {
-                                    if symbol != Id::NULL {
-                                        imported_symbol = symbol;
-                                    }
-                                    if let Some(imported_symbol) = tree.get(imported_symbol) {
-                                        if let syntax::Symbol(t) = imported_symbol.kind {
-                                            if t.lexeme() == name {
-                                                match find_declaration_from_import(
-                                                    node,
-                                                    modules.clone(),
-                                                ) {
-                                                    Some(n) => {
-                                                        result = Some(n);
-                                                    }
-                                                    None => {
-                                                        result = Some(node.clone());
-                                                    }
-                                                }
-                                                return false;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if node.is_declaration() {
-                    if let Some(symbol) = node.symbol_id().and_then(|id| tree.get(id)) {
-                        if let syntax::Symbol(ref t) = symbol.kind {
-                            if t.lexeme() == name {
-                                result = Some(node.clone());
-                                return false;
-                            }
-                        }
-                    }
-                }
-
-                true
-            });
-            if result.is_some() {
-                return result;
-            }
-            let parent = tree.get(scope_root.parent_id?)?;
-            find_declaration(modules, tree, parent, name)
-        }
-    }
-}
-
+/*
 fn find_declaration_from_import(
     import_directive: &syntax::Node,
     modules: Arc<HashMap<URI, Arc<syntax::Tree>>>,
@@ -261,32 +154,4 @@ fn find_node_in_modules(
     None
 }
 
-fn find_references(
-    tree: Arc<syntax::Tree>,
-    declaration: syntax::Node,
-    name: String,
-) -> Vec<syntax::Node> {
-    match declaration.closest_scope_root_upwards(tree.clone()) {
-        None => vec![],
-        Some(scope_root) => scope_root.all_downwards(tree.clone(), &|n| {
-            if !n.is_reference() {
-                return false;
-            }
-
-            n.symbol_id()
-                .and_then(|id| tree.get(id))
-                .and_then(|s| {
-                    if let syntax::Symbol(ref t) = s.kind {
-                        if t.lexeme() == name {
-                            Some(true)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or(false)
-        }),
-    }
-}
+*/

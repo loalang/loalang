@@ -46,9 +46,9 @@ impl RequestHandler for CodeActionRequestHandler {
                     edits: vec![TextEdit {
                         range: Default::default(),
                         new_text: match namespace {
-                            None => format!("class {}.\n", s),
+                            None => format!("export class {}.\n", s),
                             Some(ref namespace) => {
-                                format!("namespace {}.\n\nclass {}.\n", namespace, s)
+                                format!("namespace {}.\n\nexport class {}.\n", namespace, s)
                             }
                         },
                     }],

@@ -28,6 +28,21 @@ impl URI {
             _ => None,
         }
     }
+
+    pub fn basename(&self) -> Option<String> {
+        match self {
+            URI::Exact(s) => {
+                let mut segments: Vec<_> = s.split("/").collect();
+                segments.pop().map(|s| s.into())
+            }
+            URI::File(path) => path.file_name().map(|os| os.to_string_lossy().to_string()),
+            _ => None,
+        }
+    }
+
+    pub fn matches_basename(&self, basename: &str) -> bool {
+        self.basename() == Some(basename.into())
+    }
 }
 
 impl PartialEq for URI {

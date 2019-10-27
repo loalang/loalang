@@ -4,4 +4,5 @@ use crate::syntax::*;
 pub struct Usage {
     pub declaration: Node,
     pub references: Vec<Node>,
+    pub import_directives: Vec<Node>,
 }
