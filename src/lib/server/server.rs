@@ -174,7 +174,36 @@ impl Server {
         })
     }
 
-    pub fn completion(&mut self, _location: Location) -> Option<server::Completion> {
-        None
+    pub fn completion(&mut self, location: Location) -> Option<server::Completion> {
+        let (before, _at, _after) = self
+            .module_cells
+            .get(&location.uri)?
+            .tree
+            .nodes_around(location);
+
+        let before = before?;
+
+        match before.kind {
+            syntax::MethodBody { .. } => {
+                let declarations = self.analysis.declarations_in_scope(before.clone());
+
+                Some(server::Completion::VariablesInScope(
+                    declarations
+                        .into_iter()
+                        .filter_map(|dec| {
+                            Some(server::Variable {
+                                name: self.analysis.navigator().symbol_of(&dec)?.0,
+                                type_: server::Type::Tuple(vec![]),
+                                kind: match dec.kind {
+                                    syntax::Class { .. } => server::VariableKind::Class,
+                                    _ => server::VariableKind::Unknown,
+                                },
+                            })
+                        })
+                        .collect(),
+                ))
+            }
+            _ => None,
+        }
     }
 }

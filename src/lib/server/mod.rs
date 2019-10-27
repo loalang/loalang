@@ -42,6 +42,12 @@ pub enum Completion {
 pub struct Variable {
     pub name: String,
     pub type_: Type,
+    pub kind: VariableKind,
+}
+
+pub enum VariableKind {
+    Unknown,
+    Class,
 }
 
 pub enum MessageSignature {

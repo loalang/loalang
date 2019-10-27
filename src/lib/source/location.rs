@@ -1,6 +1,7 @@
 use crate::*;
+use std::cmp::Ordering;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq)]
 pub struct Location {
     pub uri: URI,
     pub offset: usize,
@@ -88,6 +89,18 @@ impl fmt::Display for Location {
 impl PartialEq for Location {
     fn eq(&self, other: &Self) -> bool {
         self.uri == other.uri && self.offset == other.offset
+    }
+}
+
+impl Ord for Location {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.offset.cmp(&other.offset)
+    }
+}
+
+impl PartialOrd for Location {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.offset.cmp(&other.offset))
     }
 }
 

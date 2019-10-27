@@ -33,6 +33,47 @@ impl Tree {
         self.nodes.get(&self.root)
     }
 
+    pub fn nodes_around(
+        &self,
+        location: Location,
+    ) -> (Option<&Node>, Option<&Node>, Option<&Node>) {
+        let mut nodes_before = vec![];
+        let mut nodes_at = vec![];
+        let mut nodes_after = vec![];
+
+        for node in self.nodes.values() {
+            let leaves = node.leaves();
+            if node.span.end <= location {
+                nodes_before.push((node.span.end.clone(), node))
+            } else if node.span.start >= location {
+                nodes_after.push((node.span.start.clone(), node))
+            } else {
+                nodes_at.push((node.span.start.clone(), node))
+            }
+            for leaf in leaves {
+                if leaf.span.end <= location {
+                    nodes_before.push((leaf.span.end.clone(), node))
+                } else if leaf.span.start >= location {
+                    nodes_after.push((leaf.span.start.clone(), node))
+                } else {
+                    nodes_at.push((leaf.span.start.clone(), node))
+                }
+            }
+        }
+
+        nodes_before.sort_by(|(a, _), (b, _)| b.cmp(&a));
+
+        nodes_at.sort_by(|(a, _), (b, _)| b.cmp(&a));
+
+        nodes_after.sort_by(|(a, _), (b, _)| a.cmp(&b));
+
+        (
+            nodes_before.first().map(|(_, n)| *n),
+            nodes_at.first().map(|(_, n)| *n),
+            nodes_after.first().map(|(_, n)| *n),
+        )
+    }
+
     pub fn node_at(&self, location: Location) -> Option<&Node> {
         let mut current_node = self.root;
         'children: loop {

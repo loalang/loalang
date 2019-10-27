@@ -14,6 +14,10 @@ impl Node {
         self.kind.children()
     }
 
+    pub fn leaves(&self) -> Vec<&Token> {
+        self.kind.leaves()
+    }
+
     pub fn is_symbol(&self) -> bool {
         match self.kind {
             Symbol(_) => true,
@@ -263,11 +267,87 @@ pub enum NodeKind {
     ///   Symbol
     /// ```
     ReferenceTypeExpression { symbol: Id },
+
+    /// ```bnf
+    /// MethodBody ::=
+    ///   FAT_ARROW
+    ///   Expression
+    /// ```
+    MethodBody {
+        fat_arrow: Option<Token>,
+        expression: Id,
+    },
+
+    /// ```bnf
+    /// Expression ::=
+    ///   ReferenceExpression
+    /// ```
+
+    /// ```bnf
+    /// ReferenceExpression ::=
+    ///   Symbol
+    /// ```
+    ReferenceExpression { symbol: Id },
 }
 
 pub use NodeKind::*;
 
 impl NodeKind {
+    pub fn leaves(&self) -> Vec<&Token> {
+        let option_tokens: Vec<Option<&Token>> = match self {
+            Exported(ref token, _) => vec![Some(token)],
+
+            NamespaceDirective {
+                ref namespace_keyword,
+                ref period,
+                ..
+            } => vec![namespace_keyword.as_ref(), period.as_ref()],
+
+            ImportDirective {
+                ref import_keyword,
+                ref as_keyword,
+                ref period,
+                ..
+            } => vec![
+                import_keyword.as_ref(),
+                as_keyword.as_ref(),
+                period.as_ref(),
+            ],
+
+            Symbol(ref token) => vec![Some(token)],
+
+            Class {
+                ref class_keyword,
+                ref period,
+                ..
+            } => vec![class_keyword.as_ref(), period.as_ref()],
+
+            ClassBody {
+                ref open_curly,
+                ref close_curly,
+                ..
+            } => vec![open_curly.as_ref(), close_curly.as_ref()],
+
+            Method {
+                ref visibility,
+                ref period,
+                ..
+            } => vec![visibility.as_ref(), period.as_ref()],
+
+            Operator(ref token) => vec![Some(token)],
+
+            KeywordPair { ref colon, .. } => vec![colon.as_ref()],
+
+            ReturnType { ref arrow, .. } => vec![arrow.as_ref()],
+
+            MethodBody { ref fat_arrow, .. } => vec![fat_arrow.as_ref()],
+
+            _ => vec![],
+        };
+
+        option_tokens.into_iter().filter_map(|t| t).collect()
+    }
+
     pub fn children(&self) -> Vec<Id> {
         let mut children = vec![];
 
@@ -356,6 +436,12 @@ impl NodeKind {
                 children.push(symbol);
             }
             ReferenceTypeExpression { symbol } => {
+                children.push(symbol);
+            }
+            MethodBody { expression, .. } => {
+                children.push(expression);
+            }
+            ReferenceExpression { symbol } => {
                 children.push(symbol);
             }
         }

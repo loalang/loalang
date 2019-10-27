@@ -462,8 +462,25 @@ impl Parser {
         )
     }
 
-    fn parse_method_body(&mut self, _builder: NodeBuilder) -> Id {
-        Id::NULL
+    fn parse_method_body(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut fat_arrow = None;
+        let expression;
+
+        if sees!(self, FatArrow) {
+            fat_arrow = Some(self.next());
+        } else {
+            self.syntax_error("Expected `=>`.");
+        }
+
+        expression = self.parse_expression(self.child(&mut builder));
+
+        self.finalize(
+            builder,
+            MethodBody {
+                fat_arrow,
+                expression,
+            },
+        )
     }
 
     fn parse_return_type(&mut self, mut builder: NodeBuilder) -> Id {
@@ -518,9 +535,17 @@ impl Parser {
         self.finalize(builder, Operator(token))
     }
 
-    fn parse_parameter_pattern(&mut self, builder: NodeBuilder) -> Id {
-        let type_expression = Id::NULL;
-        let symbol = Id::NULL;
+    fn parse_parameter_pattern(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut type_expression = Id::NULL;
+        let mut symbol = Id::NULL;
+
+        if sees!(self, SimpleSymbol(_)) {
+            type_expression = self.parse_type_expression(self.child(&mut builder));
+        }
+
+        if sees!(self, SimpleSymbol(_)) {
+            symbol = self.parse_symbol(self.child(&mut builder));
+        }
 
         self.finalize(
             builder,
@@ -529,5 +554,20 @@ impl Parser {
                 symbol,
             },
         )
+    }
+
+    fn parse_expression(&mut self, builder: NodeBuilder) -> Id {
+        if sees!(self, SimpleSymbol(_)) {
+            self.parse_reference_expression(builder)
+        } else {
+            self.syntax_error_end("Expected expression.");
+            Id::NULL
+        }
+    }
+
+    fn parse_reference_expression(&mut self, mut builder: NodeBuilder) -> Id {
+        let symbol = self.parse_symbol(self.child(&mut builder));
+
+        self.finalize(builder, ReferenceExpression { symbol })
     }
 }

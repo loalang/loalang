@@ -21,3 +21,6 @@ pub use self::references::*;
 
 mod code_action;
 pub use self::code_action::*;
+
+mod completion;
+pub use self::completion::*;

@@ -28,7 +28,7 @@ fn main() {
 
     let sender = NotificationSender { conn: &conn };
     let mut context = server_handler::ServerContext::new(&sender);
-    let initialize_params = init(&conn, &server_handler::ServerHandler::CAPABILITIES).unwrap();
+    let initialize_params = init(&conn, &server_handler::ServerHandler::capabilities()).unwrap();
 
     conn.sender
         .send(Message::Request(Request::new(

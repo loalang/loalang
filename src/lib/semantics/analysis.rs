@@ -57,101 +57,37 @@ impl Analysis {
     pub fn declaration_is_exported(&self, declaration: &syntax::Node) -> bool {
         self.navigator().declaration_is_exported(declaration)
     }
-}
 
-/*
-fn find_declaration_from_import(
-    import_directive: &syntax::Node,
-    modules: Arc<HashMap<URI, Arc<syntax::Tree>>>,
-) -> Option<syntax::Node> {
-    if let syntax::ImportDirective {
-        qualified_symbol, ..
-    } = import_directive.kind
-    {
-        let (tree, qualified_symbol) = find_node_in_modules(modules.as_ref(), qualified_symbol)?;
-        if let syntax::QualifiedSymbol { mut symbols } = qualified_symbol.kind {
-            let declaration_symbol = find_node_in_modules(modules.as_ref(), symbols.pop()?)
-                .map(|(_, n)| n)
-                .and_then(symbol_to_string)?;
-            let namespace = qualified_symbol_to_string(&tree, symbols);
+    pub fn declarations_in_scope(&self, mut from: syntax::Node) -> Vec<syntax::Node> {
+        let uri = from.span.start.uri.clone();
+        let navigator = self.navigator();
 
-            for (_uri, other_tree) in modules_with_namespace(modules.clone(), namespace) {
-                if Arc::ptr_eq(&tree, &other_tree) {
-                    continue;
+        let mut declarations = vec![];
+
+        while let Some(scope_root) = navigator.closest_scope_root_upwards(&from) {
+            navigator.traverse(&scope_root, &mut |n| {
+                // Don't traverse into lower scopes.
+                if n.is_scope_root() && n.id != scope_root.id {
+                    return false;
                 }
 
-                if let Some(root) = other_tree.root().cloned() {
-                    if let Some(n) = find_declaration(
-                        modules.clone(),
-                        other_tree,
-                        root,
-                        declaration_symbol.clone(),
-                    ) {
-                        return Some(n);
-                    }
+                if n.is_declaration() {
+                    declarations.push(n.clone());
                 }
+
+                true
+            });
+
+            if let Some(parent) = scope_root
+                .parent_id
+                .and_then(|pid| navigator.find_node_in(&uri, pid))
+            {
+                from = parent;
+            } else {
+                break;
             }
         }
-    }
-    None
-}
 
-fn modules_with_namespace(
-    modules: Arc<HashMap<URI, Arc<syntax::Tree>>>,
-    namespace: String,
-) -> Vec<(URI, Arc<syntax::Tree>)> {
-    modules
-        .iter()
-        .map(|(a, b)| (a.clone(), b.clone()))
-        .filter(|(_, tree)| namespace_from_tree(tree) == Some(namespace.clone()))
-        .collect()
-}
-
-fn namespace_from_tree(tree: &syntax::Tree) -> Option<String> {
-    let module = tree.root()?;
-    if let syntax::Module {
-        namespace_directive,
-        ..
-    } = module.kind
-    {
-        if let syntax::NamespaceDirective {
-            qualified_symbol, ..
-        } = tree.get(namespace_directive)?.kind
-        {
-            if let syntax::QualifiedSymbol { symbols } = tree.get(qualified_symbol)?.kind {
-                return Some(qualified_symbol_to_string(tree, symbols));
-            }
-        }
-    }
-    None
-}
-
-fn qualified_symbol_to_string(tree: &syntax::Tree, symbols: Vec<Id>) -> String {
-    symbols
-        .into_iter()
-        .filter_map(|id| tree.get(id))
-        .filter_map(symbol_to_string)
-        .collect::<Vec<_>>()
-        .join("/")
-}
-
-fn symbol_to_string(node: syntax::Node) -> Option<String> {
-    match node.kind {
-        syntax::Symbol(ref t) => Some(t.lexeme()),
-        _ => None,
+        declarations
     }
 }
-
-fn find_node_in_modules(
-    modules: &HashMap<URI, Arc<syntax::Tree>>,
-    id: Id,
-) -> Option<(Arc<syntax::Tree>, syntax::Node)> {
-    for (_, tree) in modules.iter() {
-        if let Some(node) = tree.get(id) {
-            return Some((tree.clone(), node));
-        }
-    }
-    None
-}
-
-*/
