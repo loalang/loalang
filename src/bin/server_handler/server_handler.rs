@@ -11,7 +11,7 @@ impl<'a> ServerHandler<'a> {
             text_document_sync: Some(TextDocumentSyncCapability::Kind(
                 TextDocumentSyncKind::Incremental,
             )),
-            hover_provider: None,
+            hover_provider: Some(true),
             completion_provider: Some(CompletionOptions {
                 resolve_provider: Some(true),
                 trigger_characters: Some(vec![" ".into()]),
@@ -104,6 +104,7 @@ impl<'a> ServerHandler<'a> {
         handle_request!(CodeActionRequestHandler);
         handle_request!(CompletionRequestHandler);
         handle_request!(DocumentHighlightRequestHandler);
+        handle_request!(HoverRequestHandler);
 
         warn!("UNKNOWN MESSAGE: {}", method);
 
