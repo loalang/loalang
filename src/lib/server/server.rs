@@ -116,7 +116,6 @@ impl Server {
             }
         }
         let usage = self.analysis.usage(node)?;
-        info!("USAGE: {:?}", usage);
         Some(server::Usage {
             handle: self.create_named_node(&node)?,
             declaration: self.create_named_node(&usage.declaration)?,

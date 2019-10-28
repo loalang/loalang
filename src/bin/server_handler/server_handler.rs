@@ -18,10 +18,10 @@ impl<'a> ServerHandler<'a> {
             }),
             signature_help_provider: None,
             definition_provider: Some(true),
-            type_definition_provider: None,
+            type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
             implementation_provider: None,
             references_provider: Some(true),
-            document_highlight_provider: None,
+            document_highlight_provider: Some(true),
             document_symbol_provider: None,
             workspace_symbol_provider: None,
             code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
@@ -102,6 +102,7 @@ impl<'a> ServerHandler<'a> {
         handle_request!(ReferencesRequestHandler);
         handle_request!(CodeActionRequestHandler);
         handle_request!(CompletionRequestHandler);
+        handle_request!(DocumentHighlightRequestHandler);
 
         warn!("UNKNOWN MESSAGE: {}", method);
 

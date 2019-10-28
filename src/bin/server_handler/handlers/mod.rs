@@ -24,3 +24,6 @@ pub use self::code_action::*;
 
 mod completion;
 pub use self::completion::*;
+
+mod document_highlight;
+pub use self::document_highlight::*;
