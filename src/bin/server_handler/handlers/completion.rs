@@ -58,7 +58,7 @@ impl CompletionRequestHandler {
                                 .enumerate()
                                 .map(|(i, (s, _))| format!("{}: ${}", s, i + 1))
                                 .collect::<Vec<_>>()
-                            .join(" "),
+                                .join(" "),
                         }),
                         insert_text_format: Some(InsertTextFormat::Snippet),
                         text_edit: None,

@@ -410,27 +410,35 @@ impl Parser {
     }
 
     fn parse_keyword_message_pattern(&mut self, mut builder: NodeBuilder) -> Id {
-        let mut keyword_pairs = vec![];
-
         if !sees!(self, SimpleSymbol(_)) {
             self.syntax_error("Expected keywords.");
             return Id::NULL;
         }
 
-        while sees!(self, SimpleSymbol(_)) {
-            keyword_pairs.push(
-                self.parse_keyword_pair(self.child(&mut builder), Self::parse_parameter_pattern),
-            );
-        }
+        let keyword_pairs = self.parse_keyword_pairs(&mut builder, &Self::parse_parameter_pattern);
 
         self.finalize(builder, KeywordMessagePattern { keyword_pairs })
     }
 
+    fn parse_keyword_pairs<F: Fn(&mut Self, NodeBuilder) -> Id>(
+        &mut self,
+        builder: &mut NodeBuilder,
+        f: &F,
+    ) -> Vec<Id> {
+        let mut keyword_pairs = vec![];
+
+        while sees!(self, SimpleSymbol(_)) {
+            keyword_pairs.push(self.parse_keyword_pair(self.child(builder), f));
+        }
+
+        keyword_pairs
+    }
+
     #[inline]
-    fn parse_keyword_pair<F: FnOnce(&mut Self, NodeBuilder) -> Id>(
+    fn parse_keyword_pair<F: Fn(&mut Self, NodeBuilder) -> Id>(
         &mut self,
         mut builder: NodeBuilder,
-        f: F,
+        f: &F,
     ) -> Id {
         let keyword;
         let mut colon = None;
@@ -556,13 +564,104 @@ impl Parser {
         )
     }
 
-    fn parse_expression(&mut self, builder: NodeBuilder) -> Id {
+    fn parse_expression(&mut self, mut builder: NodeBuilder) -> Id {
+        let result = self.parse_leaf_expression(self.child(&mut builder));
+        let result = self.parse_unary_message_send(self.child(&mut builder), result);
+        let result = self.parse_binary_message_send(self.child(&mut builder), result);
+        let result = self.parse_keyword_message_send(self.child(&mut builder), result);
+        builder.fix_parentage(result)
+    }
+
+    fn parse_leaf_expression(&mut self, builder: NodeBuilder) -> Id {
         if sees!(self, SimpleSymbol(_)) {
-            self.parse_reference_expression(builder)
-        } else {
-            self.syntax_error_end("Expected expression.");
-            Id::NULL
+            return self.parse_reference_expression(builder);
         }
+        self.syntax_error_end("Expected expression.");
+        Id::NULL
+    }
+
+    fn parse_unary_message_send(&mut self, mut builder: NodeBuilder, receiver: Id) -> Id {
+        if sees!(self, SimpleSymbol(_)) {
+            if self.tokens[1].kind != Colon {
+                let message = {
+                    let mut builder = self.child(&mut builder);
+
+                    let symbol = self.parse_symbol(self.child(&mut builder));
+
+                    self.finalize(builder, UnaryMessage { symbol })
+                };
+
+                let result = self.finalize(
+                    self.child(&mut builder),
+                    MessageSendExpression {
+                        expression: receiver,
+                        message,
+                    },
+                );
+                return self.parse_unary_message_send(self.child(&mut builder), result);
+            }
+        }
+        return receiver;
+    }
+
+    fn parse_binary_message_send(&mut self, mut builder: NodeBuilder, receiver: Id) -> Id {
+        if sees!(self, Plus | Slash | EqualSign | OpenAngle | CloseAngle) {
+            let message = {
+                let mut builder = self.child(&mut builder);
+
+                let operator = self.parse_operator(self.child(&mut builder));
+                let result = self.parse_leaf_expression(self.child(&mut builder));
+                let expression = self.parse_unary_message_send(self.child(&mut builder), result);
+
+                self.finalize(
+                    builder,
+                    BinaryMessage {
+                        operator,
+                        expression,
+                    },
+                )
+            };
+
+            let result = self.finalize(
+                self.child(&mut builder),
+                MessageSendExpression {
+                    expression: receiver,
+                    message,
+                },
+            );
+            let result = self.parse_unary_message_send(self.child(&mut builder), result);
+            return self.parse_binary_message_send(self.child(&mut builder), result);
+        }
+        return receiver;
+    }
+
+    fn parse_keyword_argument(&mut self, mut builder: NodeBuilder) -> Id {
+        let result = self.parse_leaf_expression(self.child(&mut builder));
+        let result = self.parse_unary_message_send(self.child(&mut builder), result);
+        self.parse_binary_message_send(self.child(&mut builder), result)
+    }
+
+    fn parse_keyword_message_send(&mut self, mut builder: NodeBuilder, receiver: Id) -> Id {
+        if sees!(self, SimpleSymbol(_)) {
+            let message = {
+                let mut builder = self.child(&mut builder);
+
+                let keyword_pairs =
+                    self.parse_keyword_pairs(&mut builder, &Self::parse_keyword_argument);
+
+                self.finalize(builder, KeywordMessage { keyword_pairs })
+            };
+
+            return self.finalize(
+                builder,
+                MessageSendExpression {
+                    expression: receiver,
+                    message,
+                },
+            );
+        }
+
+        return receiver;
     }
 
     fn parse_reference_expression(&mut self, mut builder: NodeBuilder) -> Id {

@@ -21,6 +21,10 @@ impl Tree {
         self.nodes.get(&id).cloned()
     }
 
+    pub fn get_mut(&mut self, id: Id) -> Option<&mut Node> {
+        self.nodes.get_mut(&id)
+    }
+
     pub fn add(&mut self, node: Node) {
         let id = node.id;
         if node.parent_id.is_none() {
@@ -44,28 +48,28 @@ impl Tree {
         for node in self.nodes.values() {
             let leaves = node.leaves();
             if node.span.end <= location {
-                nodes_before.push((node.span.end.clone(), node))
+                nodes_before.push((node.span.clone(), node))
             } else if node.span.start >= location {
-                nodes_after.push((node.span.start.clone(), node))
+                nodes_after.push((node.span.clone(), node))
             } else {
-                nodes_at.push((node.span.start.clone(), node))
+                nodes_at.push((node.span.clone(), node))
             }
             for leaf in leaves {
                 if leaf.span.end <= location {
-                    nodes_before.push((leaf.span.end.clone(), node))
+                    nodes_before.push((leaf.span.clone(), node))
                 } else if leaf.span.start >= location {
-                    nodes_after.push((leaf.span.start.clone(), node))
+                    nodes_after.push((leaf.span.clone(), node))
                 } else {
-                    nodes_at.push((leaf.span.start.clone(), node))
+                    nodes_at.push((leaf.span.clone(), node))
                 }
             }
         }
 
-        nodes_before.sort_by(|(a, _), (b, _)| b.cmp(&a));
+        nodes_before.sort_by(|(a, _), (b, _)| b.end.cmp(&a.end).then(a.len().cmp(&b.len())));
 
-        nodes_at.sort_by(|(a, _), (b, _)| b.cmp(&a));
+        nodes_at.sort_by(|(a, _), (b, _)| b.start.cmp(&a.start).then(a.len().cmp(&b.len())));
 
-        nodes_after.sort_by(|(a, _), (b, _)| a.cmp(&b));
+        nodes_after.sort_by(|(a, _), (b, _)| a.start.cmp(&b.start).then(a.len().cmp(&b.len())));
 
         (
             nodes_before.first().map(|(_, n)| *n),

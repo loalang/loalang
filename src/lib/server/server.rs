@@ -175,56 +175,96 @@ impl Server {
     }
 
     pub fn completion(&mut self, location: Location) -> Option<server::Completion> {
-        let (before, _at, _after) = self
-            .module_cells
-            .get(&location.uri)?
-            .tree
-            .nodes_around(location);
+        let tree = &self.module_cells.get(&location.uri)?.tree;
+        let (before, _at, _after) = tree.nodes_around(location);
 
-        let before = before?;
+        info!("Getting completion on {:?}", before);
+
+        let mut before = before?.clone();
+
+        if before.is_symbol() {
+            info!(
+                "Completion not possible on symbol, get parent {:?}",
+                before.parent_id
+            );
+            before = tree.get(before.parent_id?)?;
+            info!("Parent: {:?}", before);
+        }
+
+        if before.is_message() {
+            info!(
+                "Completion not possible on message, get parent {:?}",
+                before.parent_id
+            );
+            before = tree.get(before.parent_id?)?;
+            info!("Parent: {:?}", before);
+        }
 
         match before.kind {
-            syntax::ReferenceExpression { .. } => {
-                let type_ = self.analysis.types.get_type_of_expression(before);
+            _ if before.is_expression() => {
+                let type_ = self.analysis.types.get_type_of_expression(&before);
 
-                info!("{:?}", type_);
+                info!("Expression has type: {}", type_);
+                info!(
+                    "Type has behaviours: {:?}",
+                    self.analysis.types.get_behaviours(&type_)
+                );
 
-                Some(server::Completion::Behaviours(vec![
-                    semantics::Behaviour::Unary("unary".into(), type_.clone()),
-                    semantics::Behaviour::Binary(("+".into(), type_.clone()), type_.clone()),
-                    semantics::Behaviour::Keyword(
-                        vec![
-                            ("keyword".into(), type_.clone()),
-                            ("message".into(), type_.clone()),
-                        ],
-                        type_.clone(),
-                    ),
-                ]))
-            }
-
-            syntax::MethodBody { .. } => {
-                let declarations = self.analysis.declarations_in_scope(before.clone());
-
-                Some(server::Completion::VariablesInScope(
-                    declarations
-                        .into_iter()
-                        .filter_map(|(name, dec)| {
-                            Some(server::Variable {
-                                name,
-                                type_: server::Type::Unknown,
-                                kind: match dec.kind {
-                                    syntax::Class { .. } => server::VariableKind::Class,
-                                    syntax::ParameterPattern { .. } => {
-                                        server::VariableKind::Parameter
-                                    }
-                                    _ => server::VariableKind::Unknown,
-                                },
-                            })
-                        })
-                        .collect(),
+                Some(server::Completion::Behaviours(
+                    self.analysis.types.get_behaviours(&type_),
                 ))
             }
-            _ => None,
+
+            syntax::KeywordPair { .. } => {
+                // A keyword pair can occur in different locations in the tree.
+                // It can be part of a message, or a message pattern.
+                // Looking at the parent can give us some clue.
+                let parent = tree.get(before.parent_id?)?;
+
+                match parent.kind {
+                    syntax::KeywordMessage { .. } | syntax::KeywordMessagePattern { .. } => {
+                        self.completion_on_declarations_in_scope(&before)
+                    }
+                    kind => {
+                        warn!(
+                            "Cannot get completion from a keyword pair within {:?}",
+                            kind
+                        );
+                        None
+                    }
+                }
+            }
+
+            syntax::MethodBody { .. } => self.completion_on_declarations_in_scope(&before),
+
+            kind => {
+                warn!("Cannot get completion on {:?}", kind);
+                None
+            }
         }
+    }
+
+    fn completion_on_declarations_in_scope(
+        &self,
+        from: &syntax::Node,
+    ) -> Option<server::Completion> {
+        let declarations = self.analysis.declarations_in_scope(from.clone());
+
+        Some(server::Completion::VariablesInScope(
+            declarations
+                .into_iter()
+                .filter_map(|(name, dec)| {
+                    Some(server::Variable {
+                        name,
+                        type_: server::Type::Unknown,
+                        kind: match dec.kind {
+                            syntax::Class { .. } => server::VariableKind::Class,
+                            syntax::ParameterPattern { .. } => server::VariableKind::Parameter,
+                            _ => server::VariableKind::Unknown,
+                        },
+                    })
+                })
+                .collect(),
+        ))
     }
 }

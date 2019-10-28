@@ -41,6 +41,10 @@ impl Span {
 
         self.start.offset <= location.offset && self.end.offset >= location.offset
     }
+
+    pub fn len(&self) -> usize {
+        self.end.offset - self.start.offset
+    }
 }
 
 impl PartialEq for Span {

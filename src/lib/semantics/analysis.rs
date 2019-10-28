@@ -10,9 +10,9 @@ pub struct Analysis {
 impl Analysis {
     pub fn new(modules: Arc<HashMap<URI, Arc<syntax::Tree>>>) -> Analysis {
         Analysis {
-            modules,
+            modules: modules.clone(),
             usage: Cache::new(),
-            types: Types::new(),
+            types: Types::new(ProgramNavigator::new(modules)),
         }
     }
 

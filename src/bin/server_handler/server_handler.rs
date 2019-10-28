@@ -51,7 +51,7 @@ impl<'a> ServerHandler<'a> {
     }
 
     pub fn handle(&mut self, method: &str, params: Value) -> Result<Value, ServerError> {
-        info!("-> {:?} {:#}", method, params);
+        // info!("-> {:?} {:#}", method, params);
 
         macro_rules! handle_notification {
             ($notification:ty) => {

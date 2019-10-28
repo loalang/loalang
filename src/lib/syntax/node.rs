@@ -55,8 +55,21 @@ impl Node {
 
     pub fn is_reference(&self) -> bool {
         match self.kind {
-            ReferenceTypeExpression { .. } => true,
-            ReferenceExpression { .. } => true,
+            ReferenceTypeExpression { .. } | ReferenceExpression { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_expression(&self) -> bool {
+        match self.kind {
+            ReferenceExpression { .. } | MessageSendExpression { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_message(&self) -> bool {
+        match self.kind {
+            UnaryMessage { .. } | BinaryMessage { .. } | KeywordMessage { .. } => true,
             _ => false,
         }
     }
@@ -281,7 +294,8 @@ pub enum NodeKind {
 
     /// ```bnf
     /// Expression ::=
-    ///   ReferenceExpression
+    ///   ReferenceExpression |
+    ///   MessageSendExpression
     /// ```
 
     /// ```bnf
@@ -289,6 +303,39 @@ pub enum NodeKind {
     ///   Symbol
     /// ```
     ReferenceExpression { symbol: Id },
+
+    /// ```bnf
+    /// MessageSendExpression ::=
+    ///   Expression
+    ///   Message
+    /// ```
+    MessageSendExpression { expression: Id, message: Id },
+
+    /// ```bnf
+    /// Message ::=
+    ///   UnaryMessage |
+    ///   BinaryMessage |
+    ///   KeywordMessage
+    /// ```
+
+    /// ```bnf
+    /// UnaryMessage ::=
+    ///   Symbol
+    /// ```
+    UnaryMessage { symbol: Id },
+
+    /// ```bnf
+    /// BinaryMessage ::=
+    ///   Operator
+    ///   Expression
+    /// ```
+    BinaryMessage { operator: Id, expression: Id },
+
+    /// ```bnf
+    /// KeywordMessage ::=
+    ///   KeywordPair<Expression>+
+    /// ```
+    KeywordMessage { keyword_pairs: Vec<Id> },
 }
 
 pub use NodeKind::*;
@@ -445,6 +492,26 @@ impl NodeKind {
             ReferenceExpression { symbol } => {
                 children.push(symbol);
             }
+            MessageSendExpression {
+                expression,
+                message,
+            } => {
+                children.push(expression);
+                children.push(message);
+            }
+            UnaryMessage { symbol } => {
+                children.push(symbol);
+            }
+            BinaryMessage {
+                operator,
+                expression,
+            } => {
+                children.push(operator);
+                children.push(expression);
+            }
+            KeywordMessage { keyword_pairs } => {
+                children.extend(keyword_pairs);
+            }
         }
 
         children
@@ -489,5 +556,19 @@ impl<'a> NodeBuilder<'a> {
             kind,
         });
         self.id
+    }
+
+    pub fn fix_parentage(mut self, id: Id) -> Id {
+        fix_parentage(&mut self.tree, id, self.parent_id);
+        id
+    }
+}
+
+fn fix_parentage(tree: &mut Tree, id: Id, parent_id: Option<Id>) {
+    if let Some(node) = tree.get_mut(id) {
+        node.parent_id = parent_id;
+        for child in node.children() {
+            fix_parentage(tree, child, Some(id));
+        }
     }
 }

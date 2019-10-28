@@ -29,6 +29,37 @@ where
             .collect()
     }
 
+    fn message_selector(&self, message: &Node) -> Option<String> {
+        match message.kind {
+            UnaryMessage { symbol } => Some(self.symbol_of(&self.find_child(message, symbol)?)?.0),
+            BinaryMessage { operator, .. } => {
+                if let Operator(t) = self.find_child(message, operator)?.kind {
+                    Some(t.lexeme())
+                } else {
+                    None
+                }
+            }
+            KeywordMessage { ref keyword_pairs } => {
+                let mut selector = String::new();
+
+                for pair in keyword_pairs.iter() {
+                    if let KeywordPair { keyword, .. } = self.find_child(message, *pair)?.kind {
+                        selector.push_str(
+                            format!(
+                                "{}:",
+                                self.symbol_of(&self.find_child(message, keyword)?)?.0
+                            )
+                            .as_ref(),
+                        );
+                    }
+                }
+
+                Some(selector)
+            }
+            _ => None,
+        }
+    }
+
     fn symbol_of(&self, node: &Node) -> Option<(String, Node)> {
         match node.kind {
             Symbol(ref t) => Some((t.lexeme(), node.clone())),
