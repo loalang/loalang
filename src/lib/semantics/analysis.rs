@@ -4,6 +4,7 @@ use crate::*;
 pub struct Analysis {
     modules: Arc<HashMap<URI, Arc<syntax::Tree>>>,
     usage: Cache<Id, Option<Arc<Usage>>>,
+    pub types: Types,
 }
 
 impl Analysis {
@@ -11,6 +12,7 @@ impl Analysis {
         Analysis {
             modules,
             usage: Cache::new(),
+            types: Types::new(),
         }
     }
 

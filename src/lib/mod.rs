@@ -9,6 +9,7 @@ pub use std::fmt;
 pub use std::future::Future;
 pub use std::slice::Iter;
 pub use std::sync::Arc;
+pub use std::sync::Mutex;
 
 extern crate log;
 

@@ -184,6 +184,24 @@ impl Server {
         let before = before?;
 
         match before.kind {
+            syntax::ReferenceExpression { .. } => {
+                let type_ = self.analysis.types.get_type_of_expression(before);
+
+                info!("{:?}", type_);
+
+                Some(server::Completion::Behaviours(vec![
+                    semantics::Behaviour::Unary("unary".into(), type_.clone()),
+                    semantics::Behaviour::Binary(("+".into(), type_.clone()), type_.clone()),
+                    semantics::Behaviour::Keyword(
+                        vec![
+                            ("keyword".into(), type_.clone()),
+                            ("message".into(), type_.clone()),
+                        ],
+                        type_.clone(),
+                    ),
+                ]))
+            }
+
             syntax::MethodBody { .. } => {
                 let declarations = self.analysis.declarations_in_scope(before.clone());
 
@@ -193,7 +211,7 @@ impl Server {
                         .filter_map(|(name, dec)| {
                             Some(server::Variable {
                                 name,
-                                type_: server::Type::Tuple(vec![]),
+                                type_: server::Type::Unknown,
                                 kind: match dec.kind {
                                     syntax::Class { .. } => server::VariableKind::Class,
                                     syntax::ParameterPattern { .. } => {

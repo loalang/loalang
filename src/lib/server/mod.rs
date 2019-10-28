@@ -1,3 +1,4 @@
+use crate::semantics::*;
 use crate::*;
 
 mod module_cell;
@@ -35,7 +36,7 @@ pub struct NamedNode {
 }
 
 pub enum Completion {
-    MessageSends(String, Vec<MessageSignature>),
+    Behaviours(Vec<Behaviour>),
     VariablesInScope(Vec<Variable>),
 }
 
@@ -49,15 +50,4 @@ pub enum VariableKind {
     Unknown,
     Class,
     Parameter,
-}
-
-pub enum MessageSignature {
-    Unary(String, Type),
-    Binary((String, Type), Type),
-    Keyword(Vec<(String, Type)>, Type),
-}
-
-pub enum Type {
-    Named(String, Vec<Type>),
-    Tuple(Vec<Type>),
 }

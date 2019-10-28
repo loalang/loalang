@@ -38,25 +38,29 @@ impl CompletionRequestHandler {
                     })
                     .collect(),
 
-                server::Completion::MessageSends(_, signatures) => signatures
+                server::Completion::Behaviours(behaviours) => behaviours
                     .into_iter()
-                    .map(|s| CompletionItem {
-                        label: match s {
-                            server::MessageSignature::Unary(s, _) => s,
-                            server::MessageSignature::Binary((s, _), _) => s,
-                            server::MessageSignature::Keyword(kws, _) => {
-                                kws.into_iter().map(|(s, _)| format!("{}:", s)).collect()
-                            }
-                        },
-                        kind: None,
-                        detail: None,
+                    .enumerate()
+                    .map(|(i, b)| CompletionItem {
+                        label: b.selector(),
+                        kind: Some(CompletionItemKind::Method),
+                        detail: Some(b.to_string()),
                         documentation: None,
                         deprecated: None,
-                        preselect: None,
+                        preselect: Some(i == 0),
                         sort_text: None,
                         filter_text: None,
-                        insert_text: None,
-                        insert_text_format: None,
+                        insert_text: Some(match b {
+                            semantics::Behaviour::Unary(ref s, _) => s.clone(),
+                            semantics::Behaviour::Binary((ref s, _), _) => format!("{} $1", s),
+                            semantics::Behaviour::Keyword(ref kws, _) => kws
+                                .iter()
+                                .enumerate()
+                                .map(|(i, (s, _))| format!("{}: ${}", s, i + 1))
+                                .collect::<Vec<_>>()
+                            .join(" "),
+                        }),
+                        insert_text_format: Some(InsertTextFormat::Snippet),
                         text_edit: None,
                         additional_text_edits: None,
                         command: None,
