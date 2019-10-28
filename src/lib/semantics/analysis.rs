@@ -33,9 +33,10 @@ impl Analysis {
 
     pub fn usage(&mut self, node: &syntax::Node) -> Option<Arc<Usage>> {
         let navigator = self.navigator();
+        let types = self.types.clone();
         self.usage
             .cache(node.id, move |cache| {
-                let usage = navigator.find_usage(node, DeclarationKind::Any)?;
+                let usage = navigator.find_usage(node, DeclarationKind::Any, &types)?;
 
                 cache.set(usage.declaration.id, Some(usage.clone()));
                 for n in usage.references.iter() {

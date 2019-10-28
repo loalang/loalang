@@ -31,15 +31,17 @@ where
 
     fn message_selector(&self, message: &Node) -> Option<String> {
         match message.kind {
-            UnaryMessage { symbol } => Some(self.symbol_of(&self.find_child(message, symbol)?)?.0),
-            BinaryMessage { operator, .. } => {
+            UnaryMessage { symbol } | UnaryMessagePattern { symbol } => {
+                Some(self.symbol_of(&self.find_child(message, symbol)?)?.0)
+            }
+            BinaryMessage { operator, .. } | BinaryMessagePattern { operator, .. } => {
                 if let Operator(t) = self.find_child(message, operator)?.kind {
                     Some(t.lexeme())
                 } else {
                     None
                 }
             }
-            KeywordMessage { ref keyword_pairs } => {
+            KeywordMessage { ref keyword_pairs } | KeywordMessagePattern { ref keyword_pairs } => {
                 let mut selector = String::new();
 
                 for pair in keyword_pairs.iter() {
@@ -91,7 +93,7 @@ where
         }
     }
 
-    fn find_usage(&self, node: &Node, kind: DeclarationKind) -> Option<Arc<Usage>> {
+    fn find_usage(&self, node: &Node, kind: DeclarationKind, types: &Types) -> Option<Arc<Usage>> {
         if node.is_declaration(kind) {
             Some(Arc::new(semantics::Usage {
                 declaration: node.clone(),
@@ -100,20 +102,58 @@ where
             }))
         } else if node.is_import_directive() {
             let declaration = &self.find_declaration_from_import(&node)?;
-            self.find_usage(declaration, declaration.declaration_kind())
+            self.find_usage(declaration, declaration.declaration_kind(), types)
         } else if node.is_symbol() {
-            let declaration_or_reference_or_import =
-                &self.declaration_or_reference_or_import_of_symbol(node)?;
-            self.find_usage(
-                declaration_or_reference_or_import,
-                declaration_or_reference_or_import.declaration_kind(),
-            )
+            let usage_target = &self.usage_target_from_symbol(node)?;
+            self.find_usage(usage_target, usage_target.declaration_kind(), types)
         } else if node.is_reference(kind) {
             let declaration = &self.find_declaration(node, node.declaration_kind())?;
-            self.find_usage(declaration, declaration.declaration_kind())
+            self.find_usage(declaration, declaration.declaration_kind(), types)
+        } else if let Method { .. } = node.kind {
+            Some(Arc::new(semantics::Usage {
+                declaration: node.clone(),
+                references: self.find_method_references(node, types),
+                import_directives: vec![],
+            }))
+        } else if node.is_message_pattern() {
+            let signature = self.parent(node)?;
+            let method = self.parent(&signature)?;
+            self.find_usage(&method, DeclarationKind::None, types)
+        } else if node.is_message() {
+            let method = self.method_from_message(node, types)?;
+            self.find_usage(&method, DeclarationKind::None, types)
         } else {
             None
         }
+    }
+
+    fn method_from_message(&self, message: &Node, types: &Types) -> Option<Node> {
+        let send = self.parent(message)?;
+        if let MessageSendExpression { expression, .. } = send.kind {
+            let receiver = self.find_child(&send, expression)?;
+            let type_ = types.get_type_of_expression(&receiver);
+            let behaviours = types.get_behaviours(&type_);
+
+            let selector = self.message_selector(message)?;
+            for behaviour in behaviours {
+                if behaviour.selector() == selector {
+                    return self.find_node(behaviour.id());
+                }
+            }
+        }
+        None
+    }
+
+    fn find_method_references(&self, method: &Node, types: &Types) -> Vec<Node> {
+        let mut messages = vec![];
+        for message in self.all_messages() {
+            if let Some(matching_method) = self.method_from_message(&message, types) {
+                if matching_method.id == method.id {
+                    messages.push(message);
+                }
+            }
+        }
+        messages
     }
 
     fn find_import_directives_from_declaration(&self, declaration: &Node) -> Vec<Node> {
@@ -155,11 +195,15 @@ where
             .collect()
     }
 
+    fn all_messages(&self) -> Vec<Node> {
+        self.all_matching(|n| n.is_message())
+    }
+
     fn all_imports(&self) -> Vec<Node> {
         self.all_matching(|n| n.is_import_directive())
     }
 
-    fn declaration_or_reference_or_import_of_symbol(&self, symbol: &Node) -> Option<Node> {
+    fn usage_target_from_symbol(&self, symbol: &Node) -> Option<Node> {
         let parent = self.parent(symbol)?;
         if parent.is_qualified_symbol() {
             if let Some(qs_parent) = self.parent(&parent) {
@@ -168,12 +212,38 @@ where
                 }
             }
         }
+
         if parent.is_declaration(DeclarationKind::Any)
             || parent.is_reference(DeclarationKind::Any)
             || parent.is_import_directive()
         {
             return Some(parent);
         }
+
+        if parent.is_message() {
+            return Some(parent);
+        }
+
+        if let KeywordPair { .. } = parent.kind {
+            let parent = self.parent(&parent)?;
+
+            if parent.is_message() {
+                return Some(parent);
+            }
+        }
+
+        if parent.is_message_pattern() {
+            return Some(parent);
+        }
+
+        if let KeywordPair { .. } = parent.kind {
+            let parent = self.parent(&parent)?;
+
+            if parent.is_message_pattern() {
+                return Some(parent);
+            }
+        }
+
         None
     }
 

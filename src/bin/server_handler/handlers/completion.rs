@@ -51,9 +51,9 @@ impl CompletionRequestHandler {
                         sort_text: None,
                         filter_text: None,
                         insert_text: Some(match b {
-                            semantics::Behaviour::Unary(ref s, _) => s.clone(),
-                            semantics::Behaviour::Binary((ref s, _), _) => format!("{} $1", s),
-                            semantics::Behaviour::Keyword(ref kws, _) => kws
+                            semantics::Behaviour::Unary(_, ref s, _) => s.clone(),
+                            semantics::Behaviour::Binary(_, (ref s, _), _) => format!("{} $1", s),
+                            semantics::Behaviour::Keyword(_, ref kws, _) => kws
                                 .iter()
                                 .enumerate()
                                 .map(|(i, (s, _))| format!("{}: ${}", s, i + 1))

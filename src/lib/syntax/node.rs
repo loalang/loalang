@@ -85,6 +85,15 @@ impl Node {
             _ => false,
         }
     }
+
+    pub fn is_message_pattern(&self) -> bool {
+        match self.kind {
+            UnaryMessagePattern { .. }
+            | BinaryMessagePattern { .. }
+            | KeywordMessagePattern { .. } => true,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Debug for Node {

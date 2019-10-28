@@ -269,7 +269,11 @@ impl Types {
                 match message_pattern.kind {
                     UnaryMessagePattern { symbol } => {
                         if let Symbol(t) = self.navigator.find_node(symbol)?.kind {
-                            return Some(Behaviour::Unary(t.lexeme(), resolved_return_type));
+                            return Some(Behaviour::Unary(
+                                method.id,
+                                t.lexeme(),
+                                resolved_return_type,
+                            ));
                         }
                     }
 
@@ -282,6 +286,7 @@ impl Types {
 
                         if let Operator(t) = self.navigator.find_node(operator)?.kind {
                             return Some(Behaviour::Binary(
+                                method.id,
                                 (t.lexeme(), type_),
                                 resolved_return_type,
                             ));
@@ -304,7 +309,11 @@ impl Types {
                             }
                         }
 
-                        return Some(Behaviour::Keyword(keywords, resolved_return_type));
+                        return Some(Behaviour::Keyword(
+                            method.id,
+                            keywords,
+                            resolved_return_type,
+                        ));
                     }
 
                     _ => (),
@@ -383,17 +392,17 @@ impl std::ops::Try for Type {
 
 #[derive(Debug, Clone)]
 pub enum Behaviour {
-    Unary(String, Type),
-    Binary((String, Type), Type),
-    Keyword(Vec<(String, Type)>, Type),
+    Unary(Id, String, Type),
+    Binary(Id, (String, Type), Type),
+    Keyword(Id, Vec<(String, Type)>, Type),
 }
 
 impl Behaviour {
     pub fn selector(&self) -> String {
         match self {
-            Behaviour::Unary(ref s, _) => s.clone(),
-            Behaviour::Binary((ref s, _), _) => s.clone(),
-            Behaviour::Keyword(ref kws, _) => kws
+            Behaviour::Unary(_, ref s, _) => s.clone(),
+            Behaviour::Binary(_, (ref s, _), _) => s.clone(),
+            Behaviour::Keyword(_, ref kws, _) => kws
                 .iter()
                 .map(|(s, _)| format!("{}:", s))
                 .collect::<Vec<_>>()
@@ -401,22 +410,34 @@ impl Behaviour {
         }
     }
 
+    pub fn id(&self) -> Id {
+        match self {
+            Behaviour::Unary(id, _, _) => *id,
+            Behaviour::Binary(id, _, _) => *id,
+            Behaviour::Keyword(id, _, _) => *id,
+        }
+    }
+
     pub fn return_type(&self) -> Type {
         match self {
-            Behaviour::Unary(_, ref t) => t.clone(),
-            Behaviour::Binary(_, ref t) => t.clone(),
-            Behaviour::Keyword(_, ref t) => t.clone(),
+            Behaviour::Unary(_, _, ref t) => t.clone(),
+            Behaviour::Binary(_, _, ref t) => t.clone(),
+            Behaviour::Keyword(_, _, ref t) => t.clone(),
         }
     }
 
     pub fn with_applied_type_arguments(self, map: &HashMap<Id, Type>) -> Behaviour {
         match self {
-            Behaviour::Unary(s, t) => Behaviour::Unary(s, t.with_applied_type_arguments(map)),
-            Behaviour::Binary((o, pt), t) => Behaviour::Binary(
+            Behaviour::Unary(id, s, t) => {
+                Behaviour::Unary(id, s, t.with_applied_type_arguments(map))
+            }
+            Behaviour::Binary(id, (o, pt), t) => Behaviour::Binary(
+                id,
                 (o, pt.with_applied_type_arguments(map)),
                 t.with_applied_type_arguments(map),
             ),
-            Behaviour::Keyword(kws, t) => Behaviour::Keyword(
+            Behaviour::Keyword(id, kws, t) => Behaviour::Keyword(
+                id,
                 kws.into_iter()
                     .map(|(s, t)| (s, t.with_applied_type_arguments(map)))
                     .collect(),
@@ -429,13 +450,13 @@ impl Behaviour {
 impl fmt::Display for Behaviour {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Behaviour::Unary(ref selector, ref return_type) => {
+            Behaviour::Unary(_, ref selector, ref return_type) => {
                 write!(f, "{} -> {}", selector, return_type)
             }
-            Behaviour::Binary((ref operator, ref operand_type), ref return_type) => {
+            Behaviour::Binary(_, (ref operator, ref operand_type), ref return_type) => {
                 write!(f, "{} {} -> {}", operator, operand_type, return_type)
             }
-            Behaviour::Keyword(ref kwd, ref return_type) => {
+            Behaviour::Keyword(_, ref kwd, ref return_type) => {
                 let arguments = kwd.iter().map(|(arg, type_)| format!("{}: {}", arg, type_));
                 write!(
                     f,

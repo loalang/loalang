@@ -116,6 +116,7 @@ impl Server {
             }
         }
         let usage = self.analysis.usage(node)?;
+        info!("USAGE: {:?}", usage);
         Some(server::Usage {
             handle: self.create_named_node(&node)?,
             declaration: self.create_named_node(&usage.declaration)?,
@@ -167,6 +168,30 @@ impl Server {
         let navigator = semantics::ModuleNavigator::new(
             self.module_cells.get(&node.span.start.uri)?.tree.clone(),
         );
+
+        if node.is_message() {
+            return Some(server::NamedNode {
+                name_span: node.span.clone(),
+                name: navigator.message_selector(&node)?,
+                node: node.clone(),
+            });
+        }
+
+        if let syntax::Method { signature, .. } = node.kind {
+            let signature = navigator.find_child(node, signature)?;
+            if let syntax::Signature {
+                message_pattern, ..
+            } = signature.kind
+            {
+                let message_pattern = navigator.find_child(&signature, message_pattern)?;
+                return Some(server::NamedNode {
+                    name_span: signature.span.clone(),
+                    name: navigator.message_selector(&message_pattern)?,
+                    node: node.clone(),
+                });
+            }
+        }
+
         let (name, symbol) = navigator.symbol_of(node)?;
         Some(server::NamedNode {
             name_span: symbol.span.clone(),
