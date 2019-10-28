@@ -84,6 +84,10 @@ pub mod from_lsp {
                 span,
                 diagnostic.message[1..diagnostic.message.len() - 15].into(),
             )),
+            Some(lsp::NumberOrString::Number(3)) => Some(loa::Diagnostic::UndefinedReference(
+                span,
+                diagnostic.message[1..diagnostic.message.len() - 15].into(),
+            )),
             _ => None,
         }
     }

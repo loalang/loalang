@@ -229,6 +229,7 @@ impl Parser {
         let mut class_keyword = None;
         let mut symbol = Id::NULL;
         let mut class_body = Id::NULL;
+        let mut type_parameter_list = Id::NULL;
         let mut period = None;
 
         if sees!(self, ClassKeyword) {
@@ -241,6 +242,10 @@ impl Parser {
             symbol = self.parse_symbol(self.child(&mut builder));
         } else {
             self.syntax_error("Every class must have a name.");
+        }
+
+        if sees!(self, OpenAngle) {
+            type_parameter_list = self.parse_type_parameter_list(self.child(&mut builder));
         }
 
         if sees!(self, Period) {
@@ -261,10 +266,70 @@ impl Parser {
             Class {
                 class_keyword,
                 symbol,
+                type_parameter_list,
                 class_body,
                 period,
             },
         )
+    }
+
+    fn parse_type_parameter_list(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut open_angle = None;
+        let mut type_parameters = vec![];
+        let mut close_angle = None;
+
+        if sees!(self, OpenAngle) {
+            open_angle = Some(self.next());
+        } else {
+            self.syntax_error("Expected type parameter list.");
+        }
+
+        while !sees!(self, EOF) {
+            let before = self.tokens.len();
+            type_parameters.push(self.parse_type_parameter(self.child(&mut builder)));
+            let after = self.tokens.len();
+
+            if before == after {
+                self.syntax_error("Unexpected token.");
+                self.next();
+                break;
+            }
+
+            if sees!(self, Comma) {
+                self.next();
+            }
+
+            if sees!(self, CloseAngle) {
+                break;
+            }
+        }
+
+        if sees!(self, CloseAngle) {
+            close_angle = Some(self.next());
+        } else {
+            self.syntax_error_end("Unterminated type parameter list.");
+        }
+
+        self.finalize(
+            builder,
+            TypeParameterList {
+                open_angle,
+                type_parameters,
+                close_angle,
+            },
+        )
+    }
+
+    fn parse_type_parameter(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut symbol = Id::NULL;
+
+        if sees!(self, SimpleSymbol(_)) {
+            symbol = self.parse_symbol(self.child(&mut builder));
+        } else {
+            self.syntax_error("Expected type parameter.");
+        }
+
+        self.finalize(builder, TypeParameter { symbol })
     }
 
     fn parse_class_body(&mut self, mut builder: NodeBuilder) -> Id {
@@ -523,6 +588,7 @@ impl Parser {
 
     fn parse_reference_type_expression(&mut self, mut builder: NodeBuilder) -> Id {
         let mut symbol = Id::NULL;
+        let mut type_argument_list = Id::NULL;
 
         if sees!(self, SimpleSymbol(_)) {
             symbol = self.parse_symbol(self.child(&mut builder));
@@ -530,7 +596,64 @@ impl Parser {
             self.syntax_error("Expected type name.");
         }
 
-        self.finalize(builder, ReferenceTypeExpression { symbol })
+        if sees!(self, OpenAngle) {
+            type_argument_list = self.parse_type_argument_list(self.child(&mut builder));
+        }
+
+        self.finalize(
+            builder,
+            ReferenceTypeExpression {
+                symbol,
+                type_argument_list,
+            },
+        )
+    }
+
+    fn parse_type_argument_list(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut open_angle = None;
+        let mut type_expressions = vec![];
+        let mut close_angle = None;
+
+        if sees!(self, OpenAngle) {
+            open_angle = Some(self.next());
+        } else {
+            self.syntax_error("Expected type argument list.");
+        }
+
+        while !sees!(self, EOF) {
+            let before = self.tokens.len();
+            type_expressions.push(self.parse_type_expression(self.child(&mut builder)));
+            let after = self.tokens.len();
+
+            if before == after {
+                self.syntax_error("Unexpected token.");
+                self.next();
+                break;
+            }
+
+            if sees!(self, Comma) {
+                self.next();
+            }
+
+            if sees!(self, CloseAngle) {
+                break;
+            }
+        }
+
+        if sees!(self, CloseAngle) {
+            close_angle = Some(self.next());
+        } else {
+            self.syntax_error_end("Unterminated type argument list.");
+        }
+
+        self.finalize(
+            builder,
+            TypeArgumentList {
+                open_angle,
+                type_expressions,
+                close_angle,
+            },
+        )
     }
 
     fn parse_operator(&mut self, builder: NodeBuilder) -> Id {

@@ -1,4 +1,5 @@
 use crate::semantics::*;
+use crate::syntax::DeclarationKind;
 use crate::*;
 
 pub struct Analysis {
@@ -34,7 +35,7 @@ impl Analysis {
         let navigator = self.navigator();
         self.usage
             .cache(node.id, move |cache| {
-                let usage = navigator.find_usage(node)?;
+                let usage = navigator.find_usage(node, DeclarationKind::Any)?;
 
                 cache.set(usage.declaration.id, Some(usage.clone()));
                 for n in usage.references.iter() {
@@ -48,19 +49,23 @@ impl Analysis {
             .clone()
     }
 
-    pub fn all_reference_symbols(&self) -> Vec<syntax::Node> {
-        self.navigator().all_reference_symbols()
+    pub fn all_reference_symbols(&self, kind: DeclarationKind) -> Vec<syntax::Node> {
+        self.navigator().all_reference_symbols(kind)
     }
 
-    pub fn all_references(&self) -> Vec<syntax::Node> {
-        self.navigator().all_references()
+    pub fn all_references(&self, kind: DeclarationKind) -> Vec<syntax::Node> {
+        self.navigator().all_references(kind)
     }
 
     pub fn declaration_is_exported(&self, declaration: &syntax::Node) -> bool {
         self.navigator().declaration_is_exported(declaration)
     }
 
-    pub fn declarations_in_scope(&self, mut from: syntax::Node) -> Vec<(String, syntax::Node)> {
+    pub fn declarations_in_scope(
+        &self,
+        mut from: syntax::Node,
+        kind: DeclarationKind,
+    ) -> Vec<(String, syntax::Node)> {
         let uri = from.span.start.uri.clone();
         let navigator = self.navigator();
 
@@ -73,7 +78,7 @@ impl Analysis {
                     return false;
                 }
 
-                if n.is_declaration() {
+                if n.is_declaration(kind) {
                     if let Some((name, _)) = navigator.symbol_of(&n) {
                         declarations.push((name, n.clone()));
                     }

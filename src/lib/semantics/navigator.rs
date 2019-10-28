@@ -66,6 +66,7 @@ where
             Class { symbol, .. }
             | ReferenceTypeExpression { symbol, .. }
             | ReferenceExpression { symbol, .. }
+            | TypeParameter { symbol, .. }
             | ParameterPattern { symbol, .. } => {
                 self.find_node(symbol).and_then(|s| self.symbol_of(&s))
             }
@@ -90,19 +91,26 @@ where
         }
     }
 
-    fn find_usage(&self, node: &Node) -> Option<Arc<Usage>> {
-        if node.is_declaration() {
+    fn find_usage(&self, node: &Node, kind: DeclarationKind) -> Option<Arc<Usage>> {
+        if node.is_declaration(kind) {
             Some(Arc::new(semantics::Usage {
                 declaration: node.clone(),
                 references: self.find_references(node),
                 import_directives: self.find_import_directives_from_declaration(node),
             }))
         } else if node.is_import_directive() {
-            self.find_usage(&self.find_declaration_from_import(&node)?)
+            let declaration = &self.find_declaration_from_import(&node)?;
+            self.find_usage(declaration, declaration.declaration_kind())
         } else if node.is_symbol() {
-            self.find_usage(&self.declaration_or_reference_or_import_of_symbol(node)?)
-        } else if node.is_reference() {
-            self.find_usage(&self.find_declaration(node)?)
+            let declaration_or_reference_or_import =
+                &self.declaration_or_reference_or_import_of_symbol(node)?;
+            self.find_usage(
+                declaration_or_reference_or_import,
+                declaration_or_reference_or_import.declaration_kind(),
+            )
+        } else if node.is_reference(kind) {
+            let declaration = &self.find_declaration(node, node.declaration_kind())?;
+            self.find_usage(declaration, declaration.declaration_kind())
         } else {
             None
         }
@@ -160,7 +168,10 @@ where
                 }
             }
         }
-        if parent.is_declaration() || parent.is_reference() || parent.is_import_directive() {
+        if parent.is_declaration(DeclarationKind::Any)
+            || parent.is_reference(DeclarationKind::Any)
+            || parent.is_import_directive()
+        {
             return Some(parent);
         }
         None
@@ -189,7 +200,7 @@ where
             match self.closest_scope_root_upwards(declaration) {
                 None => (),
                 Some(scope_root) => references.extend(self.all_downwards(&scope_root, &|n| {
-                    if !n.is_reference() {
+                    if !n.is_reference(declaration.declaration_kind()) {
                         return false;
                     }
 
@@ -203,12 +214,17 @@ where
         references
     }
 
-    fn find_declaration(&self, reference: &Node) -> Option<Node> {
+    fn find_declaration(&self, reference: &Node, kind: DeclarationKind) -> Option<Node> {
         let (name, _) = self.symbol_of(reference)?;
-        self.find_declaration_above(reference, name)
+        self.find_declaration_above(reference, name, kind)
     }
 
-    fn find_declaration_above(&self, node: &Node, name: String) -> Option<Node> {
+    fn find_declaration_above(
+        &self,
+        node: &Node,
+        name: String,
+        kind: DeclarationKind,
+    ) -> Option<Node> {
         match self.closest_scope_root_upwards(node) {
             None => None,
             Some(scope_root) => {
@@ -260,7 +276,7 @@ where
                         }
                     }
 
-                    if node.is_declaration() {
+                    if node.is_declaration(kind) {
                         if let Some((n, _)) = self.symbol_of(node) {
                             if n == name {
                                 result = Some(node.clone());
@@ -275,7 +291,7 @@ where
                     return result;
                 }
                 let parent = self.parent(&scope_root)?;
-                self.find_declaration_above(&parent, name)
+                self.find_declaration_above(&parent, name, kind)
             }
         }
     }
@@ -413,12 +429,12 @@ where
         }
     }
 
-    fn all_references(&self) -> Vec<Node> {
-        self.all_matching(|n| n.is_reference())
+    fn all_references(&self, kind: DeclarationKind) -> Vec<Node> {
+        self.all_matching(|n| n.is_reference(kind))
     }
 
-    fn all_reference_symbols(&self) -> Vec<Node> {
-        self.all_references()
+    fn all_reference_symbols(&self, kind: DeclarationKind) -> Vec<Node> {
+        self.all_references(kind)
             .into_iter()
             .filter_map(|reference| self.symbol_of(&reference))
             .map(|(_, n)| n)
@@ -505,20 +521,20 @@ where
         self.all_downwards(from, &|n| n.is_scope_root())
     }
 
-    fn closest_declaration_upwards(&self, from: &Node) -> Option<Node> {
-        self.closest_upwards(from, |n| n.is_declaration())
+    fn closest_declaration_upwards(&self, from: &Node, kind: DeclarationKind) -> Option<Node> {
+        self.closest_upwards(from, |n| n.is_declaration(kind))
     }
 
-    fn all_declarations_downwards(&self, from: &Node) -> Vec<Node> {
-        self.all_downwards(from, &|n| n.is_declaration())
+    fn all_declarations_downwards(&self, from: &Node, kind: DeclarationKind) -> Vec<Node> {
+        self.all_downwards(from, &|n| n.is_declaration(kind))
     }
 
-    fn closest_references_upwards(&self, from: &Node) -> Option<Node> {
-        self.closest_upwards(from, |n| n.is_reference())
+    fn closest_references_upwards(&self, from: &Node, kind: DeclarationKind) -> Option<Node> {
+        self.closest_upwards(from, |n| n.is_reference(kind))
     }
 
-    fn all_references_downwards(&self, from: &Node) -> Vec<Node> {
-        self.all_downwards(from, &|n| n.is_reference())
+    fn all_references_downwards(&self, from: &Node, kind: DeclarationKind) -> Vec<Node> {
+        self.all_downwards(from, &|n| n.is_reference(kind))
     }
 
     fn declaration_is_exported(&self, declaration: &Node) -> bool {

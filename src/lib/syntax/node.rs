@@ -46,16 +46,28 @@ impl Node {
         }
     }
 
-    pub fn is_declaration(&self) -> bool {
+    pub fn declaration_kind(&self) -> DeclarationKind {
         match self.kind {
-            Class { .. } | ParameterPattern { .. } => true,
+            Class { .. } => DeclarationKind::Any,
+            TypeParameter { .. } | ReferenceTypeExpression { .. } => DeclarationKind::Type,
+            ParameterPattern { .. } | ReferenceExpression { .. } => DeclarationKind::Value,
+            _ => DeclarationKind::None,
+        }
+    }
+
+    pub fn is_declaration(&self, declaration_kind: DeclarationKind) -> bool {
+        match self.kind {
+            Class { .. } => true,
+            TypeParameter { .. } => declaration_kind.is_type(),
+            ParameterPattern { .. } => declaration_kind.is_value(),
             _ => false,
         }
     }
 
-    pub fn is_reference(&self) -> bool {
+    pub fn is_reference(&self, kind: DeclarationKind) -> bool {
         match self.kind {
-            ReferenceTypeExpression { .. } | ReferenceExpression { .. } => true,
+            ReferenceTypeExpression { .. } => kind.is_type(),
+            ReferenceExpression { .. } => kind.is_value(),
             _ => false,
         }
     }
@@ -78,6 +90,30 @@ impl Node {
 impl fmt::Debug for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} @ {}: {:?}", self.id, self.span, self.kind)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum DeclarationKind {
+    Type,
+    Value,
+    Any,
+    None,
+}
+
+impl DeclarationKind {
+    pub fn is_value(&self) -> bool {
+        match self {
+            DeclarationKind::Any | DeclarationKind::Value => true,
+            DeclarationKind::Type | DeclarationKind::None => false,
+        }
+    }
+
+    pub fn is_type(&self) -> bool {
+        match self {
+            DeclarationKind::Any | DeclarationKind::Type => true,
+            DeclarationKind::Value | DeclarationKind::None => false,
+        }
     }
 }
 
@@ -156,14 +192,35 @@ pub enum NodeKind {
     /// Class ::=
     ///   CLASS_KEYWORD
     ///   Symbol
+    ///   TypeParameterList?
     ///   (ClassBody | PERIOD)
     /// ```
     Class {
         class_keyword: Option<Token>,
         symbol: Id,
+        type_parameter_list: Id,
         class_body: Id,
         period: Option<Token>,
     },
+
+    /// ```bnf
+    /// TypeParameterList ::=
+    ///   OPEN_ANGLE
+    ///   TypeParameter
+    ///   (COMMA TypeParameter)*
+    ///   CLOSE_ANGLE
+    /// ```
+    TypeParameterList {
+        open_angle: Option<Token>,
+        type_parameters: Vec<Id>,
+        close_angle: Option<Token>,
+    },
+
+    /// ```bnf
+    /// TypeParameter ::=
+    ///   Symbol
+    /// ```
+    TypeParameter { symbol: Id },
 
     /// ```bnf
     /// ClassBody ::=
@@ -279,8 +336,22 @@ pub enum NodeKind {
     /// ```bnf
     /// ReferenceTypeExpression ::=
     ///   Symbol
+    ///   TypeArgumentList?
     /// ```
-    ReferenceTypeExpression { symbol: Id },
+    ReferenceTypeExpression { symbol: Id, type_argument_list: Id },
+
+    /// ```bnf
+    /// TypeArgumentList ::=
+    ///   OPEN_ANGLE
+    ///   TypeExpression
+    ///   (COMMA TypeExpression)*
+    ///   CLOSE_ANGLE
+    /// ```
+    TypeArgumentList {
+        open_angle: Option<Token>,
+        type_expressions: Vec<Id>,
+        close_angle: Option<Token>,
+    },
 
     /// ```bnf
     /// MethodBody ::=
@@ -370,6 +441,12 @@ impl NodeKind {
                 ..
             } => vec![class_keyword.as_ref(), period.as_ref()],
 
+            TypeParameterList {
+                ref open_angle,
+                ref close_angle,
+                ..
+            } => vec![open_angle.as_ref(), close_angle.as_ref()],
+
             ClassBody {
                 ref open_curly,
                 ref close_curly,
@@ -389,6 +466,12 @@ impl NodeKind {
             ReturnType { ref arrow, .. } => vec![arrow.as_ref()],
 
             MethodBody { ref fat_arrow, .. } => vec![fat_arrow.as_ref()],
+
+            TypeArgumentList {
+                ref open_angle,
+                ref close_angle,
+                ..
+            } => vec![open_angle.as_ref(), close_angle.as_ref()],
 
             _ => vec![],
         };
@@ -430,10 +513,22 @@ impl NodeKind {
             }
             Symbol(_) => {}
             Class {
-                symbol, class_body, ..
+                symbol,
+                type_parameter_list,
+                class_body,
+                ..
             } => {
                 children.push(symbol);
+                children.push(type_parameter_list);
                 children.push(class_body);
+            }
+            TypeParameterList {
+                type_parameters, ..
+            } => {
+                children.extend(type_parameters);
+            }
+            TypeParameter { symbol, .. } => {
+                children.push(symbol);
             }
             ClassBody { class_members, .. } => {
                 children.extend(class_members);
@@ -483,8 +578,17 @@ impl NodeKind {
                 children.push(type_expression);
                 children.push(symbol);
             }
-            ReferenceTypeExpression { symbol } => {
+            ReferenceTypeExpression {
+                symbol,
+                type_argument_list,
+            } => {
                 children.push(symbol);
+                children.push(type_argument_list);
+            }
+            TypeArgumentList {
+                type_expressions, ..
+            } => {
+                children.extend(type_expressions);
             }
             MethodBody { expression, .. } => {
                 children.push(expression);
@@ -559,16 +663,20 @@ impl<'a> NodeBuilder<'a> {
     }
 
     pub fn fix_parentage(mut self, id: Id) -> Id {
-        fix_parentage(&mut self.tree, id, self.parent_id);
+        fix_parentage(&mut self.tree, id, self.parent_id, self.start);
         id
     }
 }
 
-fn fix_parentage(tree: &mut Tree, id: Id, parent_id: Option<Id>) {
+fn fix_parentage(tree: &mut Tree, id: Id, parent_id: Option<Id>, start: Location) {
     if let Some(node) = tree.get_mut(id) {
         node.parent_id = parent_id;
+        if let MessageSendExpression { .. } = node.kind {
+            node.span.start = start;
+        }
+        let start = node.span.start.clone();
         for child in node.children() {
-            fix_parentage(tree, child, Some(id));
+            fix_parentage(tree, child, Some(id), start.clone());
         }
     }
 }

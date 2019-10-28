@@ -1,4 +1,5 @@
 use crate::semantics::{Analysis, Navigator};
+use crate::syntax::DeclarationKind;
 use crate::*;
 
 pub struct Server {
@@ -101,8 +102,8 @@ impl Server {
     }
 
     pub fn usage(&mut self, location: Location) -> Option<server::Usage> {
-        let symbol = self.module_cells.get(&location.uri)?;
-        let node = symbol.tree.node_at(location)?;
+        let cell = self.module_cells.get(&location.uri)?;
+        let node = cell.tree.node_at(location)?;
         if !node.is_symbol() {
             return None;
         }
@@ -178,37 +179,19 @@ impl Server {
         let tree = &self.module_cells.get(&location.uri)?.tree;
         let (before, _at, _after) = tree.nodes_around(location);
 
-        info!("Getting completion on {:?}", before);
-
         let mut before = before?.clone();
 
         if before.is_symbol() {
-            info!(
-                "Completion not possible on symbol, get parent {:?}",
-                before.parent_id
-            );
             before = tree.get(before.parent_id?)?;
-            info!("Parent: {:?}", before);
         }
 
         if before.is_message() {
-            info!(
-                "Completion not possible on message, get parent {:?}",
-                before.parent_id
-            );
             before = tree.get(before.parent_id?)?;
-            info!("Parent: {:?}", before);
         }
 
         match before.kind {
             _ if before.is_expression() => {
                 let type_ = self.analysis.types.get_type_of_expression(&before);
-
-                info!("Expression has type: {}", type_);
-                info!(
-                    "Type has behaviours: {:?}",
-                    self.analysis.types.get_behaviours(&type_)
-                );
 
                 Some(server::Completion::Behaviours(
                     self.analysis.types.get_behaviours(&type_),
@@ -222,8 +205,11 @@ impl Server {
                 let parent = tree.get(before.parent_id?)?;
 
                 match parent.kind {
-                    syntax::KeywordMessage { .. } | syntax::KeywordMessagePattern { .. } => {
-                        self.completion_on_declarations_in_scope(&before)
+                    syntax::KeywordMessage { .. } => {
+                        self.completion_on_declarations_in_scope(&before, DeclarationKind::Value)
+                    }
+                    syntax::KeywordMessagePattern { .. } => {
+                        self.completion_on_declarations_in_scope(&before, DeclarationKind::Type)
                     }
                     kind => {
                         warn!(
@@ -235,7 +221,9 @@ impl Server {
                 }
             }
 
-            syntax::MethodBody { .. } => self.completion_on_declarations_in_scope(&before),
+            syntax::MethodBody { .. } => {
+                self.completion_on_declarations_in_scope(&before, DeclarationKind::Value)
+            }
 
             kind => {
                 warn!("Cannot get completion on {:?}", kind);
@@ -247,8 +235,9 @@ impl Server {
     fn completion_on_declarations_in_scope(
         &self,
         from: &syntax::Node,
+        kind: DeclarationKind,
     ) -> Option<server::Completion> {
-        let declarations = self.analysis.declarations_in_scope(from.clone());
+        let declarations = self.analysis.declarations_in_scope(from.clone(), kind);
 
         Some(server::Completion::VariablesInScope(
             declarations

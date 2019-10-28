@@ -5,6 +5,7 @@ use std::fmt;
 pub enum Diagnostic {
     SyntaxError(Span, String),
     UndefinedTypeReference(Span, String),
+    UndefinedReference(Span, String),
 }
 
 impl Diagnostic {
@@ -14,6 +15,7 @@ impl Diagnostic {
         match self {
             SyntaxError(ref s, _) => s,
             UndefinedTypeReference(ref s, _) => s,
+            UndefinedReference(ref s, _) => s,
         }
     }
 
@@ -23,6 +25,7 @@ impl Diagnostic {
         match self {
             SyntaxError(_, _) => DiagnosticLevel::Error,
             UndefinedTypeReference(_, _) => DiagnosticLevel::Error,
+            UndefinedReference(_, _) => DiagnosticLevel::Error,
         }
     }
 
@@ -32,6 +35,7 @@ impl Diagnostic {
         match self {
             SyntaxError(_, _) => 1,
             UndefinedTypeReference(_, _) => 2,
+            UndefinedReference(_, _) => 3,
         }
     }
 }
@@ -49,6 +53,7 @@ impl fmt::Debug for Diagnostic {
         match self {
             SyntaxError(_, s) => write!(f, "{}", s),
             UndefinedTypeReference(_, s) => write!(f, "`{}` is undefined.", s),
+            UndefinedReference(_, s) => write!(f, "`{}` is undefined.", s),
         }
     }
 }

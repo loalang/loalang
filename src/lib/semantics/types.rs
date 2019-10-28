@@ -20,10 +20,12 @@ impl Types {
 
     fn type_gate<F: FnOnce() -> Type>(&self, node: &Node, f: F) -> Type {
         {
-            if let Ok(cache) = self.types_cache.lock() {
+            if let Ok(mut cache) = self.types_cache.lock() {
                 if let Some(type_) = cache.get(&node.id) {
                     return type_.clone();
                 }
+
+                cache.set(node.id, Type::Unknown);
             }
         }
 
@@ -64,9 +66,11 @@ impl Types {
 
     pub fn get_type_of_expression(&self, expression: &Node) -> Type {
         self.type_gate(expression, || match expression.kind {
-            ReferenceExpression { .. } => {
-                self.get_type_of_declaration(&self.navigator.find_declaration(expression)?)
-            }
+            ReferenceExpression { .. } => self.get_type_of_declaration(
+                &self
+                    .navigator
+                    .find_declaration(expression, DeclarationKind::Value)?,
+            ),
 
             MessageSendExpression {
                 expression,
@@ -98,7 +102,11 @@ impl Types {
             } => self.get_type_of_type_expression(&self.navigator.find_node(type_expression)?),
             Class { .. } => {
                 let (name, _) = self.navigator.symbol_of(declaration)?;
-                Type::Class(name, declaration.id)
+                Type::Class(name, declaration.id, vec![])
+            }
+            TypeParameter { .. } => {
+                let (name, _) = self.navigator.symbol_of(declaration)?;
+                Type::Parameter(name, declaration.id, vec![])
             }
             _ => Type::Unknown,
         })
@@ -106,8 +114,37 @@ impl Types {
 
     pub fn get_type_of_type_expression(&self, type_expression: &Node) -> Type {
         self.type_gate(type_expression, || match type_expression.kind {
-            ReferenceTypeExpression { .. } => {
-                self.get_type_of_declaration(&self.navigator.find_declaration(type_expression)?)
+            ReferenceTypeExpression {
+                type_argument_list, ..
+            } => {
+                let args = if let Some(argument_list) = self.navigator.find_node(type_argument_list)
+                {
+                    if let TypeArgumentList {
+                        type_expressions, ..
+                    } = argument_list.kind
+                    {
+                        type_expressions
+                            .into_iter()
+                            .map(|e| {
+                                self.navigator
+                                    .find_node(e)
+                                    .map(|te| self.get_type_of_type_expression(&te))
+                                    .unwrap_or(Type::Unknown)
+                            })
+                            .collect()
+                    } else {
+                        vec![]
+                    }
+                } else {
+                    vec![]
+                };
+
+                self.get_type_of_declaration(
+                    &self
+                        .navigator
+                        .find_declaration(type_expression, DeclarationKind::Type)?,
+                )
+                .with_args(args)
             }
             _ => Type::Unknown,
         })
@@ -143,14 +180,46 @@ impl Types {
     pub fn get_behaviours(&self, type_: &Type) -> Vec<Behaviour> {
         match type_ {
             Type::Unknown => vec![],
-            Type::Class(_, class_id) => self.get_behaviours_from_class(*class_id).unwrap_or(vec![]),
+            Type::Parameter(_, _, _) => vec![],
+            Type::Class(_, class_id, args) => self
+                .get_behaviours_from_class(*class_id, args)
+                .unwrap_or(vec![]),
         }
     }
 
-    fn get_behaviours_from_class(&self, class_id: Id) -> Option<Vec<Behaviour>> {
+    fn get_behaviours_from_class(&self, class_id: Id, args: &Vec<Type>) -> Option<Vec<Behaviour>> {
         let class = self.navigator.find_node(class_id)?;
         self.behaviours_gate(&class, || {
-            if let Class { class_body, .. } = class.kind {
+            if let Class {
+                class_body,
+                type_parameter_list,
+                ..
+            } = class.kind
+            {
+                let type_parameters = if let Some(type_parameter_list) =
+                    self.navigator.find_node(type_parameter_list)
+                {
+                    if let TypeParameterList {
+                        type_parameters, ..
+                    } = type_parameter_list.kind
+                    {
+                        type_parameters
+                    } else {
+                        vec![]
+                    }
+                } else {
+                    vec![]
+                };
+
+                let mut type_arg_map = HashMap::new();
+                for (i, param_id) in type_parameters.iter().enumerate() {
+                    if i < args.len() {
+                        type_arg_map.insert(*param_id, args[i].clone());
+                    } else {
+                        type_arg_map.insert(*param_id, Type::Unknown);
+                    }
+                }
+
                 if let ClassBody { class_members, .. } = self.navigator.find_node(class_body)?.kind
                 {
                     return Some(
@@ -164,6 +233,7 @@ impl Types {
                                     None
                                 }
                             })
+                            .map(|b| b.with_applied_type_arguments(&type_arg_map))
                             .collect(),
                     );
                 }
@@ -248,14 +318,48 @@ impl Types {
 #[derive(Debug, Clone)]
 pub enum Type {
     Unknown,
-    Class(String, Id),
+    Class(String, Id, Vec<Type>),
+    Parameter(String, Id, Vec<Type>),
+}
+
+impl Type {
+    pub fn with_args(self, args: Vec<Type>) -> Type {
+        use Type::*;
+
+        match self {
+            Unknown => Unknown,
+            Class(s, i, _) => Class(s, i, args),
+            Parameter(s, i, _) => Parameter(s, i, args),
+        }
+    }
+
+    pub fn with_applied_type_arguments(self, map: &HashMap<Id, Type>) -> Type {
+        match self {
+            Type::Parameter(_, id, _) if map.contains_key(&id) => map[&id].clone(),
+            other => other,
+        }
+    }
 }
 
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Type::Unknown => write!(f, "?"),
-            Type::Class(ref name, _) => write!(f, "{}", name),
+            Type::Class(ref name, _, ref args) | Type::Parameter(ref name, _, ref args) => {
+                if args.is_empty() {
+                    write!(f, "{}", name)
+                } else {
+                    write!(
+                        f,
+                        "{}<{}>",
+                        name,
+                        args.iter()
+                            .map(|t| t.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                }
+            }
         }
     }
 }
@@ -302,6 +406,22 @@ impl Behaviour {
             Behaviour::Unary(_, ref t) => t.clone(),
             Behaviour::Binary(_, ref t) => t.clone(),
             Behaviour::Keyword(_, ref t) => t.clone(),
+        }
+    }
+
+    pub fn with_applied_type_arguments(self, map: &HashMap<Id, Type>) -> Behaviour {
+        match self {
+            Behaviour::Unary(s, t) => Behaviour::Unary(s, t.with_applied_type_arguments(map)),
+            Behaviour::Binary((o, pt), t) => Behaviour::Binary(
+                (o, pt.with_applied_type_arguments(map)),
+                t.with_applied_type_arguments(map),
+            ),
+            Behaviour::Keyword(kws, t) => Behaviour::Keyword(
+                kws.into_iter()
+                    .map(|(s, t)| (s, t.with_applied_type_arguments(map)))
+                    .collect(),
+                t.with_applied_type_arguments(map),
+            ),
         }
     }
 }
