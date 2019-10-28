@@ -21,6 +21,7 @@ impl CompletionRequestHandler {
                         kind: Some(match v.kind {
                             server::VariableKind::Unknown => CompletionItemKind::Value,
                             server::VariableKind::Class => CompletionItemKind::Class,
+                            server::VariableKind::Parameter => CompletionItemKind::Variable,
                         }),
                         detail: None,
                         documentation: None,

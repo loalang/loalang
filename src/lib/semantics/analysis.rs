@@ -58,7 +58,7 @@ impl Analysis {
         self.navigator().declaration_is_exported(declaration)
     }
 
-    pub fn declarations_in_scope(&self, mut from: syntax::Node) -> Vec<syntax::Node> {
+    pub fn declarations_in_scope(&self, mut from: syntax::Node) -> Vec<(String, syntax::Node)> {
         let uri = from.span.start.uri.clone();
         let navigator = self.navigator();
 
@@ -72,7 +72,17 @@ impl Analysis {
                 }
 
                 if n.is_declaration() {
-                    declarations.push(n.clone());
+                    if let Some((name, _)) = navigator.symbol_of(&n) {
+                        declarations.push((name, n.clone()));
+                    }
+                }
+
+                if n.is_import_directive() {
+                    if let Some((name, _)) = navigator.symbol_of(&n) {
+                        if let Some(n) = navigator.find_declaration_from_import(&n) {
+                            declarations.push((name, n.clone()));
+                        }
+                    }
                 }
 
                 true

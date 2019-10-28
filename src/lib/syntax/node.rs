@@ -56,6 +56,7 @@ impl Node {
     pub fn is_reference(&self) -> bool {
         match self.kind {
             ReferenceTypeExpression { .. } => true,
+            ReferenceExpression { .. } => true,
             _ => false,
         }
     }

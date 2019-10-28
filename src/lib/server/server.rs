@@ -190,12 +190,15 @@ impl Server {
                 Some(server::Completion::VariablesInScope(
                     declarations
                         .into_iter()
-                        .filter_map(|dec| {
+                        .filter_map(|(name, dec)| {
                             Some(server::Variable {
-                                name: self.analysis.navigator().symbol_of(&dec)?.0,
+                                name,
                                 type_: server::Type::Tuple(vec![]),
                                 kind: match dec.kind {
                                     syntax::Class { .. } => server::VariableKind::Class,
+                                    syntax::ParameterPattern { .. } => {
+                                        server::VariableKind::Parameter
+                                    }
                                     _ => server::VariableKind::Unknown,
                                 },
                             })

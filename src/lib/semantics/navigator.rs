@@ -32,7 +32,10 @@ where
     fn symbol_of(&self, node: &Node) -> Option<(String, Node)> {
         match node.kind {
             Symbol(ref t) => Some((t.lexeme(), node.clone())),
-            Class { symbol, .. } | ReferenceTypeExpression { symbol, .. } => {
+            Class { symbol, .. }
+            | ReferenceTypeExpression { symbol, .. }
+            | ReferenceExpression { symbol, .. }
+            | ParameterPattern { symbol, .. } => {
                 self.find_node(symbol).and_then(|s| self.symbol_of(&s))
             }
             ImportDirective {

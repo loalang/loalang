@@ -48,6 +48,7 @@ pub struct Variable {
 pub enum VariableKind {
     Unknown,
     Class,
+    Parameter,
 }
 
 pub enum MessageSignature {
