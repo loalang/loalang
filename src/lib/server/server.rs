@@ -1,4 +1,4 @@
-use crate::semantics::{Analysis, Navigator};
+use crate::semantics::{Analysis, Navigator, ProgramNavigator};
 use crate::syntax::DeclarationKind;
 use crate::*;
 
@@ -99,6 +99,23 @@ impl Server {
 
     pub fn declaration_is_exported(&self, declaration: &syntax::Node) -> bool {
         self.analysis.declaration_is_exported(declaration)
+    }
+
+    pub fn navigator(&self) -> ProgramNavigator {
+        self.analysis.navigator()
+    }
+
+    pub fn type_at(&self, location: Location) -> semantics::Type {
+        let cell = self.module_cells.get(&location.uri)?;
+        let node = cell.tree.node_at(location)?;
+        let navigator = self.analysis.navigator();
+        if let Some(expression) = navigator.closest_expression_upwards(node) {
+            return self.analysis.types.get_type_of_expression(&expression);
+        }
+        if let Some(type_expression) = navigator.closest_type_expression_upwards(node) {
+            return self.analysis.types.get_type_of_type_expression(&type_expression);
+        }
+        semantics::Type::Unknown
     }
 
     pub fn usage(&mut self, location: Location) -> Option<server::Usage> {

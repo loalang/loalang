@@ -27,3 +27,6 @@ pub use self::completion::*;
 
 mod document_highlight;
 pub use self::document_highlight::*;
+
+mod goto_type_definition;
+pub use self::goto_type_definition::*;

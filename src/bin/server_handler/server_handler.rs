@@ -99,6 +99,7 @@ impl<'a> ServerHandler<'a> {
         handle_request!(RenameRequestHandler);
         handle_request!(PrepareRenameRequestHandler);
         handle_request!(GotoDefinitionRequestHandler);
+        handle_request!(GotoTypeDefinitionRequestHandler);
         handle_request!(ReferencesRequestHandler);
         handle_request!(CodeActionRequestHandler);
         handle_request!(CompletionRequestHandler);

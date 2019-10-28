@@ -79,6 +79,13 @@ impl Node {
         }
     }
 
+    pub fn is_type_expression(&self) -> bool {
+        match self.kind {
+            ReferenceTypeExpression { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn is_message(&self) -> bool {
         match self.kind {
             UnaryMessage { .. } | BinaryMessage { .. } | KeywordMessage { .. } => true,
