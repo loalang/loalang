@@ -95,14 +95,44 @@ impl Types {
         })
     }
 
+    pub fn get_types_of_type_parameter_list(&self, list: &Node) -> Option<Vec<Type>> {
+        if let TypeParameterList {
+            ref type_parameters,
+            ..
+        } = list.kind
+        {
+            return Some(
+                type_parameters
+                    .iter()
+                    .map(|pid| {
+                        let param = self.navigator.find_child(list, *pid)?;
+
+                        self.get_type_of_declaration(&param)
+                    })
+                    .collect(),
+            );
+        }
+        None
+    }
+
     pub fn get_type_of_declaration(&self, declaration: &Node) -> Type {
         self.type_gate(declaration, || match declaration.kind {
             ParameterPattern {
                 type_expression, ..
             } => self.get_type_of_type_expression(&self.navigator.find_node(type_expression)?),
-            Class { .. } => {
+            Class {
+                type_parameter_list,
+                ..
+            } => {
                 let (name, _) = self.navigator.symbol_of(declaration)?;
-                Type::Class(name, declaration.id, vec![])
+                Type::Class(
+                    name,
+                    declaration.id,
+                    self.navigator
+                        .find_child(declaration, type_parameter_list)
+                        .and_then(|list| self.get_types_of_type_parameter_list(&list))
+                        .unwrap_or(vec![]),
+                )
             }
             TypeParameter { .. } => {
                 let (name, _) = self.navigator.symbol_of(declaration)?;
@@ -189,6 +219,7 @@ impl Types {
 
     fn get_behaviours_from_class(&self, class_id: Id, args: &Vec<Type>) -> Option<Vec<Behaviour>> {
         let class = self.navigator.find_node(class_id)?;
+        let receiver_type = self.get_type_of_declaration(&class);
         self.behaviours_gate(&class, || {
             if let Class {
                 class_body,
@@ -228,7 +259,10 @@ impl Types {
                             .filter_map(|member_id| {
                                 let maybe_method = self.navigator.find_node(member_id)?;
                                 if let Method { .. } = maybe_method.kind {
-                                    self.get_behaviour_from_method(maybe_method)
+                                    self.get_behaviour_from_method(
+                                        receiver_type.clone(),
+                                        maybe_method,
+                                    )
                                 } else {
                                     None
                                 }
@@ -242,7 +276,7 @@ impl Types {
         })
     }
 
-    fn get_behaviour_from_method(&self, method: Node) -> Option<Behaviour> {
+    fn get_behaviour_from_method(&self, receiver_type: Type, method: Node) -> Option<Behaviour> {
         if let Method {
             signature,
             method_body,
@@ -254,6 +288,7 @@ impl Types {
             if let Signature {
                 message_pattern,
                 return_type,
+                ..
             } = signature.kind
             {
                 let message_pattern = self.navigator.find_node(message_pattern)?;
@@ -266,14 +301,12 @@ impl Types {
                     self.get_type_of_return_type(&return_type)
                 };
 
-                match message_pattern.kind {
+                let message = match message_pattern.kind {
                     UnaryMessagePattern { symbol } => {
                         if let Symbol(t) = self.navigator.find_node(symbol)?.kind {
-                            return Some(Behaviour::Unary(
-                                method.id,
-                                t.lexeme(),
-                                resolved_return_type,
-                            ));
+                            BehaviourMessage::Unary(t.lexeme())
+                        } else {
+                            return None;
                         }
                     }
 
@@ -285,11 +318,9 @@ impl Types {
                         let type_ = self.get_type_of_parameter_pattern(&parameter_pattern);
 
                         if let Operator(t) = self.navigator.find_node(operator)?.kind {
-                            return Some(Behaviour::Binary(
-                                method.id,
-                                (t.lexeme(), type_),
-                                resolved_return_type,
-                            ));
+                            BehaviourMessage::Binary(t.lexeme(), type_)
+                        } else {
+                            return None;
                         }
                     }
 
@@ -309,15 +340,18 @@ impl Types {
                             }
                         }
 
-                        return Some(Behaviour::Keyword(
-                            method.id,
-                            keywords,
-                            resolved_return_type,
-                        ));
+                        BehaviourMessage::Keyword(keywords)
                     }
 
-                    _ => (),
-                }
+                    _ => return None,
+                };
+
+                return Some(Behaviour {
+                    receiver_type,
+                    method_id: method.id,
+                    message,
+                    return_type: resolved_return_type,
+                });
             }
         }
         None
@@ -345,6 +379,13 @@ impl Type {
     pub fn with_applied_type_arguments(self, map: &HashMap<Id, Type>) -> Type {
         match self {
             Type::Parameter(_, id, _) if map.contains_key(&id) => map[&id].clone(),
+            Type::Class(s, i, a) => Type::Class(
+                s,
+                i,
+                a.into_iter()
+                    .map(|a| a.with_applied_type_arguments(map))
+                    .collect(),
+            ),
             other => other,
         }
     }
@@ -391,18 +432,26 @@ impl std::ops::Try for Type {
 }
 
 #[derive(Debug, Clone)]
-pub enum Behaviour {
-    Unary(Id, String, Type),
-    Binary(Id, (String, Type), Type),
-    Keyword(Id, Vec<(String, Type)>, Type),
+pub struct Behaviour {
+    pub receiver_type: Type,
+    pub method_id: Id,
+    pub message: BehaviourMessage,
+    pub return_type: Type,
+}
+
+#[derive(Debug, Clone)]
+pub enum BehaviourMessage {
+    Unary(String),
+    Binary(String, Type),
+    Keyword(Vec<(String, Type)>),
 }
 
 impl Behaviour {
     pub fn selector(&self) -> String {
-        match self {
-            Behaviour::Unary(_, ref s, _) => s.clone(),
-            Behaviour::Binary(_, (ref s, _), _) => s.clone(),
-            Behaviour::Keyword(_, ref kws, _) => kws
+        match self.message {
+            BehaviourMessage::Unary(ref s) => s.clone(),
+            BehaviourMessage::Binary(ref s, _) => s.clone(),
+            BehaviourMessage::Keyword(ref kws) => kws
                 .iter()
                 .map(|(s, _)| format!("{}:", s))
                 .collect::<Vec<_>>()
@@ -410,61 +459,46 @@ impl Behaviour {
         }
     }
 
-    pub fn id(&self) -> Id {
-        match self {
-            Behaviour::Unary(id, _, _) => *id,
-            Behaviour::Binary(id, _, _) => *id,
-            Behaviour::Keyword(id, _, _) => *id,
-        }
-    }
-
     pub fn return_type(&self) -> Type {
-        match self {
-            Behaviour::Unary(_, _, ref t) => t.clone(),
-            Behaviour::Binary(_, _, ref t) => t.clone(),
-            Behaviour::Keyword(_, _, ref t) => t.clone(),
-        }
+        self.return_type.clone()
     }
 
     pub fn with_applied_type_arguments(self, map: &HashMap<Id, Type>) -> Behaviour {
-        match self {
-            Behaviour::Unary(id, s, t) => {
-                Behaviour::Unary(id, s, t.with_applied_type_arguments(map))
-            }
-            Behaviour::Binary(id, (o, pt), t) => Behaviour::Binary(
-                id,
-                (o, pt.with_applied_type_arguments(map)),
-                t.with_applied_type_arguments(map),
-            ),
-            Behaviour::Keyword(id, kws, t) => Behaviour::Keyword(
-                id,
-                kws.into_iter()
-                    .map(|(s, t)| (s, t.with_applied_type_arguments(map)))
-                    .collect(),
-                t.with_applied_type_arguments(map),
-            ),
+        Behaviour {
+            receiver_type: self.receiver_type.with_applied_type_arguments(map),
+            method_id: self.method_id,
+            message: match self.message {
+                BehaviourMessage::Unary(s) => BehaviourMessage::Unary(s),
+                BehaviourMessage::Binary(o, pt) => {
+                    BehaviourMessage::Binary(o, pt.with_applied_type_arguments(map))
+                }
+                BehaviourMessage::Keyword(kws) => BehaviourMessage::Keyword(
+                    kws.into_iter()
+                        .map(|(s, t)| (s, t.with_applied_type_arguments(map)))
+                        .collect(),
+                ),
+            },
+            return_type: self.return_type.with_applied_type_arguments(map),
         }
     }
 }
 
 impl fmt::Display for Behaviour {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Behaviour::Unary(_, ref selector, ref return_type) => {
-                write!(f, "{} -> {}", selector, return_type)
+        write!(f, "{} ", self.receiver_type)?;
+        match self.message {
+            BehaviourMessage::Unary(ref selector) => {
+                write!(f, "{} ", selector)?;
             }
-            Behaviour::Binary(_, (ref operator, ref operand_type), ref return_type) => {
-                write!(f, "{} {} -> {}", operator, operand_type, return_type)
+            BehaviourMessage::Binary(ref operator, ref operand_type) => {
+                write!(f, "{} {} ", operator, operand_type)?;
             }
-            Behaviour::Keyword(_, ref kwd, ref return_type) => {
-                let arguments = kwd.iter().map(|(arg, type_)| format!("{}: {}", arg, type_));
-                write!(
-                    f,
-                    "{} -> {}",
-                    arguments.collect::<Vec<_>>().join(" "),
-                    return_type
-                )
+            BehaviourMessage::Keyword(ref kwd) => {
+                for (arg, type_) in kwd.iter() {
+                    write!(f, "{}: {} ", arg, type_)?;
+                }
             }
         }
+        write!(f, "-> {}", self.return_type)
     }
 }

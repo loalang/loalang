@@ -76,6 +76,13 @@ impl Analysis {
             navigator.traverse(&scope_root, &mut |n| {
                 // Don't traverse into lower scopes.
                 if n.is_scope_root() && n.id != scope_root.id {
+                    // Classes exist outside their own scope, though.
+                    if n.is_class() {
+                        if let Some((name, _)) = navigator.symbol_of(&n) {
+                            declarations.push((name, n.clone()));
+                        }
+                    }
+
                     return false;
                 }
 

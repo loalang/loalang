@@ -50,10 +50,10 @@ impl CompletionRequestHandler {
                         preselect: Some(i == 0),
                         sort_text: None,
                         filter_text: None,
-                        insert_text: Some(match b {
-                            semantics::Behaviour::Unary(_, ref s, _) => s.clone(),
-                            semantics::Behaviour::Binary(_, (ref s, _), _) => format!("{} $1", s),
-                            semantics::Behaviour::Keyword(_, ref kws, _) => kws
+                        insert_text: Some(match b.message {
+                            semantics::BehaviourMessage::Unary(ref s) => s.clone(),
+                            semantics::BehaviourMessage::Binary(ref s, _) => format!("{} $1", s),
+                            semantics::BehaviourMessage::Keyword(ref kws) => kws
                                 .iter()
                                 .enumerate()
                                 .map(|(i, (s, _))| format!("{}: ${}", s, i + 1))

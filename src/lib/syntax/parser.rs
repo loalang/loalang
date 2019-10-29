@@ -226,11 +226,16 @@ impl Parser {
     }
 
     fn parse_class(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut partial_keyword = None;
         let mut class_keyword = None;
         let mut symbol = Id::NULL;
         let mut class_body = Id::NULL;
         let mut type_parameter_list = Id::NULL;
         let mut period = None;
+
+        if sees!(self, PartialKeyword) {
+            partial_keyword = Some(self.next());
+        }
 
         if sees!(self, ClassKeyword) {
             class_keyword = Some(self.next());
@@ -264,6 +269,7 @@ impl Parser {
         self.finalize(
             builder,
             Class {
+                partial_keyword,
                 class_keyword,
                 symbol,
                 type_parameter_list,
@@ -348,6 +354,12 @@ impl Parser {
                 class_members.push(self.parse_method(self.child(&mut builder)));
                 continue;
             }
+
+            if sees!(self, IsKeyword) {
+                class_members.push(self.parse_is_directive(self.child(&mut builder)));
+                continue;
+            }
+
             self.syntax_error("Expected a class member.");
             while !sees!(self, CloseCurly | EOF | PrivateKeyword | PublicKeyword) {
                 self.next();
@@ -366,6 +378,31 @@ impl Parser {
                 open_curly,
                 class_members,
                 close_curly,
+            },
+        )
+    }
+
+    fn parse_is_directive(&mut self, mut builder: NodeBuilder) -> Id {
+        if !sees!(self, IsKeyword) {
+            return Id::NULL;
+        }
+
+        let is_keyword = self.next();
+        let type_expression = self.parse_type_expression(self.child(&mut builder));
+        let mut period = None;
+
+        if sees!(self, Period) {
+            period = Some(self.next());
+        } else {
+            self.syntax_error_end("Directive must end with a period.");
+        }
+
+        self.finalize(
+            builder,
+            IsDirective {
+                is_keyword,
+                type_expression,
+                period,
             },
         )
     }
@@ -404,8 +441,13 @@ impl Parser {
     }
 
     fn parse_signature(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut type_parameter_list = Id::NULL;
         let message_pattern;
         let mut return_type = Id::NULL;
+
+        if sees!(self, OpenAngle) {
+            type_parameter_list = self.parse_type_parameter_list(self.child(&mut builder));
+        }
 
         message_pattern = self.parse_message_pattern(self.child(&mut builder));
 
@@ -416,6 +458,7 @@ impl Parser {
         self.finalize(
             builder,
             Signature {
+                type_parameter_list,
                 message_pattern,
                 return_type,
             },
@@ -578,12 +621,49 @@ impl Parser {
     }
 
     fn parse_type_expression(&mut self, builder: NodeBuilder) -> Id {
-        if sees!(self, SimpleSymbol(_)) {
+        if sees!(self, Underscore) {
+            self.parse_nothing(builder)
+        } else if sees!(self, SelfKeyword) {
+            self.parse_self_type_expression(builder)
+        } else if sees!(self, SimpleSymbol(_)) {
             self.parse_reference_type_expression(builder)
         } else {
             self.syntax_error("Expected type expression.");
             Id::NULL
         }
+    }
+
+    fn parse_self_type_expression(&mut self, builder: NodeBuilder) -> Id {
+        if !sees!(self, SelfKeyword) {
+            self.syntax_error("Expected self keyword.");
+            return Id::NULL;
+        }
+
+        let keyword = self.next();
+
+        self.finalize(builder, SelfTypeExpression(keyword))
+    }
+
+    fn parse_self_expression(&mut self, builder: NodeBuilder) -> Id {
+        if !sees!(self, SelfKeyword) {
+            self.syntax_error("Expected self keyword.");
+            return Id::NULL;
+        }
+
+        let keyword = self.next();
+
+        self.finalize(builder, SelfExpression(keyword))
+    }
+
+    fn parse_nothing(&mut self, builder: NodeBuilder) -> Id {
+        if !sees!(self, Underscore) {
+            self.syntax_error("Expected underscore.");
+            return Id::NULL;
+        }
+
+        let underscore = self.next();
+
+        self.finalize(builder, Nothing(underscore))
     }
 
     fn parse_reference_type_expression(&mut self, mut builder: NodeBuilder) -> Id {
@@ -670,12 +750,16 @@ impl Parser {
         let mut type_expression = Id::NULL;
         let mut symbol = Id::NULL;
 
-        if sees!(self, SimpleSymbol(_)) {
+        if sees!(self, SimpleSymbol(_) | Underscore | SelfKeyword) {
             type_expression = self.parse_type_expression(self.child(&mut builder));
         }
 
         if sees!(self, SimpleSymbol(_)) {
-            symbol = self.parse_symbol(self.child(&mut builder));
+            if let Colon = self.tokens[1].kind {
+                // What we're seeing is the next keyword in a keyword pattern
+            } else {
+                symbol = self.parse_symbol(self.child(&mut builder));
+            }
         }
 
         self.finalize(
@@ -696,6 +780,9 @@ impl Parser {
     }
 
     fn parse_leaf_expression(&mut self, builder: NodeBuilder) -> Id {
+        if sees!(self, SelfKeyword) {
+            return self.parse_self_expression(builder);
+        }
         if sees!(self, SimpleSymbol(_)) {
             return self.parse_reference_expression(builder);
         }

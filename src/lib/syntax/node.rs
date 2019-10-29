@@ -27,7 +27,14 @@ impl Node {
 
     pub fn is_scope_root(&self) -> bool {
         match self.kind {
-            Module { .. } | ClassBody { .. } | Method { .. } => true,
+            Module { .. } | Class { .. } | Method { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_class(&self) -> bool {
+        match self.kind {
+            Class { .. } => true,
             _ => false,
         }
     }
@@ -206,12 +213,14 @@ pub enum NodeKind {
 
     /// ```bnf
     /// Class ::=
+    ///   PARTIAL_KEYWORD?
     ///   CLASS_KEYWORD
     ///   Symbol
     ///   TypeParameterList?
     ///   (ClassBody | PERIOD)
     /// ```
     Class {
+        partial_keyword: Option<Token>,
         class_keyword: Option<Token>,
         symbol: Id,
         type_parameter_list: Id,
@@ -252,7 +261,8 @@ pub enum NodeKind {
 
     /// ```bnf
     /// ClassMember ::=
-    ///   Method
+    ///   Method |
+    ///   IsDirective
     /// ```
 
     /// ```bnf
@@ -270,11 +280,25 @@ pub enum NodeKind {
     },
 
     /// ```bnf
+    /// IsDirective ::=
+    ///   IS_KEYWORD
+    ///   TypeExpression
+    ///   PERIOD
+    /// ```
+    IsDirective {
+        is_keyword: Token,
+        type_expression: Id,
+        period: Option<Token>,
+    },
+
+    /// ```bnf
     /// Signature ::=
+    ///   TypeParameterList?
     ///   MessagePattern
     ///   ReturnType?
     /// ```
     Signature {
+        type_parameter_list: Id,
         message_pattern: Id,
         return_type: Id,
     },
@@ -346,7 +370,9 @@ pub enum NodeKind {
 
     /// ```bnf
     /// TypeExpression ::=
-    ///   ReferenceTypeExpression
+    ///   ReferenceTypeExpression |
+    ///   SelfTypeExpression |
+    ///   Nothing
     /// ```
 
     /// ```bnf
@@ -355,6 +381,18 @@ pub enum NodeKind {
     ///   TypeArgumentList?
     /// ```
     ReferenceTypeExpression { symbol: Id, type_argument_list: Id },
+
+    /// ```bnf
+    /// SelfTypeExpression ::=
+    ///   SELF_KEYWORD
+    /// ```
+    SelfTypeExpression(Token),
+
+    /// ```bnf
+    /// Nothing ::=
+    ///   UNDERSCORE
+    /// ```
+    Nothing(Token),
 
     /// ```bnf
     /// TypeArgumentList ::=
@@ -382,7 +420,8 @@ pub enum NodeKind {
     /// ```bnf
     /// Expression ::=
     ///   ReferenceExpression |
-    ///   MessageSendExpression
+    ///   MessageSendExpression |
+    ///   SelfExpression
     /// ```
 
     /// ```bnf
@@ -390,6 +429,12 @@ pub enum NodeKind {
     ///   Symbol
     /// ```
     ReferenceExpression { symbol: Id },
+
+    /// ```bnf
+    /// SelfExpression ::=
+    ///   SELF_KEYWORD
+    /// ```
+    SelfExpression(Token),
 
     /// ```bnf
     /// MessageSendExpression ::=
@@ -452,10 +497,15 @@ impl NodeKind {
             Symbol(ref token) => vec![Some(token)],
 
             Class {
+                ref partial_keyword,
                 ref class_keyword,
                 ref period,
                 ..
-            } => vec![class_keyword.as_ref(), period.as_ref()],
+            } => vec![
+                partial_keyword.as_ref(),
+                class_keyword.as_ref(),
+                period.as_ref(),
+            ],
 
             TypeParameterList {
                 ref open_angle,
@@ -475,6 +525,12 @@ impl NodeKind {
                 ..
             } => vec![visibility.as_ref(), period.as_ref()],
 
+            IsDirective {
+                ref is_keyword,
+                ref period,
+                ..
+            } => vec![Some(is_keyword), period.as_ref()],
+
             Operator(ref token) => vec![Some(token)],
 
             KeywordPair { ref colon, .. } => vec![colon.as_ref()],
@@ -482,6 +538,12 @@ impl NodeKind {
             ReturnType { ref arrow, .. } => vec![arrow.as_ref()],
 
             MethodBody { ref fat_arrow, .. } => vec![fat_arrow.as_ref()],
+
+            Nothing(ref underscore) => vec![Some(underscore)],
+
+            SelfExpression(ref keyword) => vec![Some(keyword)],
+
+            SelfTypeExpression(ref keyword) => vec![Some(keyword)],
 
             TypeArgumentList {
                 ref open_angle,
@@ -557,10 +619,17 @@ impl NodeKind {
                 children.push(signature);
                 children.push(method_body);
             }
+            IsDirective {
+                type_expression, ..
+            } => {
+                children.push(type_expression);
+            }
             Signature {
+                type_parameter_list,
                 message_pattern,
                 return_type,
             } => {
+                children.push(type_parameter_list);
                 children.push(message_pattern);
                 children.push(return_type);
             }
@@ -575,6 +644,8 @@ impl NodeKind {
                 children.push(parameter_pattern);
             }
             Operator(_) => {}
+            SelfExpression(_) => {}
+            SelfTypeExpression(_) => {}
             KeywordMessagePattern { keyword_pairs } => {
                 children.extend(keyword_pairs);
             }
@@ -601,6 +672,7 @@ impl NodeKind {
                 children.push(symbol);
                 children.push(type_argument_list);
             }
+            Nothing(_) => {}
             TypeArgumentList {
                 type_expressions, ..
             } => {

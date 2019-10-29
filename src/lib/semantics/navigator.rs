@@ -137,7 +137,7 @@ where
             let selector = self.message_selector(message)?;
             for behaviour in behaviours {
                 if behaviour.selector() == selector {
-                    return self.find_node(behaviour.id());
+                    return self.find_node(behaviour.method_id);
                 }
             }
         }
@@ -267,16 +267,39 @@ where
                 }
             }
 
-            match self.closest_scope_root_upwards(declaration) {
+            let mut start_scope_root_search_from = declaration.clone();
+
+            if declaration.is_class() {
+                if let Some(class_parent) = self.parent(declaration) {
+                    start_scope_root_search_from = class_parent;
+                }
+            }
+
+            match self.closest_scope_root_upwards(&start_scope_root_search_from) {
                 None => (),
                 Some(scope_root) => references.extend(self.all_downwards(&scope_root, &|n| {
                     if !n.is_reference(kind) {
                         return false;
                     }
 
-                    self.symbol_of(n)
-                        .and_then(|(n, _)| if n == name { Some(true) } else { None })
-                        .unwrap_or(false)
+                    if let Some(dec) = self.find_declaration(n, kind) {
+                        if declaration.is_import_directive() {
+                            // Reference is referencing an import
+                            if dec.span.start.uri != n.span.start.uri {
+                                if let Some((ref_name, _)) = self.symbol_of(n) {
+                                    if ref_name == name {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+
+                        if dec.id == declaration.id {
+                            return true;
+                        }
+                    }
+
+                    return false;
                 })),
             }
         }
@@ -304,6 +327,15 @@ where
                     // declarations declared there is not reachable
                     // to the original reference.
                     if node.id != scope_root.id && node.is_scope_root() {
+                        // Classes exist outside their own scope, though.
+                        if node.is_class() {
+                            if let Some((n, _)) = self.symbol_of(node) {
+                                if n == name {
+                                    result = Some(node.clone());
+                                }
+                            }
+                        }
+
                         return false;
                     }
 
