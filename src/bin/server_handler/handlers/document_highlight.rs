@@ -15,8 +15,10 @@ impl RequestHandler for DocumentHighlightRequestHandler {
             usage
                 .named_nodes()
                 .into_iter()
-                .map(|named_node| DocumentHighlight {
-                    range: convert::from_loa::span_to_range(named_node.name_span),
+                .map(|named_node| named_node.name_span)
+                .filter(|span| span.start.uri == uri)
+                .map(|span| DocumentHighlight {
+                    range: convert::from_loa::span_to_range(span),
                     kind: None,
                 })
                 .collect(),

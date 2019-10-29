@@ -1,9 +1,12 @@
 .SILENT:
 
-.PHONY: build install test
+.PHONY: build install test debug
 
 build:
 	cargo build --release
+
+debug:
+	cargo build
 
 test:
 	cargo test --lib

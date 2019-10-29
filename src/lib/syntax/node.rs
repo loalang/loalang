@@ -109,7 +109,7 @@ impl fmt::Debug for Node {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum DeclarationKind {
     Type,
     Value,

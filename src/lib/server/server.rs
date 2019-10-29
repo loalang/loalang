@@ -113,7 +113,10 @@ impl Server {
             return self.analysis.types.get_type_of_expression(&expression);
         }
         if let Some(type_expression) = navigator.closest_type_expression_upwards(node) {
-            return self.analysis.types.get_type_of_type_expression(&type_expression);
+            return self
+                .analysis
+                .types
+                .get_type_of_type_expression(&type_expression);
         }
         semantics::Type::Unknown
     }

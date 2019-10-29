@@ -97,7 +97,7 @@ where
         if node.is_declaration(kind) {
             Some(Arc::new(semantics::Usage {
                 declaration: node.clone(),
-                references: self.find_references(node),
+                references: self.find_references(node, kind),
                 import_directives: self.find_import_directives_from_declaration(node),
             }))
         } else if node.is_import_directive() {
@@ -251,7 +251,7 @@ where
         self.find_node_in(&parent.span.start.uri, child_id)
     }
 
-    fn find_references(&self, declaration: &Node) -> Vec<Node> {
+    fn find_references(&self, declaration: &Node, kind: DeclarationKind) -> Vec<Node> {
         let mut references = vec![];
 
         if let Some((name, _)) = self.symbol_of(declaration) {
@@ -261,7 +261,7 @@ where
             {
                 if let Some(refs) = module_id
                     .and_then(|id| self.find_node(id))
-                    .map(|m| self.find_references_through_imports(m, name.clone()))
+                    .map(|m| self.find_references_through_imports(m, name.clone(), kind))
                 {
                     references.extend(refs);
                 }
@@ -270,7 +270,7 @@ where
             match self.closest_scope_root_upwards(declaration) {
                 None => (),
                 Some(scope_root) => references.extend(self.all_downwards(&scope_root, &|n| {
-                    if !n.is_reference(declaration.declaration_kind()) {
+                    if !n.is_reference(kind) {
                         return false;
                     }
 
@@ -370,6 +370,7 @@ where
         &self,
         module: syntax::Node,
         exported_name: String,
+        kind: DeclarationKind,
     ) -> Vec<syntax::Node> {
         let mut references = vec![];
         if let Some(namespace) = self.namespace_of_module(&module) {
@@ -382,7 +383,7 @@ where
                     {
                         if let Some(qs) = self.find_child(&import_directive, qualified_symbol) {
                             if self.qualified_symbol_to_string(&qs) == name {
-                                references.extend(self.find_references(&import_directive));
+                                references.extend(self.find_references(&import_directive, kind));
                             }
                         }
                     }

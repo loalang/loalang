@@ -43,7 +43,11 @@ impl Span {
     }
 
     pub fn len(&self) -> usize {
-        self.end.offset - self.start.offset
+        if self.end.offset < self.start.offset {
+            0
+        } else {
+            self.end.offset - self.start.offset
+        }
     }
 }
 
