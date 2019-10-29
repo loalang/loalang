@@ -16,17 +16,18 @@ impl CompletionRequestHandler {
             items: match completion {
                 server::Completion::VariablesInScope(variables) => variables
                     .into_iter()
-                    .map(|v| CompletionItem {
+                    .enumerate()
+                    .map(|(i, v)| CompletionItem {
                         label: v.name,
                         kind: Some(match v.kind {
                             server::VariableKind::Unknown => CompletionItemKind::Value,
                             server::VariableKind::Class => CompletionItemKind::Class,
                             server::VariableKind::Parameter => CompletionItemKind::Variable,
                         }),
-                        detail: None,
+                        detail: Some(v.type_.to_string()),
                         documentation: None,
                         deprecated: None,
-                        preselect: None,
+                        preselect: Some(i == 0),
                         sort_text: None,
                         filter_text: None,
                         insert_text: None,

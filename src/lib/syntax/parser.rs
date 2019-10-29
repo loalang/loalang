@@ -303,6 +303,8 @@ impl Parser {
 
             if sees!(self, Comma) {
                 self.next();
+            } else {
+                break;
             }
 
             if sees!(self, CloseAngle) {
@@ -328,6 +330,7 @@ impl Parser {
 
     fn parse_type_parameter(&mut self, mut builder: NodeBuilder) -> Id {
         let mut symbol = Id::NULL;
+        let mut variance_keyword = None;
 
         if sees!(self, SimpleSymbol(_)) {
             symbol = self.parse_symbol(self.child(&mut builder));
@@ -335,7 +338,17 @@ impl Parser {
             self.syntax_error("Expected type parameter.");
         }
 
-        self.finalize(builder, TypeParameter { symbol })
+        if sees!(self, InKeyword | OutKeyword | InoutKeyword) {
+            variance_keyword = Some(self.next());
+        }
+
+        self.finalize(
+            builder,
+            TypeParameter {
+                symbol,
+                variance_keyword,
+            },
+        )
     }
 
     fn parse_class_body(&mut self, mut builder: NodeBuilder) -> Id {
@@ -713,6 +726,8 @@ impl Parser {
 
             if sees!(self, Comma) {
                 self.next();
+            } else {
+                break;
             }
 
             if sees!(self, CloseAngle) {

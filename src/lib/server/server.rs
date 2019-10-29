@@ -249,12 +249,17 @@ impl Server {
                 let parent = tree.get(before.parent_id?)?;
 
                 match parent.kind {
-                    syntax::KeywordMessage { .. } => {
-                        self.completion_on_declarations_in_scope(&before, DeclarationKind::Value)
-                    }
-                    syntax::KeywordMessagePattern { .. } => {
-                        self.completion_on_declarations_in_scope(&before, DeclarationKind::Type)
-                    }
+                    syntax::KeywordMessage { .. } => self.completion_on_declarations_in_scope(
+                        &before,
+                        DeclarationKind::Value,
+                        &self.analysis.types,
+                    ),
+                    syntax::KeywordMessagePattern { .. } => self
+                        .completion_on_declarations_in_scope(
+                            &before,
+                            DeclarationKind::Type,
+                            &self.analysis.types,
+                        ),
                     kind => {
                         warn!(
                             "Cannot get completion from a keyword pair within {:?}",
@@ -265,9 +270,11 @@ impl Server {
                 }
             }
 
-            syntax::MethodBody { .. } => {
-                self.completion_on_declarations_in_scope(&before, DeclarationKind::Value)
-            }
+            syntax::MethodBody { .. } => self.completion_on_declarations_in_scope(
+                &before,
+                DeclarationKind::Value,
+                &self.analysis.types,
+            ),
 
             kind => {
                 warn!("Cannot get completion on {:?}", kind);
@@ -280,6 +287,7 @@ impl Server {
         &self,
         from: &syntax::Node,
         kind: DeclarationKind,
+        types: &semantics::Types,
     ) -> Option<server::Completion> {
         let declarations = self.analysis.declarations_in_scope(from.clone(), kind);
 
@@ -289,7 +297,7 @@ impl Server {
                 .filter_map(|(name, dec)| {
                     Some(server::Variable {
                         name,
-                        type_: server::Type::Unknown,
+                        type_: types.get_type_of_declaration(&dec),
                         kind: match dec.kind {
                             syntax::Class { .. } => server::VariableKind::Class,
                             syntax::ParameterPattern { .. } => server::VariableKind::Parameter,

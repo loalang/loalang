@@ -244,8 +244,12 @@ pub enum NodeKind {
     /// ```bnf
     /// TypeParameter ::=
     ///   Symbol
+    ///   (IN_KEYWORD | OUT_KEYWORD | INOUT_KEYWORD)?
     /// ```
-    TypeParameter { symbol: Id },
+    TypeParameter {
+        symbol: Id,
+        variance_keyword: Option<Token>,
+    },
 
     /// ```bnf
     /// ClassBody ::=
@@ -512,6 +516,11 @@ impl NodeKind {
                 ref close_angle,
                 ..
             } => vec![open_angle.as_ref(), close_angle.as_ref()],
+
+            TypeParameter {
+                ref variance_keyword,
+                ..
+            } => vec![variance_keyword.as_ref()],
 
             ClassBody {
                 ref open_curly,
