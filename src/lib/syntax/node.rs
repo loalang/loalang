@@ -46,6 +46,13 @@ impl Node {
         }
     }
 
+    pub fn is_message_send(&self) -> bool {
+        match self.kind {
+            MessageSendExpression { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn is_import_directive(&self) -> bool {
         match self.kind {
             ImportDirective { .. } => true,

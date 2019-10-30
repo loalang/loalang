@@ -185,6 +185,76 @@ impl TypeAssignment {
         }
         Some(())
     }
+
+    fn check_message_send(
+        &self,
+        message_send: &Node,
+        analysis: &mut Analysis,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) -> Option<()> {
+        let navigator = analysis.navigator();
+        if let MessageSendExpression {
+            expression,
+            message,
+            ..
+        } = message_send.kind
+        {
+            let expression = navigator.find_child(message_send, expression)?;
+            let receiver_type = analysis.types.get_type_of_expression(&expression);
+
+            let message = navigator.find_child(message_send, message)?;
+            let selector = navigator.message_selector(&message)?;
+
+            let behaviours = analysis.types.get_behaviours(&receiver_type);
+
+            for behaviour in behaviours {
+                if behaviour.selector() == selector {
+                    match (behaviour.message, &message.kind) {
+                        (BehaviourMessage::Unary(_), UnaryMessage { .. }) => {}
+                        (
+                            BehaviourMessage::Binary(_, ref parameter_type),
+                            BinaryMessage { expression, .. },
+                        ) => {
+                            let argument = navigator.find_child(&message, *expression)?;
+                            let argument_type = analysis.types.get_type_of_expression(&argument);
+
+                            self.diagnose_assignment(
+                                argument.span,
+                                parameter_type.clone(),
+                                argument_type,
+                                analysis,
+                                diagnostics,
+                            );
+                        }
+                        (
+                            BehaviourMessage::Keyword(ref kws),
+                            KeywordMessage { ref keyword_pairs },
+                        ) => {
+                            for (i, (_, parameter_type)) in kws.iter().enumerate() {
+                                let keyword_pair =
+                                    navigator.find_child(&message, keyword_pairs[i])?;
+                                if let KeywordPair { value, .. } = keyword_pair.kind {
+                                    let argument = navigator.find_child(&message, value)?;
+                                    let argument_type =
+                                        analysis.types.get_type_of_expression(&argument);
+
+                                    self.diagnose_assignment(
+                                        argument.span,
+                                        parameter_type.clone(),
+                                        argument_type,
+                                        analysis,
+                                        diagnostics,
+                                    );
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        None
+    }
 }
 
 impl Checker for TypeAssignment {
@@ -192,6 +262,10 @@ impl Checker for TypeAssignment {
         analysis.navigator().traverse_all(&mut |n| {
             if n.is_method() {
                 self.check_method(n, analysis, diagnostics).unwrap_or(());
+            }
+            if n.is_message_send() {
+                self.check_message_send(n, analysis, diagnostics)
+                    .unwrap_or(());
             }
             true
         })
