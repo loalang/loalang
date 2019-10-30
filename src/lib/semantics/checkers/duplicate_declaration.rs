@@ -11,12 +11,14 @@ impl DuplicateDeclaration {
         diagnostics: &mut Vec<Diagnostic>,
         reported_symbols: &mut Vec<Id>,
     ) {
-        let navigator = analysis.navigator();
-        for scope_root in navigator.all_scope_roots() {
+        for scope_root in analysis.navigator.all_scope_roots() {
             let mut declarations_by_name = HashMap::new();
 
-            for declaration in navigator.all_declarations_in_scope(&scope_root, kind) {
-                if let Some((name, symbol)) = navigator.symbol_of(&declaration) {
+            for declaration in analysis
+                .navigator
+                .all_declarations_in_scope(&scope_root, kind)
+            {
+                if let Some((name, symbol)) = analysis.navigator.symbol_of(&declaration) {
                     if !declarations_by_name.contains_key(&name) {
                         declarations_by_name.insert(name.clone(), vec![]);
                     }
@@ -53,7 +55,17 @@ impl DuplicateDeclaration {
 impl Checker for DuplicateDeclaration {
     fn check(&self, analysis: &mut Analysis, diagnostics: &mut Vec<Diagnostic>) {
         let mut reported_symbols = vec![];
-        Self::check_kind(DeclarationKind::Type, analysis, diagnostics, &mut reported_symbols);
-        Self::check_kind(DeclarationKind::Value, analysis, diagnostics, &mut reported_symbols);
+        Self::check_kind(
+            DeclarationKind::Type,
+            analysis,
+            diagnostics,
+            &mut reported_symbols,
+        );
+        Self::check_kind(
+            DeclarationKind::Value,
+            analysis,
+            diagnostics,
+            &mut reported_symbols,
+        );
     }
 }

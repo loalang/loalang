@@ -4,22 +4,16 @@ use crate::*;
 
 #[derive(Clone)]
 pub struct Analysis {
-    modules: Arc<HashMap<URI, Arc<syntax::Tree>>>,
-    usage: Cache<Id, Option<Arc<Usage>>>,
     pub types: Types,
+    pub navigator: Navigator,
 }
 
 impl Analysis {
     pub fn new(modules: Arc<HashMap<URI, Arc<syntax::Tree>>>) -> Analysis {
-        Analysis {
-            modules: modules.clone(),
-            usage: Cache::new(),
-            types: Types::new(ProgramNavigator::new(modules)),
-        }
-    }
+        let navigator = Navigator::new(modules);
+        let types = Types::new(navigator.clone());
 
-    pub fn navigator(&self) -> ProgramNavigator {
-        ProgramNavigator::new(self.modules.clone())
+        Analysis { navigator, types }
     }
 
     pub fn check(&mut self) -> Vec<Diagnostic> {
@@ -32,44 +26,13 @@ impl Analysis {
         diagnostics
     }
 
-    pub fn usage(&mut self, node: &syntax::Node) -> Option<Arc<Usage>> {
-        let navigator = self.navigator();
-        let types = self.types.clone();
-        self.usage
-            .cache(node.id, move |cache| {
-                let usage = navigator.find_usage(node, DeclarationKind::Any, &types)?;
-
-                cache.set(usage.declaration.id, Some(usage.clone()));
-                for n in usage.references.iter() {
-                    cache.set(n.id, Some(usage.clone()));
-                }
-                for n in usage.import_directives.iter() {
-                    cache.set(n.id, Some(usage.clone()));
-                }
-                Some(usage)
-            })
-            .clone()
-    }
-
-    pub fn all_reference_symbols(&self, kind: DeclarationKind) -> Vec<syntax::Node> {
-        self.navigator().all_reference_symbols(kind)
-    }
-
-    pub fn all_references(&self, kind: DeclarationKind) -> Vec<syntax::Node> {
-        self.navigator().all_references(kind)
-    }
-
-    pub fn declaration_is_exported(&self, declaration: &syntax::Node) -> bool {
-        self.navigator().declaration_is_exported(declaration)
-    }
-
     pub fn declarations_in_scope(
         &self,
         mut from: syntax::Node,
         kind: DeclarationKind,
     ) -> Vec<(String, syntax::Node)> {
         let uri = from.span.start.uri.clone();
-        let navigator = self.navigator();
+        let navigator = &self.navigator;
 
         let mut declarations = vec![];
 

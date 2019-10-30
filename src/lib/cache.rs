@@ -1,59 +1,72 @@
 use crate::*;
-use std::collections::hash_map::RandomState;
 use std::hash::Hash;
 
 #[derive(Clone)]
-pub struct Cache<K, V> {
-    entries: HashMap<K, V>,
+pub struct Cache<K, T> {
+    mutex: Arc<Mutex<HashMap<K, T>>>,
 }
 
-impl<K: Hash + Eq + Clone, V> Cache<K, V> {
-    pub fn new() -> Cache<K, V> {
+impl<K, T> Cache<K, T>
+where
+    K: Hash + Eq,
+{
+    pub fn new() -> Cache<K, T> {
         Cache {
-            entries: HashMap::new(),
+            mutex: Arc::new(Mutex::new(HashMap::new())),
         }
-    }
-
-    pub fn set(&mut self, k: K, v: V) {
-        self.entries.insert(k, v);
-    }
-
-    pub fn get(&self, k: &K) -> Option<&V> {
-        self.entries.get(k)
-    }
-
-    pub fn get_mut(&mut self, k: &K) -> Option<&mut V> {
-        self.entries.get_mut(k)
-    }
-
-    pub fn cache<F: FnOnce(&mut Self) -> V>(&mut self, k: K, f: F) -> &V {
-        if !self.entries.contains_key(&k) {
-            let v = f(self);
-
-            self.entries.insert(k.clone(), v);
-        }
-        self.entries.get(&k).unwrap()
     }
 }
 
-impl<K: Hash + Eq, V> From<HashMap<K, V>> for Cache<K, V> {
-    fn from(entries: HashMap<K, V, RandomState>) -> Self {
-        Cache { entries }
+impl<K, T> Cache<K, T>
+where
+    T: Default + Clone,
+    K: Hash + Eq + Clone,
+{
+    pub fn gate<F: FnOnce() -> T>(&self, key: &K, f: F) -> T {
+        {
+            if let Ok(mut cache) = self.mutex.lock() {
+                if let Some(type_) = cache.get(key) {
+                    return type_.clone();
+                }
+
+                cache.insert(key.clone(), Default::default());
+            }
+        }
+
+        let result = f();
+
+        {
+            if let Ok(mut cache) = self.mutex.lock() {
+                cache.insert(key.clone(), result.clone());
+            }
+        }
+
+        result
     }
 }
 
-#[test]
-fn cache() {
-    let mut cache = Cache::new();
-    let mut called_times = 0;
+impl<K, T> Cache<K, T>
+where
+    T: Clone,
+    K: Hash + Eq + Clone,
+{
+    pub fn gate_not_loop_safe<F: FnOnce() -> T>(&self, key: &K, f: F) -> T {
+        {
+            if let Ok(cache) = self.mutex.lock() {
+                if let Some(type_) = cache.get(key) {
+                    return type_.clone();
+                }
+            }
+        }
 
-    for _ in 0..3 {
-        cache.cache(12, || {
-            called_times += 1;
-            String::from("twelve")
-        });
+        let result = f();
+
+        {
+            if let Ok(mut cache) = self.mutex.lock() {
+                cache.insert(key.clone(), result.clone());
+            }
+        }
+
+        result
     }
-
-    assert_eq!(called_times, 1);
-    assert_eq!(cache.get(&12).unwrap(), "twelve");
 }

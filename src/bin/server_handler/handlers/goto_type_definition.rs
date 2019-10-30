@@ -1,5 +1,4 @@
 use crate::server_handler::*;
-use loa::semantics::Navigator;
 
 pub struct GotoTypeDefinitionRequestHandler;
 impl RequestHandler for GotoTypeDefinitionRequestHandler {
@@ -16,7 +15,7 @@ impl RequestHandler for GotoTypeDefinitionRequestHandler {
         match type_ {
             semantics::Type::Unknown => None,
             semantics::Type::Class(_, id, _) | semantics::Type::Parameter(_, id, _) => {
-                let navigator = context.server.navigator();
+                let navigator = &context.server.analysis.navigator;
                 let declaration = navigator.find_node(id)?;
                 let (_, s) = navigator.symbol_of(&declaration)?;
                 Some(convert::from_loa::span_to_location(s.span).into())

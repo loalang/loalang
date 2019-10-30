@@ -1,98 +1,53 @@
-use crate::semantics::{Navigator, ProgramNavigator};
+use crate::semantics::*;
 use crate::syntax::*;
 use crate::*;
 
 #[derive(Clone)]
 pub struct Types {
-    types_cache: Arc<Mutex<Cache<Id, Type>>>,
-    behaviours_cache: Arc<Mutex<Cache<Id, Option<Vec<Behaviour>>>>>,
-    navigator: ProgramNavigator,
+    navigator: Navigator,
+    types_cache: Cache<Id, Type>,
+    behaviours_cache: Cache<Id, Option<Vec<Behaviour>>>,
 }
 
 impl Types {
-    pub fn new(navigator: ProgramNavigator) -> Types {
+    pub fn new(navigator: Navigator) -> Types {
         Types {
             navigator,
-            types_cache: Arc::new(Mutex::new(Cache::new())),
-            behaviours_cache: Arc::new(Mutex::new(Cache::new())),
+            types_cache: Cache::new(),
+            behaviours_cache: Cache::new(),
         }
-    }
-
-    fn type_gate<F: FnOnce() -> Type>(&self, node: &Node, f: F) -> Type {
-        {
-            if let Ok(mut cache) = self.types_cache.lock() {
-                if let Some(type_) = cache.get(&node.id) {
-                    return type_.clone();
-                }
-
-                cache.set(node.id, Type::Unknown);
-            }
-        }
-
-        let type_ = f();
-
-        {
-            if let Ok(mut cache) = self.types_cache.lock() {
-                cache.set(node.id, type_.clone());
-            }
-        }
-
-        type_
-    }
-
-    fn behaviours_gate<F: FnOnce() -> Option<Vec<Behaviour>>>(
-        &self,
-        node: &Node,
-        f: F,
-    ) -> Option<Vec<Behaviour>> {
-        {
-            if let Ok(cache) = self.behaviours_cache.lock() {
-                if let Some(behaviours) = cache.get(&node.id) {
-                    return behaviours.clone();
-                }
-            }
-        }
-
-        let behaviours = f();
-
-        {
-            if let Ok(mut cache) = self.behaviours_cache.lock() {
-                cache.set(node.id, behaviours.clone());
-            }
-        }
-
-        behaviours
     }
 
     pub fn get_type_of_expression(&self, expression: &Node) -> Type {
-        self.type_gate(expression, || match expression.kind {
-            ReferenceExpression { .. } => self.get_type_of_declaration(
-                &self
-                    .navigator
-                    .find_declaration(expression, DeclarationKind::Value)?,
-            ),
+        self.types_cache
+            .gate(&expression.id, || match expression.kind {
+                ReferenceExpression { .. } => self.get_type_of_declaration(
+                    &self
+                        .navigator
+                        .find_declaration(expression, DeclarationKind::Value)?,
+                ),
 
-            MessageSendExpression {
-                expression,
-                message,
-            } => {
-                let receiver = self.navigator.find_node(expression)?;
-                let message = self.navigator.find_node(message)?;
+                MessageSendExpression {
+                    expression,
+                    message,
+                } => {
+                    let receiver = self.navigator.find_node(expression)?;
+                    let message = self.navigator.find_node(message)?;
 
-                let selector = self.navigator.message_selector(&message)?;
+                    let selector = self.navigator.message_selector(&message)?;
 
-                let receiver_type = self.get_type_of_expression(&receiver);
-                let behaviours = self.get_behaviours(&receiver_type);
+                    let receiver_type = self.get_type_of_expression(&receiver);
+                    let behaviours = self.get_behaviours(&receiver_type);
 
-                for behaviour in behaviours {
-                    if behaviour.selector() == selector {
-                        return behaviour.return_type();
+                    for behaviour in behaviours {
+                        if behaviour.selector() == selector {
+                            return behaviour.return_type();
+                        }
                     }
+                    Type::Unknown
                 }
-                Type::Unknown
-            }
-            _ => Type::Unknown,
-        })
+                _ => Type::Unknown,
+            })
     }
 
     pub fn get_types_of_type_parameter_list(&self, list: &Node) -> Option<Vec<Type>> {
@@ -116,95 +71,100 @@ impl Types {
     }
 
     pub fn get_type_of_declaration(&self, declaration: &Node) -> Type {
-        self.type_gate(declaration, || match declaration.kind {
-            ParameterPattern {
-                type_expression, ..
-            } => self.get_type_of_type_expression(&self.navigator.find_node(type_expression)?),
-            Class {
-                type_parameter_list,
-                ..
-            } => {
-                let (name, _) = self.navigator.symbol_of(declaration)?;
-                Type::Class(
-                    name,
-                    declaration.id,
-                    self.navigator
-                        .find_child(declaration, type_parameter_list)
-                        .and_then(|list| self.get_types_of_type_parameter_list(&list))
-                        .unwrap_or(vec![]),
-                )
-            }
-            TypeParameter { .. } => {
-                let (name, _) = self.navigator.symbol_of(declaration)?;
-                Type::Parameter(name, declaration.id, vec![])
-            }
-            _ => Type::Unknown,
-        })
+        self.types_cache
+            .gate(&declaration.id, || match declaration.kind {
+                ParameterPattern {
+                    type_expression, ..
+                } => self.get_type_of_type_expression(&self.navigator.find_node(type_expression)?),
+                Class {
+                    type_parameter_list,
+                    ..
+                } => {
+                    let (name, _) = self.navigator.symbol_of(declaration)?;
+                    Type::Class(
+                        name,
+                        declaration.id,
+                        self.navigator
+                            .find_child(declaration, type_parameter_list)
+                            .and_then(|list| self.get_types_of_type_parameter_list(&list))
+                            .unwrap_or(vec![]),
+                    )
+                }
+                TypeParameter { .. } => {
+                    let (name, _) = self.navigator.symbol_of(declaration)?;
+                    Type::Parameter(name, declaration.id, vec![])
+                }
+                _ => Type::Unknown,
+            })
     }
 
     pub fn get_type_of_type_expression(&self, type_expression: &Node) -> Type {
-        self.type_gate(type_expression, || match type_expression.kind {
-            ReferenceTypeExpression {
-                type_argument_list, ..
-            } => {
-                let args = if let Some(argument_list) = self.navigator.find_node(type_argument_list)
-                {
-                    if let TypeArgumentList {
-                        type_expressions, ..
-                    } = argument_list.kind
-                    {
-                        type_expressions
-                            .into_iter()
-                            .map(|e| {
-                                self.navigator
-                                    .find_node(e)
-                                    .map(|te| self.get_type_of_type_expression(&te))
-                                    .unwrap_or(Type::Unknown)
-                            })
-                            .collect()
-                    } else {
-                        vec![]
-                    }
-                } else {
-                    vec![]
-                };
+        self.types_cache
+            .gate(&type_expression.id, || match type_expression.kind {
+                ReferenceTypeExpression {
+                    type_argument_list, ..
+                } => {
+                    let args =
+                        if let Some(argument_list) = self.navigator.find_node(type_argument_list) {
+                            if let TypeArgumentList {
+                                type_expressions, ..
+                            } = argument_list.kind
+                            {
+                                type_expressions
+                                    .into_iter()
+                                    .map(|e| {
+                                        self.navigator
+                                            .find_node(e)
+                                            .map(|te| self.get_type_of_type_expression(&te))
+                                            .unwrap_or(Type::Unknown)
+                                    })
+                                    .collect()
+                            } else {
+                                vec![]
+                            }
+                        } else {
+                            vec![]
+                        };
 
-                self.get_type_of_declaration(
-                    &self
-                        .navigator
-                        .find_declaration(type_expression, DeclarationKind::Type)?,
-                )
-                .with_args(args)
-            }
-            _ => Type::Unknown,
-        })
+                    self.get_type_of_declaration(
+                        &self
+                            .navigator
+                            .find_declaration(type_expression, DeclarationKind::Type)?,
+                    )
+                    .with_args(args)
+                }
+                _ => Type::Unknown,
+            })
     }
 
     pub fn get_type_of_method_body(&self, method_body: &Node) -> Type {
-        self.type_gate(method_body, || match method_body.kind {
-            MethodBody { expression, .. } => {
-                self.get_type_of_expression(&self.navigator.find_node(expression)?)
-            }
-            _ => Type::Unknown,
-        })
+        self.types_cache
+            .gate(&method_body.id, || match method_body.kind {
+                MethodBody { expression, .. } => {
+                    self.get_type_of_expression(&self.navigator.find_node(expression)?)
+                }
+                _ => Type::Unknown,
+            })
     }
 
     pub fn get_type_of_return_type(&self, return_type: &Node) -> Type {
-        self.type_gate(return_type, || match return_type.kind {
-            ReturnType {
-                type_expression, ..
-            } => self.get_type_of_type_expression(&self.navigator.find_node(type_expression)?),
-            _ => Type::Unknown,
-        })
+        self.types_cache
+            .gate(&return_type.id, || match return_type.kind {
+                ReturnType {
+                    type_expression, ..
+                } => self.get_type_of_type_expression(&self.navigator.find_node(type_expression)?),
+                _ => Type::Unknown,
+            })
     }
 
     pub fn get_type_of_parameter_pattern(&self, parameter_pattern: &Node) -> Type {
-        self.type_gate(parameter_pattern, || match parameter_pattern.kind {
-            ParameterPattern {
-                type_expression, ..
-            } => self.get_type_of_type_expression(&self.navigator.find_node(type_expression)?),
-            _ => Type::Unknown,
-        })
+        self.types_cache
+            .gate(&parameter_pattern.id, || match parameter_pattern.kind {
+                ParameterPattern {
+                    type_expression, ..
+                } => self.get_type_of_type_expression(&self.navigator.find_node(type_expression)?),
+                _ => Type::Unknown,
+            })
     }
 
     pub fn get_behaviours(&self, type_: &Type) -> Vec<Behaviour> {
@@ -220,7 +180,7 @@ impl Types {
     fn get_behaviours_from_class(&self, class_id: Id, args: &Vec<Type>) -> Option<Vec<Behaviour>> {
         let class = self.navigator.find_node(class_id)?;
         let receiver_type = self.get_type_of_declaration(&class);
-        self.behaviours_gate(&class, || {
+        self.behaviours_cache.gate(&class.id, || {
             if let Class {
                 class_body,
                 type_parameter_list,
@@ -440,6 +400,12 @@ impl std::ops::Try for Type {
 
     fn from_ok(v: Self::Ok) -> Self {
         v
+    }
+}
+
+impl Default for Type {
+    fn default() -> Self {
+        Type::Unknown
     }
 }
 

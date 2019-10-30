@@ -2,24 +2,56 @@ use crate::semantics::*;
 use crate::syntax::*;
 use crate::*;
 
-pub trait Navigator
-where
-    Self: Clone,
-{
-    fn traverse_all<F: FnMut(&Node) -> bool>(&self, f: &mut F);
-    fn modules(&self) -> Vec<Node>;
-    fn find_node(&self, id: Id) -> Option<Node>;
+#[derive(Clone)]
+pub struct Navigator {
+    modules: Arc<HashMap<URI, Arc<Tree>>>,
 
-    fn find_node_in(&self, _uri: &URI, id: Id) -> Option<Node> {
-        self.find_node(id)
+    usage_cache: Cache<(DeclarationKind, Id), Option<Arc<Usage>>>,
+}
+
+impl Navigator {
+    pub fn new(modules: Arc<HashMap<URI, Arc<Tree>>>) -> Navigator {
+        Navigator {
+            modules,
+            usage_cache: Cache::new(),
+        }
     }
 
-    fn parent(&self, child: &Node) -> Option<Node> {
+    pub fn traverse_all<F: FnMut(&Node) -> bool>(&self, f: &mut F) {
+        for module in self.modules.values() {
+            if let Some(root) = module.root() {
+                self.traverse(root, f);
+            }
+        }
+    }
+
+    pub fn modules(&self) -> Vec<Node> {
+        self.modules
+            .values()
+            .filter_map(|t| t.root())
+            .cloned()
+            .collect()
+    }
+
+    pub fn find_node(&self, id: Id) -> Option<Node> {
+        for (_, tree) in self.modules.iter() {
+            if let Some(n) = tree.get(id) {
+                return Some(n);
+            }
+        }
+        None
+    }
+
+    pub fn find_node_in(&self, uri: &URI, id: Id) -> Option<Node> {
+        self.modules.get(uri).and_then(|t| t.get(id))
+    }
+
+    pub fn parent(&self, child: &Node) -> Option<Node> {
         let uri = &child.span.start.uri;
         child.parent_id.and_then(|i| self.find_node_in(uri, i))
     }
 
-    fn children(&self, parent: &Node) -> Vec<Node> {
+    pub fn children(&self, parent: &Node) -> Vec<Node> {
         let uri = &parent.span.start.uri;
         parent
             .kind
@@ -29,7 +61,7 @@ where
             .collect()
     }
 
-    fn message_selector(&self, message: &Node) -> Option<String> {
+    pub fn message_selector(&self, message: &Node) -> Option<String> {
         match message.kind {
             UnaryMessage { symbol } | UnaryMessagePattern { symbol } => {
                 Some(self.symbol_of(&self.find_child(message, symbol)?)?.0)
@@ -62,7 +94,7 @@ where
         }
     }
 
-    fn symbol_of(&self, node: &Node) -> Option<(String, Node)> {
+    pub fn symbol_of(&self, node: &Node) -> Option<(String, Node)> {
         match node.kind {
             Symbol(ref t) => Some((t.lexeme(), node.clone())),
             Class { symbol, .. }
@@ -93,41 +125,48 @@ where
         }
     }
 
-    fn find_usage(&self, node: &Node, kind: DeclarationKind, types: &Types) -> Option<Arc<Usage>> {
-        if node.is_declaration(kind) {
-            Some(Arc::new(semantics::Usage {
-                declaration: node.clone(),
-                references: self.find_references(node, kind),
-                import_directives: self.find_import_directives_from_declaration(node),
-            }))
-        } else if node.is_import_directive() {
-            let declaration = &self.find_declaration_from_import(&node)?;
-            self.find_usage(declaration, declaration.declaration_kind(), types)
-        } else if node.is_symbol() {
-            let usage_target = &self.usage_target_from_symbol(node)?;
-            self.find_usage(usage_target, usage_target.declaration_kind(), types)
-        } else if node.is_reference(kind) {
-            let declaration = &self.find_declaration(node, node.declaration_kind())?;
-            self.find_usage(declaration, declaration.declaration_kind(), types)
-        } else if let Method { .. } = node.kind {
-            Some(Arc::new(semantics::Usage {
-                declaration: node.clone(),
-                references: self.find_method_references(node, types),
-                import_directives: vec![],
-            }))
-        } else if node.is_message_pattern() {
-            let signature = self.parent(node)?;
-            let method = self.parent(&signature)?;
-            self.find_usage(&method, DeclarationKind::None, types)
-        } else if node.is_message() {
-            let method = self.method_from_message(node, types)?;
-            self.find_usage(&method, DeclarationKind::None, types)
-        } else {
-            None
-        }
+    pub fn find_usage(
+        &self,
+        node: &Node,
+        kind: DeclarationKind,
+        types: &Types,
+    ) -> Option<Arc<Usage>> {
+        self.usage_cache.gate(&(kind.clone(), node.id), || {
+            if node.is_declaration(kind) {
+                Some(Arc::new(semantics::Usage {
+                    declaration: node.clone(),
+                    references: self.find_references(node, kind),
+                    import_directives: self.find_import_directives_from_declaration(node),
+                }))
+            } else if node.is_import_directive() {
+                let declaration = &self.find_declaration_from_import(&node)?;
+                self.find_usage(declaration, declaration.declaration_kind(), types)
+            } else if node.is_symbol() {
+                let usage_target = &self.usage_target_from_symbol(node)?;
+                self.find_usage(usage_target, usage_target.declaration_kind(), types)
+            } else if node.is_reference(kind) {
+                let declaration = &self.find_declaration(node, node.declaration_kind())?;
+                self.find_usage(declaration, declaration.declaration_kind(), types)
+            } else if let Method { .. } = node.kind {
+                Some(Arc::new(semantics::Usage {
+                    declaration: node.clone(),
+                    references: self.find_method_references(node, types),
+                    import_directives: vec![],
+                }))
+            } else if node.is_message_pattern() {
+                let signature = self.parent(node)?;
+                let method = self.parent(&signature)?;
+                self.find_usage(&method, DeclarationKind::None, types)
+            } else if node.is_message() {
+                let method = self.method_from_message(node, types)?;
+                self.find_usage(&method, DeclarationKind::None, types)
+            } else {
+                None
+            }
+        })
     }
 
-    fn method_from_message(&self, message: &Node, types: &Types) -> Option<Node> {
+    pub fn method_from_message(&self, message: &Node, types: &Types) -> Option<Node> {
         let send = self.parent(message)?;
         if let MessageSendExpression { expression, .. } = send.kind {
             let receiver = self.find_child(&send, expression)?;
@@ -144,7 +183,7 @@ where
         None
     }
 
-    fn find_method_references(&self, method: &Node, types: &Types) -> Vec<Node> {
+    pub fn find_method_references(&self, method: &Node, types: &Types) -> Vec<Node> {
         let mut messages = vec![];
         for message in self.all_messages() {
             if let Some(matching_method) = self.method_from_message(&message, types) {
@@ -156,7 +195,7 @@ where
         messages
     }
 
-    fn find_import_directives_from_declaration(&self, declaration: &Node) -> Vec<Node> {
+    pub fn find_import_directives_from_declaration(&self, declaration: &Node) -> Vec<Node> {
         let mut imports = vec![];
 
         if let Some((Some(module_id), syntax::Exported(_, _))) =
@@ -176,7 +215,7 @@ where
         imports
     }
 
-    fn imports_matching(&self, qualified_name: String) -> Vec<Node> {
+    pub fn imports_matching(&self, qualified_name: String) -> Vec<Node> {
         self.all_imports()
             .into_iter()
             .filter(|import| {
@@ -195,19 +234,19 @@ where
             .collect()
     }
 
-    fn all_message_sends(&self) -> Vec<Node> {
+    pub fn all_message_sends(&self) -> Vec<Node> {
         self.all_matching(|n| n.is_message_send())
     }
 
-    fn all_messages(&self) -> Vec<Node> {
+    pub fn all_messages(&self) -> Vec<Node> {
         self.all_matching(|n| n.is_message())
     }
 
-    fn all_imports(&self) -> Vec<Node> {
+    pub fn all_imports(&self) -> Vec<Node> {
         self.all_matching(|n| n.is_import_directive())
     }
 
-    fn usage_target_from_symbol(&self, symbol: &Node) -> Option<Node> {
+    pub fn usage_target_from_symbol(&self, symbol: &Node) -> Option<Node> {
         let parent = self.parent(symbol)?;
         if parent.is_qualified_symbol() {
             if let Some(qs_parent) = self.parent(&parent) {
@@ -251,11 +290,11 @@ where
         None
     }
 
-    fn find_child(&self, parent: &Node, child_id: Id) -> Option<Node> {
+    pub fn find_child(&self, parent: &Node, child_id: Id) -> Option<Node> {
         self.find_node_in(&parent.span.start.uri, child_id)
     }
 
-    fn find_references(&self, declaration: &Node, kind: DeclarationKind) -> Vec<Node> {
+    pub fn find_references(&self, declaration: &Node, kind: DeclarationKind) -> Vec<Node> {
         let mut references = vec![];
 
         if let Some((name, _)) = self.symbol_of(declaration) {
@@ -311,12 +350,12 @@ where
         references
     }
 
-    fn find_declaration(&self, reference: &Node, kind: DeclarationKind) -> Option<Node> {
+    pub fn find_declaration(&self, reference: &Node, kind: DeclarationKind) -> Option<Node> {
         let (name, _) = self.symbol_of(reference)?;
         self.find_declaration_above(reference, name, kind)
     }
 
-    fn find_declaration_above(
+    pub fn find_declaration_above(
         &self,
         node: &Node,
         name: String,
@@ -402,7 +441,7 @@ where
         }
     }
 
-    fn find_references_through_imports(
+    pub fn find_references_through_imports(
         &self,
         module: syntax::Node,
         exported_name: String,
@@ -429,11 +468,11 @@ where
         references
     }
 
-    fn import_directives_of_module(&self, module: &Node) -> Vec<Node> {
+    pub fn import_directives_of_module(&self, module: &Node) -> Vec<Node> {
         self.all_downwards(module, &|n| n.is_import_directive())
     }
 
-    fn find_declaration_from_import(&self, import_directive: &Node) -> Option<Node> {
+    pub fn find_declaration_from_import(&self, import_directive: &Node) -> Option<Node> {
         if let ImportDirective {
             qualified_symbol, ..
         } = import_directive.kind
@@ -464,7 +503,7 @@ where
         None
     }
 
-    fn modules_in_namespace(&self, namespace: String) -> Vec<Node> {
+    pub fn modules_in_namespace(&self, namespace: String) -> Vec<Node> {
         let namespace = Some(namespace);
         self.modules()
             .into_iter()
@@ -472,7 +511,7 @@ where
             .collect()
     }
 
-    fn namespace_of_module(&self, module: &Node) -> Option<String> {
+    pub fn namespace_of_module(&self, module: &Node) -> Option<String> {
         if let Module {
             namespace_directive,
             ..
@@ -490,11 +529,11 @@ where
         None
     }
 
-    fn qualified_symbol_to_string(&self, qualified_symbol: &Node) -> String {
+    pub fn qualified_symbol_to_string(&self, qualified_symbol: &Node) -> String {
         self.qualified_symbol_to_strings(qualified_symbol).join("/")
     }
 
-    fn qualified_symbol_to_strings(&self, qualified_symbol: &Node) -> Vec<String> {
+    pub fn qualified_symbol_to_strings(&self, qualified_symbol: &Node) -> Vec<String> {
         if let QualifiedSymbol { ref symbols, .. } = qualified_symbol.kind {
             symbols
                 .iter()
@@ -506,7 +545,7 @@ where
         }
     }
 
-    fn symbol_to_string(&self, symbol: &Node) -> Option<String> {
+    pub fn symbol_to_string(&self, symbol: &Node) -> Option<String> {
         if let Symbol(ref t) = symbol.kind {
             Some(t.lexeme())
         } else {
@@ -514,7 +553,7 @@ where
         }
     }
 
-    fn module_declarations_in(&self, module: &Node) -> Vec<(bool, Node)> {
+    pub fn module_declarations_in(&self, module: &Node) -> Vec<(bool, Node)> {
         if let Module {
             ref module_declarations,
             ..
@@ -536,7 +575,7 @@ where
         }
     }
 
-    fn super_type_expressions(&self, class: &Node) -> Vec<Node> {
+    pub fn super_type_expressions(&self, class: &Node) -> Vec<Node> {
         let mut super_type_expressions = vec![];
 
         if let Class { class_body, .. } = class.kind {
@@ -566,15 +605,15 @@ where
         super_type_expressions
     }
 
-    fn all_expressions(&self) -> Vec<Node> {
+    pub fn all_expressions(&self) -> Vec<Node> {
         self.all_matching(|n| n.is_expression())
     }
 
-    fn all_references(&self, kind: DeclarationKind) -> Vec<Node> {
+    pub fn all_references(&self, kind: DeclarationKind) -> Vec<Node> {
         self.all_matching(|n| n.is_reference(kind))
     }
 
-    fn all_reference_symbols(&self, kind: DeclarationKind) -> Vec<Node> {
+    pub fn all_reference_symbols(&self, kind: DeclarationKind) -> Vec<Node> {
         self.all_references(kind)
             .into_iter()
             .filter_map(|reference| self.symbol_of(&reference))
@@ -582,20 +621,22 @@ where
             .collect()
     }
 
-    fn all_matching<F: Fn(&Node) -> bool>(&self, f: F) -> Vec<Node> {
-        let mut matching = vec![];
+    pub fn all_matching<F: Fn(&Node) -> bool>(&self, f: F) -> Vec<Node> {
+        cache_candidate("all_matching", || {
+            let mut matching = vec![];
 
-        self.traverse_all(&mut |n| {
-            if f(n) {
-                matching.push(n.clone());
-            }
-            true
-        });
+            self.traverse_all(&mut |n| {
+                if f(n) {
+                    matching.push(n.clone());
+                }
+                true
+            });
 
-        matching
+            matching
+        })
     }
 
-    fn child_nodes(&self, node: &Node) -> Vec<Node> {
+    pub fn child_nodes(&self, node: &Node) -> Vec<Node> {
         let uri = &node.span.start.uri;
         let mut out = vec![];
         for child_id in node.children() {
@@ -610,7 +651,7 @@ where
     /// If the callback returns true for a given node, the
     /// traversal will continue down its children. Otherwise,
     /// the traversal will not traverse down that path.
-    fn traverse<F: FnMut(&Node) -> bool>(&self, from: &Node, f: &mut F) {
+    pub fn traverse<F: FnMut(&Node) -> bool>(&self, from: &Node, f: &mut F) {
         if !f(from) {
             return;
         }
@@ -620,7 +661,7 @@ where
         }
     }
 
-    fn closest_upwards<F: Fn(&Node) -> bool>(&self, node: &Node, f: F) -> Option<Node> {
+    pub fn closest_upwards<F: Fn(&Node) -> bool>(&self, node: &Node, f: F) -> Option<Node> {
         if f(node) {
             return Some(node.clone());
         }
@@ -640,7 +681,7 @@ where
         }
     }
 
-    fn all_downwards<F: Fn(&Node) -> bool>(&self, from: &Node, f: &F) -> Vec<Node> {
+    pub fn all_downwards<F: Fn(&Node) -> bool>(&self, from: &Node, f: &F) -> Vec<Node> {
         let mut nodes = vec![];
 
         if f(from) {
@@ -654,51 +695,51 @@ where
         nodes
     }
 
-    fn closest_expression_upwards(&self, from: &Node) -> Option<Node> {
+    pub fn closest_expression_upwards(&self, from: &Node) -> Option<Node> {
         self.closest_upwards(from, |n| n.is_expression())
     }
 
-    fn all_expressions_downwards(&self, from: &Node) -> Vec<Node> {
+    pub fn all_expressions_downwards(&self, from: &Node) -> Vec<Node> {
         self.all_downwards(from, &|n| n.is_expression())
     }
 
-    fn closest_type_expression_upwards(&self, from: &Node) -> Option<Node> {
+    pub fn closest_type_expression_upwards(&self, from: &Node) -> Option<Node> {
         self.closest_upwards(from, |n| n.is_type_expression())
     }
 
-    fn all_type_expressions_downwards(&self, from: &Node) -> Vec<Node> {
+    pub fn all_type_expressions_downwards(&self, from: &Node) -> Vec<Node> {
         self.all_downwards(from, &|n| n.is_type_expression())
     }
 
-    fn closest_scope_root_upwards(&self, from: &Node) -> Option<Node> {
+    pub fn closest_scope_root_upwards(&self, from: &Node) -> Option<Node> {
         self.closest_upwards(from, |n| n.is_scope_root())
     }
 
-    fn all_scope_roots_downwards(&self, from: &Node) -> Vec<Node> {
+    pub fn all_scope_roots_downwards(&self, from: &Node) -> Vec<Node> {
         self.all_downwards(from, &|n| n.is_scope_root())
     }
 
-    fn all_scope_roots(&self) -> Vec<Node> {
+    pub fn all_scope_roots(&self) -> Vec<Node> {
         self.all_matching(|n| n.is_scope_root())
     }
 
-    fn closest_declaration_upwards(&self, from: &Node, kind: DeclarationKind) -> Option<Node> {
+    pub fn closest_declaration_upwards(&self, from: &Node, kind: DeclarationKind) -> Option<Node> {
         self.closest_upwards(from, |n| n.is_declaration(kind))
     }
 
-    fn all_declarations_downwards(&self, from: &Node, kind: DeclarationKind) -> Vec<Node> {
+    pub fn all_declarations_downwards(&self, from: &Node, kind: DeclarationKind) -> Vec<Node> {
         self.all_downwards(from, &|n| n.is_declaration(kind))
     }
 
-    fn closest_references_upwards(&self, from: &Node, kind: DeclarationKind) -> Option<Node> {
+    pub fn closest_references_upwards(&self, from: &Node, kind: DeclarationKind) -> Option<Node> {
         self.closest_upwards(from, |n| n.is_reference(kind))
     }
 
-    fn all_references_downwards(&self, from: &Node, kind: DeclarationKind) -> Vec<Node> {
+    pub fn all_references_downwards(&self, from: &Node, kind: DeclarationKind) -> Vec<Node> {
         self.all_downwards(from, &|n| n.is_reference(kind))
     }
 
-    fn all_declarations_in_scope(&self, scope_root: &Node, kind: DeclarationKind) -> Vec<Node> {
+    pub fn all_declarations_in_scope(&self, scope_root: &Node, kind: DeclarationKind) -> Vec<Node> {
         let mut declarations = vec![];
         self.traverse(scope_root, &mut |n| {
             if n.is_scope_root() && n.id != scope_root.id {
@@ -718,81 +759,12 @@ where
         declarations
     }
 
-    fn declaration_is_exported(&self, declaration: &Node) -> bool {
+    pub fn declaration_is_exported(&self, declaration: &Node) -> bool {
         if let Some(parent) = self.parent(declaration) {
             if let Exported(_, _) = parent.kind {
                 return true;
             }
         }
         false
-    }
-}
-
-#[derive(Clone)]
-pub struct ProgramNavigator {
-    modules: Arc<HashMap<URI, Arc<Tree>>>,
-}
-
-impl ProgramNavigator {
-    pub fn new(modules: Arc<HashMap<URI, Arc<Tree>>>) -> ProgramNavigator {
-        ProgramNavigator { modules }
-    }
-}
-
-impl Navigator for ProgramNavigator {
-    fn traverse_all<F: FnMut(&Node) -> bool>(&self, f: &mut F) {
-        for module in self.modules.values() {
-            if let Some(root) = module.root() {
-                self.traverse(root, f);
-            }
-        }
-    }
-
-    fn modules(&self) -> Vec<Node> {
-        self.modules
-            .values()
-            .filter_map(|t| t.root())
-            .cloned()
-            .collect()
-    }
-
-    fn find_node(&self, id: Id) -> Option<Node> {
-        for (_, tree) in self.modules.iter() {
-            if let Some(n) = tree.get(id) {
-                return Some(n);
-            }
-        }
-        None
-    }
-
-    fn find_node_in(&self, uri: &URI, id: Id) -> Option<Node> {
-        self.modules.get(uri).and_then(|t| t.get(id))
-    }
-}
-
-#[derive(Clone)]
-pub struct ModuleNavigator {
-    tree: Arc<Tree>,
-}
-
-impl ModuleNavigator {
-    pub fn new(tree: Arc<Tree>) -> ModuleNavigator {
-        ModuleNavigator { tree }
-    }
-}
-
-impl Navigator for ModuleNavigator {
-    fn traverse_all<F: FnMut(&Node) -> bool>(&self, f: &mut F) {
-        if let Some(root) = self.tree.root() {
-            self.traverse(root, f);
-        }
-    }
-
-    fn modules(&self) -> Vec<Node> {
-        self.tree.root().into_iter().cloned().collect()
-    }
-
-    fn find_node(&self, id: Id) -> Option<Node> {
-        self.tree.get(id)
     }
 }

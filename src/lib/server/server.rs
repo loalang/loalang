@@ -1,10 +1,10 @@
-use crate::semantics::{Analysis, Navigator, ProgramNavigator};
+use crate::semantics::*;
 use crate::syntax::DeclarationKind;
 use crate::*;
 
 #[derive(Clone)]
 pub struct Server {
-    analysis: semantics::Analysis,
+    pub analysis: semantics::Analysis,
     module_cells: HashMap<URI, server::ModuleCell>,
 }
 
@@ -98,22 +98,17 @@ impl Server {
 
     // SEMANTIC QUERIES
 
-    pub fn declaration_is_exported(&self, declaration: &syntax::Node) -> bool {
-        self.analysis.declaration_is_exported(declaration)
-    }
-
-    pub fn navigator(&self) -> ProgramNavigator {
-        self.analysis.navigator()
-    }
-
     pub fn type_at(&self, location: Location) -> semantics::Type {
         let cell = self.module_cells.get(&location.uri)?;
         let node = cell.tree.node_at(location)?;
-        let navigator = self.analysis.navigator();
-        if let Some(expression) = navigator.closest_expression_upwards(node) {
+        if let Some(expression) = self.analysis.navigator.closest_expression_upwards(node) {
             return self.analysis.types.get_type_of_expression(&expression);
         }
-        if let Some(type_expression) = navigator.closest_type_expression_upwards(node) {
+        if let Some(type_expression) = self
+            .analysis
+            .navigator
+            .closest_type_expression_upwards(node)
+        {
             return self
                 .analysis
                 .types
@@ -128,15 +123,17 @@ impl Server {
         if !node.is_symbol() {
             return None;
         }
-        let navigator = self.analysis.navigator();
-        if let Some(qs) = navigator.parent(&node) {
+        if let Some(qs) = self.analysis.navigator.parent(&node) {
             if let syntax::QualifiedSymbol { ref symbols } = qs.kind {
                 if symbols.last() != Some(&node.id) {
                     return None;
                 }
             }
         }
-        let usage = self.analysis.usage(node)?;
+        let usage =
+            self.analysis
+                .navigator
+                .find_usage(node, DeclarationKind::Any, &self.analysis.types)?;
         Some(server::Usage {
             handle: self.create_named_node(&node)?,
             declaration: self.create_named_node(&usage.declaration)?,
@@ -156,17 +153,19 @@ impl Server {
                         ..
                     } = import.kind
                     {
-                        if let Some(symbol) = navigator.find_node(symbol) {
+                        if let Some(symbol) = self.analysis.navigator.find_node(symbol) {
                             if let Some(mut named_node) = self.create_named_node(&symbol) {
                                 named_node.node = import.clone();
                                 named_nodes.push(named_node);
                             }
                         }
 
-                        if let Some(qs) = navigator.find_node(qualified_symbol) {
+                        if let Some(qs) = self.analysis.navigator.find_node(qualified_symbol) {
                             if let syntax::QualifiedSymbol { symbols } = qs.kind {
-                                if let Some(last_symbol) =
-                                    symbols.last().cloned().and_then(|i| navigator.find_node(i))
+                                if let Some(last_symbol) = symbols
+                                    .last()
+                                    .cloned()
+                                    .and_then(|i| self.analysis.navigator.find_node(i))
                                 {
                                     if let Some(mut named_node) =
                                         self.create_named_node(&last_symbol)
@@ -185,9 +184,7 @@ impl Server {
     }
 
     fn create_named_node(&self, node: &syntax::Node) -> Option<server::NamedNode> {
-        let navigator = semantics::ModuleNavigator::new(
-            self.module_cells.get(&node.span.start.uri)?.tree.clone(),
-        );
+        let navigator = &self.analysis.navigator;
 
         if node.is_message() {
             return Some(server::NamedNode {

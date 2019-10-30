@@ -87,6 +87,8 @@ fn is_renaming_a_declaration_exported_in_file_with_same_name_as_declaration(
     // Make sure the declaration is exported
     if !context
         .server
+        .analysis
+        .navigator
         .declaration_is_exported(&usage.declaration.node)
     {
         return false;

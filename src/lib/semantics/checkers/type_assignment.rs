@@ -17,13 +17,13 @@ impl TypeAssignment {
                 Type::Class(_, assignee_class, assignee_args),
                 Type::Class(_, assigned_class, assigned_args),
             ) => {
-                let navigator = analysis.navigator();
-                let assignee_class = navigator.find_node(*assignee_class)?;
-                let assigned_class = navigator.find_node(*assigned_class)?;
+                let assignee_class = analysis.navigator.find_node(*assignee_class)?;
+                let assigned_class = analysis.navigator.find_node(*assigned_class)?;
 
                 if assignee_class.id != assigned_class.id {
                     if !invariant {
-                        for super_type in navigator.super_type_expressions(&assigned_class) {
+                        for super_type in analysis.navigator.super_type_expressions(&assigned_class)
+                        {
                             let super_type =
                                 analysis.types.get_type_of_type_expression(&super_type);
 
@@ -53,8 +53,9 @@ impl TypeAssignment {
                     ..
                 } = assignee_class.kind
                 {
-                    let type_parameter_list =
-                        navigator.find_child(&assignee_class, type_parameter_list)?;
+                    let type_parameter_list = analysis
+                        .navigator
+                        .find_child(&assignee_class, type_parameter_list)?;
                     if let TypeParameterList {
                         ref type_parameters,
                         ..
@@ -75,8 +76,9 @@ impl TypeAssignment {
                                 Type::Unknown
                             };
 
-                            let parameter =
-                                navigator.find_child(&type_parameter_list, *parameter)?;
+                            let parameter = analysis
+                                .navigator
+                                .find_child(&type_parameter_list, *parameter)?;
                             if let TypeParameter {
                                 variance_keyword, ..
                             } = parameter.kind
@@ -150,26 +152,27 @@ impl TypeAssignment {
         analysis: &mut Analysis,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Option<()> {
-        let navigator = analysis.navigator();
         if let Method {
             method_body,
             signature,
             ..
         } = method.kind
         {
-            let signature = navigator.find_child(method, signature)?;
+            let signature = analysis.navigator.find_child(method, signature)?;
             if let Signature { return_type, .. } = signature.kind {
-                let return_type = navigator.find_child(&signature, return_type)?;
+                let return_type = analysis.navigator.find_child(&signature, return_type)?;
                 if let ReturnType {
                     type_expression, ..
                 } = return_type.kind
                 {
-                    let type_expression = navigator.find_child(&return_type, type_expression)?;
+                    let type_expression = analysis
+                        .navigator
+                        .find_child(&return_type, type_expression)?;
                     let assignee = analysis.types.get_type_of_type_expression(&type_expression);
 
-                    let method_body = navigator.find_child(method, method_body)?;
+                    let method_body = analysis.navigator.find_child(method, method_body)?;
                     if let MethodBody { expression, .. } = method_body.kind {
-                        let expression = navigator.find_child(&method_body, expression)?;
+                        let expression = analysis.navigator.find_child(&method_body, expression)?;
                         let assigned = analysis.types.get_type_of_expression(&expression);
 
                         self.diagnose_assignment(
@@ -192,18 +195,17 @@ impl TypeAssignment {
         analysis: &mut Analysis,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Option<()> {
-        let navigator = analysis.navigator();
         if let MessageSendExpression {
             expression,
             message,
             ..
         } = message_send.kind
         {
-            let expression = navigator.find_child(message_send, expression)?;
+            let expression = analysis.navigator.find_child(message_send, expression)?;
             let receiver_type = analysis.types.get_type_of_expression(&expression);
 
-            let message = navigator.find_child(message_send, message)?;
-            let selector = navigator.message_selector(&message)?;
+            let message = analysis.navigator.find_child(message_send, message)?;
+            let selector = analysis.navigator.message_selector(&message)?;
 
             let behaviours = analysis.types.get_behaviours(&receiver_type);
 
@@ -215,7 +217,7 @@ impl TypeAssignment {
                             BehaviourMessage::Binary(_, ref parameter_type),
                             BinaryMessage { expression, .. },
                         ) => {
-                            let argument = navigator.find_child(&message, *expression)?;
+                            let argument = analysis.navigator.find_child(&message, *expression)?;
                             let argument_type = analysis.types.get_type_of_expression(&argument);
 
                             self.diagnose_assignment(
@@ -232,9 +234,10 @@ impl TypeAssignment {
                         ) => {
                             for (i, (_, parameter_type)) in kws.iter().enumerate() {
                                 let keyword_pair =
-                                    navigator.find_child(&message, keyword_pairs[i])?;
+                                    analysis.navigator.find_child(&message, keyword_pairs[i])?;
                                 if let KeywordPair { value, .. } = keyword_pair.kind {
-                                    let argument = navigator.find_child(&message, value)?;
+                                    let argument =
+                                        analysis.navigator.find_child(&message, value)?;
                                     let argument_type =
                                         analysis.types.get_type_of_expression(&argument);
 
@@ -259,7 +262,7 @@ impl TypeAssignment {
 
 impl Checker for TypeAssignment {
     fn check(&self, analysis: &mut Analysis, diagnostics: &mut Vec<Diagnostic>) {
-        analysis.navigator().traverse_all(&mut |n| {
+        analysis.navigator.clone().traverse_all(&mut |n| {
             if n.is_method() {
                 self.check_method(n, analysis, diagnostics).unwrap_or(());
             }
