@@ -117,10 +117,39 @@ impl Server {
         semantics::Type::Unknown
     }
 
-    pub fn usage(&mut self, location: Location) -> Option<server::Usage> {
+    pub fn behaviour_at(&self, location: Location) -> Option<semantics::Behaviour> {
         let cell = self.module_cells.get(&location.uri)?;
         let node = cell.tree.node_at(location)?;
-        if !node.is_symbol() {
+        if let Some(message_send) = self.analysis.navigator.closest_message_send_upwards(node) {
+            return self
+                .analysis
+                .types
+                .get_behaviour_from_message_send(&message_send);
+        }
+        if let Some(message_pattern) = self
+            .analysis
+            .navigator
+            .closest_message_pattern_upwards(node)
+        {
+            let signature = self.analysis.navigator.parent(&message_pattern)?;
+            let method = self.analysis.navigator.parent(&signature)?;
+            let class_body = self.analysis.navigator.parent(&method)?;
+            let class = self.analysis.navigator.parent(&class_body)?;
+
+            let receiver_type = self.analysis.types.get_type_of_declaration(&class);
+
+            return self
+                .analysis
+                .types
+                .get_behaviour_from_method(receiver_type, method);
+        }
+        None
+    }
+
+    pub fn usage(&mut self, location: Location) -> Option<server::Usage> {
+        let cell = self.module_cells.get(&location.uri)?;
+        let node = cell.tree.node_at(location.clone())?;
+        if !node.is_symbol() && !node.is_operator() {
             return None;
         }
         if let Some(qs) = self.analysis.navigator.parent(&node) {
@@ -134,8 +163,21 @@ impl Server {
             self.analysis
                 .navigator
                 .find_usage(node, DeclarationKind::Any, &self.analysis.types)?;
+
+        let mut handle = None;
+
+        for reference in usage.references.iter() {
+            if reference.span.contains_location(&location) {
+                handle = Some(reference);
+            }
+        }
+
+        if handle.is_none() && usage.declaration.span.contains_location(&location) {
+            handle = Some(&usage.declaration);
+        }
+
         Some(server::Usage {
-            handle: self.create_named_node(&node)?,
+            handle: self.create_named_node(handle.unwrap_or(node))?,
             declaration: self.create_named_node(&usage.declaration)?,
             references: usage
                 .references

@@ -18,8 +18,8 @@ pub use self::checker::*;
 
 pub mod checkers;
 
-use std::time::{Duration, Instant};
 use crate::*;
+use std::time::{Duration, Instant};
 
 const CACHE_CANDIDATE_WARNING_LIMIT: Duration = Duration::from_millis(10);
 

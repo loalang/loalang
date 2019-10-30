@@ -12,9 +12,27 @@ impl RequestHandler for PrepareRenameRequestHandler {
         let (uri, location) = convert::from_lsp::position_params(params);
         let location = context.server.location(&uri, location)?;
         let usage = context.server.usage(location)?;
+
+        let placeholder = if usage.is_behaviour() {
+            let message_pattern = context
+                .server
+                .analysis
+                .navigator
+                .message_pattern_of_method(&usage.declaration.node)?;
+            let selector = context
+                .server
+                .analysis
+                .navigator
+                .message_pattern_selector(&message_pattern)?;
+
+            selector
+        } else {
+            usage.handle.name
+        };
+
         Some(PrepareRenameResponse::RangeWithPlaceholder {
             range: convert::from_loa::span_to_range(usage.handle.name_span),
-            placeholder: usage.handle.name,
+            placeholder,
         })
     }
 }

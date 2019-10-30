@@ -25,6 +25,13 @@ impl Node {
         }
     }
 
+    pub fn is_operator(&self) -> bool {
+        match self.kind {
+            Operator(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_scope_root(&self) -> bool {
         match self.kind {
             Module { .. } | Class { .. } | Method { .. } => true,
@@ -345,7 +352,7 @@ pub enum NodeKind {
     /// Operator ::=
     ///   (PLUS | SLASH | EQUAL_SIGN | OPEN_ANGLE | CLOSE_ANGLE)+
     /// ```
-    Operator(Token),
+    Operator(Vec<Token>),
 
     /// ```bnf
     /// KeywordMessagePattern ::=
@@ -554,7 +561,7 @@ impl NodeKind {
                 ..
             } => vec![Some(is_keyword), period.as_ref()],
 
-            Operator(ref token) => vec![Some(token)],
+            Operator(ref tokens) => tokens.iter().map(Some).collect(),
 
             KeywordPair { ref colon, .. } => vec![colon.as_ref()],
 

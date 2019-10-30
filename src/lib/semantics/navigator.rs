@@ -67,8 +67,13 @@ impl Navigator {
                 Some(self.symbol_of(&self.find_child(message, symbol)?)?.0)
             }
             BinaryMessage { operator, .. } | BinaryMessagePattern { operator, .. } => {
-                if let Operator(t) = self.find_child(message, operator)?.kind {
-                    Some(t.lexeme())
+                if let Operator(ts) = self.find_child(message, operator)?.kind {
+                    Some(
+                        ts.into_iter()
+                            .map(|ref t| t.lexeme())
+                            .collect::<Vec<_>>()
+                            .join(""),
+                    )
                 } else {
                     None
                 }
@@ -97,6 +102,10 @@ impl Navigator {
     pub fn symbol_of(&self, node: &Node) -> Option<(String, Node)> {
         match node.kind {
             Symbol(ref t) => Some((t.lexeme(), node.clone())),
+            Operator(ref ts) => Some((
+                ts.iter().map(|t| t.lexeme()).collect::<Vec<_>>().join(""),
+                node.clone(),
+            )),
             Class { symbol, .. }
             | ReferenceTypeExpression { symbol, .. }
             | ReferenceExpression { symbol, .. }
@@ -141,13 +150,16 @@ impl Navigator {
             } else if node.is_import_directive() {
                 let declaration = &self.find_declaration_from_import(&node)?;
                 self.find_usage(declaration, declaration.declaration_kind(), types)
+            } else if node.is_operator() {
+                let usage_target = &self.usage_target_from_operator(node)?;
+                self.find_usage(usage_target, usage_target.declaration_kind(), types)
             } else if node.is_symbol() {
                 let usage_target = &self.usage_target_from_symbol(node)?;
                 self.find_usage(usage_target, usage_target.declaration_kind(), types)
             } else if node.is_reference(kind) {
                 let declaration = &self.find_declaration(node, node.declaration_kind())?;
                 self.find_usage(declaration, declaration.declaration_kind(), types)
-            } else if let Method { .. } = node.kind {
+            } else if node.is_method() {
                 Some(Arc::new(semantics::Usage {
                     declaration: node.clone(),
                     references: self.find_method_references(node, types),
@@ -244,6 +256,16 @@ impl Navigator {
 
     pub fn all_imports(&self) -> Vec<Node> {
         self.all_matching(|n| n.is_import_directive())
+    }
+
+    pub fn usage_target_from_operator(&self, operator: &Node) -> Option<Node> {
+        let parent = self.parent(operator)?;
+
+        if parent.is_message_pattern() || parent.is_message() {
+            return Some(parent);
+        }
+
+        None
     }
 
     pub fn usage_target_from_symbol(&self, symbol: &Node) -> Option<Node> {
@@ -699,6 +721,14 @@ impl Navigator {
         self.closest_upwards(from, |n| n.is_expression())
     }
 
+    pub fn closest_message_send_upwards(&self, from: &Node) -> Option<Node> {
+        self.closest_upwards(from, |n| n.is_message_send())
+    }
+
+    pub fn closest_message_pattern_upwards(&self, from: &Node) -> Option<Node> {
+        self.closest_upwards(from, |n| n.is_message_pattern())
+    }
+
     pub fn all_expressions_downwards(&self, from: &Node) -> Vec<Node> {
         self.all_downwards(from, &|n| n.is_expression())
     }
@@ -766,5 +796,59 @@ impl Navigator {
             }
         }
         false
+    }
+
+    pub fn message_pattern_of_method(&self, method: &Node) -> Option<Node> {
+        if let Method { signature, .. } = method.kind {
+            let signature = self.find_child(method, signature)?;
+            if let Signature {
+                message_pattern, ..
+            } = signature.kind
+            {
+                return self.find_child(&signature, message_pattern);
+            }
+        }
+        None
+    }
+
+    pub fn message_pattern_selector(&self, message_pattern: &Node) -> Option<String> {
+        match message_pattern.kind {
+            UnaryMessagePattern { symbol, .. } => {
+                let symbol = self.find_child(message_pattern, symbol)?;
+                if let Symbol(ref t) = symbol.kind {
+                    return Some(t.lexeme());
+                }
+            }
+
+            BinaryMessagePattern { operator, .. } => {
+                let operator = self.find_child(message_pattern, operator)?;
+                if let Operator(ref ts) = operator.kind {
+                    return Some(ts.iter().map(|t| t.lexeme()).collect::<Vec<_>>().join(""));
+                }
+            }
+
+            KeywordMessagePattern {
+                ref keyword_pairs, ..
+            } => {
+                let mut selector = String::new();
+
+                for pair in keyword_pairs.iter() {
+                    let pair = self.find_child(message_pattern, *pair)?;
+                    if let KeywordPair { keyword, .. } = pair.kind {
+                        let keyword = self.find_child(&pair, keyword)?;
+                        if let Symbol(ref t) = keyword.kind {
+                            selector.push_str(format!("{}:", t.lexeme()).as_ref());
+                        }
+                    }
+                }
+
+                if selector.len() > 0 {
+                    return Some(selector);
+                }
+            }
+
+            _ => (),
+        }
+        None
     }
 }

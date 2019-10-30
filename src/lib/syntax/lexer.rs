@@ -14,15 +14,20 @@ pub fn is_valid_symbol(string: &String) -> bool {
 
 pub fn is_valid_binary_selector(string: &String) -> bool {
     let source = Source::new(URI::Exact("tmp".into()), string.clone());
-    let tokens = tokenize(source);
+    let mut tokens = tokenize(source);
+    tokens.pop();
 
     use TokenKind::*;
 
-    tokens.len() == 1
-        && matches!(
-            tokens[0].kind,
+    for token in tokens {
+        if !matches!(
+            token.kind,
             Plus | Slash | EqualSign | OpenAngle | CloseAngle
-        )
+        ) {
+            return false;
+        }
+    }
+    true
 }
 
 pub fn is_valid_keyword_selector(string: &String, length: usize) -> bool {

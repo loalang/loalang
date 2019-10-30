@@ -8,17 +8,23 @@ impl RequestHandler for HoverRequestHandler {
         let (uri, location) = convert::from_lsp::position_params(params);
         let location = context.server.location(&uri, location)?;
         let usage = context.server.usage(location.clone())?;
-        let type_ = context.server.type_at(location);
+        let markdown = if usage.declaration.node.is_method() {
+            let behaviour = context.server.behaviour_at(location)?;
+            behaviour.to_markdown(&context.server.analysis.navigator)
+        } else {
+            let type_ = context.server.type_at(location);
 
-        if let semantics::Type::Unknown = type_ {
-            return None;
-        }
+            if let semantics::Type::Unknown = type_ {
+                return None;
+            }
 
+            type_.to_markdown(&context.server.analysis.navigator)
+        };
         Some(Hover {
-            range: Some(convert::from_loa::span_to_range(usage.handle.name_span)),
+            range: Some(convert::from_loa::span_to_range(usage.handle.node.span)),
             contents: HoverContents::Markup(MarkupContent {
-                kind: MarkupKind::PlainText,
-                value: type_.to_string(),
+                kind: MarkupKind::Markdown,
+                value: markdown,
             }),
         })
     }

@@ -26,6 +26,10 @@ impl Usage {
     pub fn handle_is_aliased(&self) -> bool {
         self.handle.name != self.declaration.name
     }
+
+    pub fn is_behaviour(&self) -> bool {
+        self.declaration.node.is_method()
+    }
 }
 
 #[derive(Debug, Clone)]

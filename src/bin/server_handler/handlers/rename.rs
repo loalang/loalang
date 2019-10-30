@@ -1,15 +1,13 @@
 use crate::server_handler::*;
+use loa::syntax::{is_valid_binary_selector, is_valid_keyword_selector, is_valid_symbol};
 
 pub struct RenameRequestHandler;
 
-impl RequestHandler for RenameRequestHandler {
-    type R = request::Rename;
-
-    fn handle(context: &mut ServerContext, params: RenameParams) -> Option<WorkspaceEdit> {
-        let (uri, location) = convert::from_lsp::position_params(params.text_document_position);
-        let location = context.server.location(&uri, location)?;
-        let usage = context.server.usage(location)?;
-
+impl RenameRequestHandler {
+    fn rename_symbol(
+        usage: &server::Usage,
+        new_name: String,
+    ) -> Option<HashMap<URI, Vec<TextEdit>>> {
         let declared_name = usage.declaration.name.clone();
         let handle_name = usage.handle.name.clone();
 
@@ -23,16 +21,206 @@ impl RequestHandler for RenameRequestHandler {
         let mut edits = HashMap::new();
 
         for node in named_nodes {
-            let uri = node.name_span.start.uri.clone();
-            if !edits.contains_key(&uri) {
-                edits.insert(uri.clone(), vec![]);
-            }
-            let edits = edits.get_mut(&uri).unwrap();
-            edits.push(TextEdit {
-                range: convert::from_loa::span_to_range(node.name_span),
-                new_text: params.new_name.clone(),
-            })
+            Self::add_edit(
+                &node.node.span.start.uri,
+                &mut edits,
+                TextEdit {
+                    range: convert::from_loa::span_to_range(node.node.span.clone()),
+                    new_text: new_name.clone(),
+                },
+            );
         }
+
+        Some(edits)
+    }
+
+    fn add_edit(uri: &URI, edits: &mut HashMap<URI, Vec<TextEdit>>, edit: TextEdit) {
+        if !edits.contains_key(&uri) {
+            edits.insert(uri.clone(), vec![]);
+        }
+        let edits = edits.get_mut(&uri).unwrap();
+        edits.push(edit)
+    }
+
+    fn rename_behaviour(
+        usage: &server::Usage,
+        context: &mut ServerContext,
+        new_name: String,
+    ) -> Option<HashMap<URI, Vec<TextEdit>>> {
+        let mut edits = HashMap::new();
+
+        let message_pattern = context
+            .server
+            .analysis
+            .navigator
+            .message_pattern_of_method(&usage.declaration.node)?;
+
+        match message_pattern.kind {
+            syntax::UnaryMessagePattern { symbol, .. } => {
+                let symbol = context
+                    .server
+                    .analysis
+                    .navigator
+                    .find_child(&message_pattern, symbol)?;
+
+                if !is_valid_symbol(&new_name) {
+                    return None;
+                }
+
+                Self::add_edit(
+                    &symbol.span.start.uri,
+                    &mut edits,
+                    TextEdit {
+                        range: convert::from_loa::span_to_range(symbol.span.clone()),
+                        new_text: new_name.clone(),
+                    },
+                );
+            }
+
+            syntax::BinaryMessagePattern { operator, .. } => {
+                let operator = context
+                    .server
+                    .analysis
+                    .navigator
+                    .find_child(&message_pattern, operator)?;
+
+                if !is_valid_binary_selector(&new_name) {
+                    return None;
+                }
+
+                Self::add_edit(
+                    &operator.span.start.uri,
+                    &mut edits,
+                    TextEdit {
+                        range: convert::from_loa::span_to_range(operator.span.clone()),
+                        new_text: new_name.clone(),
+                    },
+                );
+            }
+
+            syntax::KeywordMessagePattern {
+                ref keyword_pairs, ..
+            } => {
+                if !is_valid_keyword_selector(&new_name, keyword_pairs.len()) {
+                    return None;
+                }
+                let mut new_keywords = new_name.split(":").collect::<Vec<_>>();
+                new_keywords.pop();
+
+                for (i, pair) in keyword_pairs.iter().enumerate() {
+                    let pair = context
+                        .server
+                        .analysis
+                        .navigator
+                        .find_child(&message_pattern, *pair)?;
+                    if let syntax::KeywordPair { keyword, .. } = pair.kind {
+                        let keyword = context
+                            .server
+                            .analysis
+                            .navigator
+                            .find_child(&message_pattern, keyword)?;
+
+                        Self::add_edit(
+                            &keyword.span.start.uri,
+                            &mut edits,
+                            TextEdit {
+                                range: convert::from_loa::span_to_range(keyword.span.clone()),
+                                new_text: new_keywords[i].to_string(),
+                            },
+                        );
+                    }
+                }
+            }
+
+            _ => {}
+        }
+
+        for reference in usage.references.iter() {
+            match reference.node.kind {
+                syntax::UnaryMessage { symbol, .. } => {
+                    let symbol = context
+                        .server
+                        .analysis
+                        .navigator
+                        .find_child(&reference.node, symbol)?;
+                    Self::add_edit(
+                        &symbol.span.start.uri,
+                        &mut edits,
+                        TextEdit {
+                            range: convert::from_loa::span_to_range(symbol.span.clone()),
+                            new_text: new_name.clone(),
+                        },
+                    );
+                }
+
+                syntax::BinaryMessage { operator, .. } => {
+                    let operator = context
+                        .server
+                        .analysis
+                        .navigator
+                        .find_child(&reference.node, operator)?;
+                    Self::add_edit(
+                        &operator.span.start.uri,
+                        &mut edits,
+                        TextEdit {
+                            range: convert::from_loa::span_to_range(operator.span.clone()),
+                            new_text: new_name.clone(),
+                        },
+                    );
+                }
+
+                syntax::KeywordMessage {
+                    ref keyword_pairs, ..
+                } => {
+                    let mut new_keywords = new_name.split(":").collect::<Vec<_>>();
+                    new_keywords.pop();
+
+                    for (i, pair) in keyword_pairs.iter().enumerate() {
+                        let pair = context
+                            .server
+                            .analysis
+                            .navigator
+                            .find_child(&message_pattern, *pair)?;
+                        if let syntax::KeywordPair { keyword, .. } = pair.kind {
+                            let keyword = context
+                                .server
+                                .analysis
+                                .navigator
+                                .find_child(&message_pattern, keyword)?;
+
+                            Self::add_edit(
+                                &keyword.span.start.uri,
+                                &mut edits,
+                                TextEdit {
+                                    range: convert::from_loa::span_to_range(keyword.span.clone()),
+                                    new_text: new_keywords[i].to_string(),
+                                },
+                            );
+                        }
+                    }
+                }
+
+                _ => {}
+            }
+        }
+
+        Some(edits)
+    }
+}
+
+impl RequestHandler for RenameRequestHandler {
+    type R = request::Rename;
+
+    fn handle(context: &mut ServerContext, params: RenameParams) -> Option<WorkspaceEdit> {
+        let (uri, location) = convert::from_lsp::position_params(params.text_document_position);
+        let location = context.server.location(&uri, location)?;
+        let usage = context.server.usage(location)?;
+
+        let edits = if usage.is_behaviour() {
+            Self::rename_behaviour(&usage, context, params.new_name.clone())?
+        } else {
+            Self::rename_symbol(&usage, params.new_name.clone())?
+        };
 
         let mut operations: Vec<DocumentChangeOperation> = edits
             .into_iter()

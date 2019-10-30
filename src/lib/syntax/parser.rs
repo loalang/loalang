@@ -756,9 +756,12 @@ impl Parser {
             return Id::NULL;
         }
 
-        let token = self.next();
+        let mut tokens = vec![];
+        while sees!(self, Plus | Slash | EqualSign | OpenAngle | CloseAngle) {
+            tokens.push(self.next());
+        }
 
-        self.finalize(builder, Operator(token))
+        self.finalize(builder, Operator(tokens))
     }
 
     fn parse_parameter_pattern(&mut self, mut builder: NodeBuilder) -> Id {
