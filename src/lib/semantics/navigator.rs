@@ -678,6 +678,10 @@ where
         self.all_downwards(from, &|n| n.is_scope_root())
     }
 
+    fn all_scope_roots(&self) -> Vec<Node> {
+        self.all_matching(|n| n.is_scope_root())
+    }
+
     fn closest_declaration_upwards(&self, from: &Node, kind: DeclarationKind) -> Option<Node> {
         self.closest_upwards(from, |n| n.is_declaration(kind))
     }
@@ -692,6 +696,26 @@ where
 
     fn all_references_downwards(&self, from: &Node, kind: DeclarationKind) -> Vec<Node> {
         self.all_downwards(from, &|n| n.is_reference(kind))
+    }
+
+    fn all_declarations_in_scope(&self, scope_root: &Node, kind: DeclarationKind) -> Vec<Node> {
+        let mut declarations = vec![];
+        self.traverse(scope_root, &mut |n| {
+            if n.is_scope_root() && n.id != scope_root.id {
+                if n.is_class() {
+                    declarations.push(n.clone());
+                }
+
+                return false;
+            }
+
+            if n.is_declaration(kind) || n.is_import_directive() {
+                declarations.push(n.clone());
+            }
+
+            true
+        });
+        declarations
     }
 
     fn declaration_is_exported(&self, declaration: &Node) -> bool {

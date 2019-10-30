@@ -5,22 +5,39 @@ use crate::*;
 pub struct UndefinedBehaviour;
 
 impl UndefinedBehaviour {
-    fn check_message_send(message_send: &Node, analysis: &mut Analysis, diagnostics: &mut Vec<Diagnostic>) -> Option<()> {
+    fn check_message_send(
+        message_send: &Node,
+        analysis: &mut Analysis,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) -> Option<()> {
         let navigator = analysis.navigator();
 
-        if let MessageSendExpression {expression, message, ..} = message_send.kind {
+        if let MessageSendExpression {
+            expression,
+            message,
+            ..
+        } = message_send.kind
+        {
             let expression = navigator.find_child(message_send, expression)?;
             let message = navigator.find_child(message_send, message)?;
             let selector = navigator.message_selector(&message)?;
 
             let receiver_type = analysis.types.get_type_of_expression(&expression);
+            if receiver_type.is_unknown() {
+                return None;
+            }
+
             for behaviour in analysis.types.get_behaviours(&receiver_type) {
                 if behaviour.selector() == selector {
                     return None;
                 }
             }
 
-            diagnostics.push(Diagnostic::UndefinedBehaviour(message.span, receiver_type, selector))
+            diagnostics.push(Diagnostic::UndefinedBehaviour(
+                message.span,
+                receiver_type,
+                selector,
+            ))
         }
 
         None

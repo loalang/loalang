@@ -11,6 +11,7 @@ pub enum Diagnostic {
         span: Span,
         assignability: semantics::TypeAssignability,
     },
+    DuplicatedDeclaration(Span, String, usize),
 }
 
 impl Diagnostic {
@@ -23,6 +24,7 @@ impl Diagnostic {
             UndefinedReference(ref s, _) => s,
             UndefinedBehaviour(ref s, _, _) => s,
             UnassignableType { ref span, .. } => span,
+            DuplicatedDeclaration(ref s, _, _) => s,
         }
     }
 
@@ -35,6 +37,7 @@ impl Diagnostic {
             UndefinedReference(_, _) => DiagnosticLevel::Error,
             UndefinedBehaviour(_, _, _) => DiagnosticLevel::Error,
             UnassignableType { .. } => DiagnosticLevel::Error,
+            DuplicatedDeclaration(_, _, _) => DiagnosticLevel::Error,
         }
     }
 
@@ -47,6 +50,7 @@ impl Diagnostic {
             UndefinedReference(_, _) => 3,
             UndefinedBehaviour(_, _, _) => 4,
             UnassignableType { .. } => 5,
+            DuplicatedDeclaration(_, _, _) => 6,
         }
     }
 }
@@ -67,6 +71,9 @@ impl fmt::Debug for Diagnostic {
             UndefinedReference(_, s) => write!(f, "`{}` is undefined.", s),
             UndefinedBehaviour(_, t, s) => write!(f, "`{}` is not a behaviour of `{}`.", s, t),
             UnassignableType { assignability, .. } => write!(f, "{}", assignability),
+            DuplicatedDeclaration(_, s, n) => {
+                write!(f, "`{}` is defined {} times in this scope.", s, n)
+            }
         }
     }
 }

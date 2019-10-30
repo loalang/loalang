@@ -384,6 +384,10 @@ impl Type {
         }
     }
 
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Type::Unknown)
+    }
+
     pub fn with_applied_type_arguments(self, map: &HashMap<Id, Type>) -> Type {
         match self {
             Type::Parameter(_, id, _) if map.contains_key(&id) => map[&id].clone(),
