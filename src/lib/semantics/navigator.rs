@@ -195,6 +195,10 @@ where
             .collect()
     }
 
+    fn all_message_sends(&self) -> Vec<Node> {
+        self.all_matching(|n| n.is_message_send())
+    }
+
     fn all_messages(&self) -> Vec<Node> {
         self.all_matching(|n| n.is_message())
     }

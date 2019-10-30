@@ -6,6 +6,7 @@ pub enum Diagnostic {
     SyntaxError(Span, String),
     UndefinedTypeReference(Span, String),
     UndefinedReference(Span, String),
+    UndefinedBehaviour(Span, semantics::Type, String),
     UnassignableType {
         span: Span,
         assignability: semantics::TypeAssignability,
@@ -20,6 +21,7 @@ impl Diagnostic {
             SyntaxError(ref s, _) => s,
             UndefinedTypeReference(ref s, _) => s,
             UndefinedReference(ref s, _) => s,
+            UndefinedBehaviour(ref s, _, _) => s,
             UnassignableType { ref span, .. } => span,
         }
     }
@@ -31,6 +33,7 @@ impl Diagnostic {
             SyntaxError(_, _) => DiagnosticLevel::Error,
             UndefinedTypeReference(_, _) => DiagnosticLevel::Error,
             UndefinedReference(_, _) => DiagnosticLevel::Error,
+            UndefinedBehaviour(_, _, _) => DiagnosticLevel::Error,
             UnassignableType { .. } => DiagnosticLevel::Error,
         }
     }
@@ -42,7 +45,8 @@ impl Diagnostic {
             SyntaxError(_, _) => 1,
             UndefinedTypeReference(_, _) => 2,
             UndefinedReference(_, _) => 3,
-            UnassignableType { .. } => 4,
+            UndefinedBehaviour(_, _, _) => 4,
+            UnassignableType { .. } => 5,
         }
     }
 }
@@ -61,6 +65,7 @@ impl fmt::Debug for Diagnostic {
             SyntaxError(_, s) => write!(f, "{}", s),
             UndefinedTypeReference(_, s) => write!(f, "`{}` is undefined.", s),
             UndefinedReference(_, s) => write!(f, "`{}` is undefined.", s),
+            UndefinedBehaviour(_, t, s) => write!(f, "`{}` is not a behaviour of `{}`.", s, t),
             UnassignableType { assignability, .. } => write!(f, "{}", assignability),
         }
     }
