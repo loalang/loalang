@@ -2,6 +2,7 @@ use crate::semantics::*;
 use crate::syntax::DeclarationKind;
 use crate::*;
 
+#[derive(Clone)]
 pub struct Analysis {
     modules: Arc<HashMap<URI, Arc<syntax::Tree>>>,
     usage: Cache<Id, Option<Arc<Usage>>>,

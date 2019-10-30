@@ -2,6 +2,7 @@ use crate::*;
 use std::collections::hash_map::RandomState;
 use std::hash::Hash;
 
+#[derive(Clone)]
 pub struct Cache<K, V> {
     entries: HashMap<K, V>,
 }

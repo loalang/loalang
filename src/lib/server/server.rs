@@ -2,6 +2,7 @@ use crate::semantics::{Analysis, Navigator, ProgramNavigator};
 use crate::syntax::DeclarationKind;
 use crate::*;
 
+#[derive(Clone)]
 pub struct Server {
     analysis: semantics::Analysis,
     module_cells: HashMap<URI, server::ModuleCell>,

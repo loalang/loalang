@@ -1,11 +1,11 @@
 use crate::server_handler::*;
 use serde_json::Value;
 
-pub struct ServerHandler<'a> {
-    context: ServerContext<'a>,
+pub struct ServerHandler {
+    context: ServerContext,
 }
 
-impl<'a> ServerHandler<'a> {
+impl ServerHandler {
     pub fn capabilities() -> ServerCapabilities {
         ServerCapabilities {
             text_document_sync: Some(TextDocumentSyncCapability::Kind(
@@ -46,7 +46,7 @@ impl<'a> ServerHandler<'a> {
         }
     }
 
-    pub fn new(context: ServerContext<'a>) -> ServerHandler<'a> {
+    pub fn new(context: ServerContext) -> ServerHandler {
         ServerHandler { context }
     }
 

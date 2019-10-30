@@ -532,6 +532,40 @@ where
         }
     }
 
+    fn super_type_expressions(&self, class: &Node) -> Vec<Node> {
+        let mut super_type_expressions = vec![];
+
+        if let Class { class_body, .. } = class.kind {
+            if let Some(class_body) = self.find_child(class, class_body) {
+                if let ClassBody {
+                    ref class_members, ..
+                } = class_body.kind
+                {
+                    for class_member in class_members.iter() {
+                        if let Some(class_member) = self.find_child(&class_body, *class_member) {
+                            if let IsDirective {
+                                type_expression, ..
+                            } = class_member.kind
+                            {
+                                if let Some(type_expression) =
+                                    self.find_child(&class_member, type_expression)
+                                {
+                                    super_type_expressions.push(type_expression);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        super_type_expressions
+    }
+
+    fn all_expressions(&self) -> Vec<Node> {
+        self.all_matching(|n| n.is_expression())
+    }
+
     fn all_references(&self, kind: DeclarationKind) -> Vec<Node> {
         self.all_matching(|n| n.is_reference(kind))
     }

@@ -9,6 +9,7 @@ extern crate serde_json;
 extern crate simple_logging;
 
 use loa::Error;
+use loa::*;
 use lsp_server::*;
 use lsp_types::*;
 use serde_json::Value;
@@ -25,9 +26,10 @@ fn main() {
     simple_logging::log_to(log_file, log::LevelFilter::Info);
 
     let (conn, _threads) = Connection::stdio();
+    let conn = Arc::new(conn);
 
-    let sender = NotificationSender { conn: &conn };
-    let mut context = server_handler::ServerContext::new(&sender);
+    let sender = Arc::new(NotificationSender { conn: conn.clone() });
+    let mut context = server_handler::ServerContext::new(sender);
     let initialize_params = init(&conn, &server_handler::ServerHandler::capabilities()).unwrap();
 
     conn.sender
@@ -83,11 +85,11 @@ fn main() {
     }
 }
 
-struct NotificationSender<'a> {
-    conn: &'a Connection,
+struct NotificationSender {
+    conn: Arc<Connection>,
 }
 
-impl<'a> server_handler::NotificationSender for NotificationSender<'a> {
+impl server_handler::NotificationSender for NotificationSender {
     fn send(&self, method: &str, params: Value) {
         let _ = self.conn.sender.send(Message::Notification(Notification {
             method: method.into(),

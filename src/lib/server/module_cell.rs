@@ -1,6 +1,7 @@
 use crate::syntax::*;
 use crate::*;
 
+#[derive(Clone)]
 pub struct ModuleCell {
     pub tree: Arc<Tree>,
     pub source: Arc<Source>,

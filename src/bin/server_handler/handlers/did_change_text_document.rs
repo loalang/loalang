@@ -18,7 +18,7 @@ impl NotificationHandler for DidChangeTextDocumentNotificationHandler {
                 })
                 .collect(),
         );
-        context.publish_updated_diagnostics();
+        context.postpone_publish_updated_diagnostics();
         Some(())
     }
 }

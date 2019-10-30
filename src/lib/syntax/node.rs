@@ -39,6 +39,13 @@ impl Node {
         }
     }
 
+    pub fn is_method(&self) -> bool {
+        match self.kind {
+            Method { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn is_import_directive(&self) -> bool {
         match self.kind {
             ImportDirective { .. } => true,
