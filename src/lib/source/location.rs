@@ -1,5 +1,6 @@
 use crate::*;
 use std::cmp::Ordering;
+use crate::syntax::characters_to_string;
 
 #[derive(Clone, Debug, Eq)]
 pub struct Location {
@@ -11,9 +12,9 @@ pub struct Location {
 
 impl Location {
     pub fn at_offset(source: &Arc<Source>, offset: usize) -> Location {
-        let chars: Vec<char> = source.code.chars().collect();
+        let chars: Vec<u16> = source.code.encode_utf16().collect();
         let code_before = &chars[..offset];
-        let lines: Vec<_> = code_before.split(|c| *c == '\n').collect();
+        let lines: Vec<_> = code_before.split(|c| *c == '\n' as u16).collect();
         Location {
             uri: source.uri.clone(),
             offset,
@@ -27,8 +28,8 @@ impl Location {
     }
 
     pub fn at_position(source: &Arc<Source>, line: usize, character: usize) -> Option<Location> {
-        let mut chars: Vec<char> = source.code.chars().collect();
-        let mut lines: Vec<&mut [char]> = chars.split_mut(|c| *c == '\n').collect();
+        let mut chars: Vec<u16> = source.code.encode_utf16().collect();
+        let mut lines: Vec<&mut [u16]> = chars.split_mut(|c| *c == '\n' as u16).collect();
 
         if lines.len() < line {
             warn!(
@@ -50,6 +51,7 @@ impl Location {
         }
         let last_line_before = &mut lines_before[lines_before.len() - 1];
         if last_line_before.len() < character - 1 {
+            info!("LINE\n{}", characters_to_string(last_line_before.iter().cloned()));
             warn!(
                 "Tried to get position on character {} but the line had {} characters.",
                 character,

@@ -4,7 +4,7 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     EOF,
-    Unknown(char),
+    Unknown(u16),
     Whitespace(String),
     LineComment(String),
 
@@ -88,7 +88,9 @@ impl Token {
 
             Underscore => "_".into(),
 
-            Whitespace(s) | LineComment(s) | SimpleInteger(s) | SimpleSymbol(s) => s.clone(),
+            LineComment(s) => format!("//{}", s),
+
+            Whitespace(s) | SimpleInteger(s) | SimpleSymbol(s) => s.clone(),
         }
     }
 }

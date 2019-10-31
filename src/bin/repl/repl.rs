@@ -1,5 +1,7 @@
 use crate::*;
+use colored::Colorize;
 use loa::server::Server;
+use loa::syntax::{tokenize, TokenKind, string_to_characters};
 use loa::*;
 use rustyline::completion::{Candidate, Completer};
 use rustyline::config::Configurer;
@@ -7,6 +9,7 @@ use rustyline::error::ReadlineError;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
 use rustyline::{CompletionType, Context, EditMode, Editor, Helper};
+use std::borrow::Cow::{Borrowed, Owned};
 
 struct EditorHelper {
     pub server: Arc<Mutex<Server>>,
@@ -42,28 +45,35 @@ impl Completer for EditorHelper {
         pos: usize,
         _ctx: &Context<'_>,
     ) -> Result<(usize, Vec<Self::Candidate>), ReadlineError> {
+        let chars_before = string_to_characters(line[..pos].into());
+        let realpos = chars_before.len();
+
         let mut server = self.server.lock().unwrap();
 
         server.set(self.uri.clone(), line.into(), SourceKind::REPLLine);
 
-        if let Some(location) = server.location(&self.uri, (1, pos + 1)) {
+        if let Some(location) = server.location(&self.uri, (1, realpos + 1)) {
             if let Some(completion) = server.completion(location, String::new()) {
                 let candidates = match completion {
-                    server::Completion::VariablesInScope(prefix, vars) => vars
-                        .into_iter()
-                        .map(|v| CompletionCandidate {
-                            display: format!("{} ({})", v.name, v.type_),
-                            replacement: format!("{} ", &v.name[prefix.len()..]),
-                        })
-                        .collect(),
+                    server::Completion::VariablesInScope(prefix, vars) => {
+                        vars
+                            .into_iter()
+                            .map(|v| CompletionCandidate {
+                                display: format!("{} ({})", v.name, v.type_),
+                                replacement: format!("{}", &v.name[prefix.len()..]),
+                            })
+                            .collect()
+                    },
 
-                    server::Completion::Behaviours(prefix, behaviours) => behaviours
-                        .into_iter()
-                        .map(|behaviour| CompletionCandidate {
-                            display: behaviour.to_string(),
-                            replacement: format!("{} ", &behaviour.selector()[prefix.len()..]),
-                        })
-                        .collect(),
+                    server::Completion::Behaviours(prefix, behaviours) => {
+                        behaviours
+                            .into_iter()
+                            .map(|behaviour| CompletionCandidate {
+                                display: behaviour.to_string(),
+                                replacement: format!("{}", &behaviour.selector()[prefix.len()..]),
+                            })
+                            .collect()
+                    },
                 };
                 return Ok((pos, candidates));
             }
@@ -72,7 +82,77 @@ impl Completer for EditorHelper {
     }
 }
 
-impl Highlighter for EditorHelper {}
+impl Highlighter for EditorHelper {
+    fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
+        let tokens = tokenize(Source::new(
+            SourceKind::REPLLine,
+            self.uri.clone(),
+            line.into(),
+        ));
+        Owned(
+            tokens
+                .into_iter()
+                .map(|token| {
+                    let lexeme = token.lexeme();
+                    match token.kind {
+                        TokenKind::EOF => lexeme,
+                        TokenKind::Unknown(_) => lexeme.red().underline().to_string(),
+                        TokenKind::Whitespace(_) => lexeme,
+
+                        TokenKind::Arrow
+                        | TokenKind::FatArrow
+                        | TokenKind::Period
+                        | TokenKind::Comma
+                        | TokenKind::OpenCurly
+                        | TokenKind::CloseCurly
+                        | TokenKind::LineComment(_)
+                        | TokenKind::Underscore => lexeme.bright_black().to_string(),
+
+                        TokenKind::AsKeyword
+                        | TokenKind::InKeyword
+                        | TokenKind::IsKeyword
+                        | TokenKind::OutKeyword
+                        | TokenKind::InoutKeyword
+                        | TokenKind::ClassKeyword
+                        | TokenKind::PrivateKeyword
+                        | TokenKind::PublicKeyword
+                        | TokenKind::NamespaceKeyword
+                        | TokenKind::SelfKeyword
+                        | TokenKind::ImportKeyword
+                        | TokenKind::ExportKeyword
+                        | TokenKind::PartialKeyword => lexeme.blue().to_string(),
+                        TokenKind::Plus => lexeme,
+                        TokenKind::Colon => lexeme,
+                        TokenKind::Slash => lexeme,
+                        TokenKind::EqualSign => lexeme,
+                        TokenKind::OpenAngle => lexeme,
+                        TokenKind::CloseAngle => lexeme,
+                        TokenKind::SimpleInteger(_) => lexeme.red().to_string(),
+                        TokenKind::SimpleSymbol(_) => lexeme,
+                    }
+                })
+                .collect::<String>(),
+        )
+    }
+
+    fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
+        info!("HIGHLIGHT HINT");
+        Borrowed(hint)
+    }
+
+    fn highlight_candidate<'c>(
+        &self,
+        candidate: &'c str,
+        _completion: CompletionType,
+    ) -> Cow<'c, str> {
+        info!("HIGHLIGHT CANDIDATE");
+        Borrowed(candidate)
+    }
+
+    fn highlight_char(&self, _line: &str, _pos: usize) -> bool {
+        true
+    }
+}
 
 pub struct REPL {
     editor: Editor<EditorHelper>,
@@ -100,10 +180,12 @@ impl REPL {
         loop {
             let uri = loa::URI::REPLLine(n);
             self.editor.helper_mut().unwrap().uri = uri.clone();
-            let addition = match self
-                .editor
-                .readline(if line.len() == 0 { ">>> " } else { "... " })
-            {
+            let addition = match self.editor.readline(
+                if line.len() == 0 { ">>> " } else { "... " }
+                    .bright_black()
+                    .to_string()
+                    .as_ref(),
+            ) {
                 Ok(ref s) if s == "" => continue,
                 Ok(line) => line,
                 Err(_) => break,

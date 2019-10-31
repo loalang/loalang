@@ -1,6 +1,7 @@
 #![feature(try_trait)]
 
 extern crate clap;
+extern crate colored;
 extern crate jsonrpc_stdio_server;
 extern crate log;
 extern crate log_panics;

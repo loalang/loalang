@@ -12,3 +12,6 @@ pub use self::tree::*;
 
 mod parser;
 pub use self::parser::*;
+
+mod characters;
+pub use self::characters::*;
