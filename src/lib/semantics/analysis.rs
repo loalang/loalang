@@ -34,7 +34,7 @@ impl Analysis {
         let uri = from.span.start.uri.clone();
         let navigator = &self.navigator;
 
-        let mut declarations = vec![];
+        let mut declarations = HashMap::new();
 
         while let Some(scope_root) = navigator.closest_scope_root_upwards(&from) {
             navigator.traverse(&scope_root, &mut |n| {
@@ -43,7 +43,7 @@ impl Analysis {
                     // Classes exist outside their own scope, though.
                     if n.is_class() {
                         if let Some((name, _)) = navigator.symbol_of(&n) {
-                            declarations.push((name, n.clone()));
+                            declarations.insert(name, n.clone());
                         }
                     }
 
@@ -52,14 +52,14 @@ impl Analysis {
 
                 if n.is_declaration(kind) {
                     if let Some((name, _)) = navigator.symbol_of(&n) {
-                        declarations.push((name, n.clone()));
+                        declarations.insert(name, n.clone());
                     }
                 }
 
                 if n.is_import_directive() {
                     if let Some((name, _)) = navigator.symbol_of(&n) {
                         if let Some(n) = navigator.find_declaration_from_import(&n) {
-                            declarations.push((name, n.clone()));
+                            declarations.insert(name, n.clone());
                         }
                     }
                 }
@@ -77,6 +77,6 @@ impl Analysis {
             }
         }
 
-        declarations
+        declarations.into_iter().collect()
     }
 }

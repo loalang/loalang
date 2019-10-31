@@ -1,4 +1,5 @@
 use crate::server_handler::*;
+use lsp_types::{Documentation, MarkupContent, MarkupKind};
 
 pub struct CompletionRequestHandler;
 
@@ -9,12 +10,12 @@ impl CompletionRequestHandler {
     ) -> Option<CompletionResponse> {
         let (uri, position) = convert::from_lsp::position_params(params.text_document_position);
         let location = context.server.location(&uri, position)?;
-        let completion = context.server.completion(location)?;
+        let completion = context.server.completion(location, String::new())?;
 
         Some(CompletionResponse::List(CompletionList {
             is_incomplete: false,
             items: match completion {
-                server::Completion::VariablesInScope(variables) => variables
+                server::Completion::VariablesInScope(_, variables) => variables
                     .into_iter()
                     .enumerate()
                     .map(|(i, v)| CompletionItem {
@@ -25,7 +26,10 @@ impl CompletionRequestHandler {
                             server::VariableKind::Parameter => CompletionItemKind::Variable,
                         }),
                         detail: Some(v.type_.to_string()),
-                        documentation: None,
+                        documentation: Some(Documentation::MarkupContent(MarkupContent {
+                            kind: MarkupKind::Markdown,
+                            value: v.type_.to_markdown(&context.server.analysis.navigator),
+                        })),
                         deprecated: None,
                         preselect: Some(i == 0),
                         sort_text: None,
@@ -39,14 +43,17 @@ impl CompletionRequestHandler {
                     })
                     .collect(),
 
-                server::Completion::Behaviours(behaviours) => behaviours
+                server::Completion::Behaviours(_, behaviours) => behaviours
                     .into_iter()
                     .enumerate()
                     .map(|(i, b)| CompletionItem {
                         label: b.selector(),
                         kind: Some(CompletionItemKind::Method),
                         detail: Some(b.to_string()),
-                        documentation: None,
+                        documentation: Some(Documentation::MarkupContent(MarkupContent {
+                            kind: MarkupKind::Markdown,
+                            value: b.to_markdown(&context.server.analysis.navigator),
+                        })),
                         deprecated: None,
                         preselect: Some(i == 0),
                         sort_text: None,

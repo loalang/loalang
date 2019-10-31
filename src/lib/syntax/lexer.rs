@@ -6,14 +6,14 @@ use std::str::Chars;
 type CharStream<'a> = Peekable<Enumerate<Chars<'a>>>;
 
 pub fn is_valid_symbol(string: &String) -> bool {
-    let source = Source::new(URI::Exact("tmp".into()), string.clone());
+    let source = Source::new(SourceKind::Module, URI::Exact("tmp".into()), string.clone());
     let tokens = tokenize(source);
 
     tokens.len() == 2 && matches!(tokens[0].kind, TokenKind::SimpleSymbol(_))
 }
 
 pub fn is_valid_binary_selector(string: &String) -> bool {
-    let source = Source::new(URI::Exact("tmp".into()), string.clone());
+    let source = Source::new(SourceKind::Module, URI::Exact("tmp".into()), string.clone());
     let mut tokens = tokenize(source);
     tokens.pop();
 
@@ -31,7 +31,7 @@ pub fn is_valid_binary_selector(string: &String) -> bool {
 }
 
 pub fn is_valid_keyword_selector(string: &String, length: usize) -> bool {
-    let source = Source::new(URI::Exact("tmp".into()), string.clone());
+    let source = Source::new(SourceKind::Module, URI::Exact("tmp".into()), string.clone());
     let tokens = tokenize(source);
 
     if tokens.len() != length * 2 + 1 {

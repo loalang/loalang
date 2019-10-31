@@ -47,9 +47,11 @@ impl Server {
         self.analysis = Analysis::new(Arc::new(modules));
     }
 
-    pub fn set(&mut self, uri: URI, code: String) {
-        self.module_cells
-            .insert(uri.clone(), server::ModuleCell::new(Source::new(uri, code)));
+    pub fn set(&mut self, uri: URI, code: String, kind: SourceKind) {
+        self.module_cells.insert(
+            uri.clone(),
+            server::ModuleCell::new(Source::new(kind, uri, code)),
+        );
         self.reset_analysis();
     }
 
@@ -97,6 +99,13 @@ impl Server {
     }
 
     // SEMANTIC QUERIES
+
+    pub fn ends_with_syntax_error(&self, uri: &URI) -> bool {
+        if let Some(cell) = self.module_cells.get(uri) {
+            return cell.ends_with_error();
+        }
+        false
+    }
 
     pub fn type_at(&self, location: Location) -> semantics::Type {
         let cell = self.module_cells.get(&location.uri)?;
@@ -259,13 +268,17 @@ impl Server {
         })
     }
 
-    pub fn completion(&mut self, location: Location) -> Option<server::Completion> {
+    pub fn completion(&mut self, location: Location, prefix: String) -> Option<server::Completion> {
         let tree = &self.module_cells.get(&location.uri)?.tree;
-        let (before, _at, _after) = tree.nodes_around(location);
+        let (before, _at, _after) = tree.nodes_around(location.clone());
 
         let mut before = before?.clone();
 
-        if before.is_symbol() {
+        if let syntax::Symbol(ref t) = before.kind {
+            if before.span.end == location {
+                return self.completion(before.span.start.clone(), t.lexeme());
+            }
+
             before = tree.get(before.parent_id?)?;
         }
 
@@ -278,6 +291,7 @@ impl Server {
                 let type_ = self.analysis.types.get_type_of_expression(&before);
 
                 Some(server::Completion::Behaviours(
+                    prefix,
                     self.analysis.types.get_behaviours(&type_),
                 ))
             }
@@ -293,12 +307,14 @@ impl Server {
                         &before,
                         DeclarationKind::Value,
                         &self.analysis.types,
+                        prefix,
                     ),
                     syntax::KeywordMessagePattern { .. } => self
                         .completion_on_declarations_in_scope(
                             &before,
                             DeclarationKind::Type,
                             &self.analysis.types,
+                            prefix,
                         ),
                     kind => {
                         warn!(
@@ -314,6 +330,14 @@ impl Server {
                 &before,
                 DeclarationKind::Value,
                 &self.analysis.types,
+                prefix,
+            ),
+
+            syntax::ReturnType { .. } => self.completion_on_declarations_in_scope(
+                &before,
+                DeclarationKind::Type,
+                &self.analysis.types,
+                prefix,
             ),
 
             kind => {
@@ -328,10 +352,12 @@ impl Server {
         from: &syntax::Node,
         kind: DeclarationKind,
         types: &semantics::Types,
+        prefix: String,
     ) -> Option<server::Completion> {
         let declarations = self.analysis.declarations_in_scope(from.clone(), kind);
 
         Some(server::Completion::VariablesInScope(
+            prefix,
             declarations
                 .into_iter()
                 .filter_map(|(name, dec)| {

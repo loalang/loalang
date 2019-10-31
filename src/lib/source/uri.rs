@@ -9,6 +9,7 @@ pub enum URI {
     Exact(String),
     File(PathBuf),
     Stdin,
+    REPLLine(usize),
 }
 
 impl URI {
@@ -60,6 +61,7 @@ impl fmt::Display for URI {
             URI::Exact(s) => write!(f, "{}", s),
             URI::File(path) => write!(f, "file://{}", path.display()),
             URI::Stdin => write!(f, "stdin:"),
+            URI::REPLLine(n) => write!(f, "repl:{}", n),
         }
     }
 }

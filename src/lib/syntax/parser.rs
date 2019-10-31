@@ -62,7 +62,15 @@ impl Parser {
 
     pub fn parse(mut self) -> (Arc<Tree>, Vec<Diagnostic>) {
         let mut tree = Tree::new(self.source.clone());
-        self.parse_module(&mut tree);
+        let builder = NodeBuilder::new(&mut tree, self.tokens[0].span.start.clone());
+        match self.source.kind {
+            SourceKind::Module => {
+                self.parse_module(builder);
+            }
+            SourceKind::REPLLine => {
+                self.parse_repl_line(builder);
+            }
+        }
         (Arc::new(tree), self.diagnostics)
     }
 
@@ -71,9 +79,43 @@ impl Parser {
         builder.child(self.tokens[0].span.start.clone())
     }
 
-    fn parse_module(&mut self, tree: &mut Tree) -> Id {
-        let mut builder = NodeBuilder::new(tree, self.tokens[0].span.start.clone());
+    fn parse_repl_line(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut statements = vec![];
 
+        while !sees!(self, EOF) {
+            let before = self.tokens.len();
+            statements.push(self.parse_repl_statement(self.child(&mut builder)));
+            let after = self.tokens.len();
+
+            if before == after {
+                self.syntax_error("Unexpected token.");
+                self.next();
+            }
+        }
+
+        self.finalize(builder, REPLLine { statements })
+    }
+
+    fn parse_repl_statement(&mut self, builder: NodeBuilder) -> Id {
+        if sees!(self, ImportKeyword) {
+            self.parse_import_directive(builder)
+        } else if sees!(self, PartialKeyword | ClassKeyword) {
+            self.parse_class(builder)
+        } else {
+            self.parse_repl_expression(builder)
+        }
+    }
+
+    fn parse_repl_expression(&mut self, mut builder: NodeBuilder) -> Id {
+        let expression = self.parse_expression(self.child(&mut builder));
+        let mut period = None;
+        if sees!(self, Period) {
+            period = Some(self.next());
+        }
+        self.finalize(builder, REPLExpression { expression, period })
+    }
+
+    fn parse_module(&mut self, mut builder: NodeBuilder) -> Id {
         let mut namespace_directive = Id::NULL;
         let mut import_directives = vec![];
         let mut module_declarations = vec![];

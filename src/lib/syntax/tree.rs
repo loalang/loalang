@@ -65,11 +65,26 @@ impl Tree {
             }
         }
 
-        nodes_before.sort_by(|(a, _), (b, _)| b.end.cmp(&a.end).then(a.len().cmp(&b.len())));
+        nodes_before.sort_by(|(a, an), (b, bn)| {
+            b.end
+                .cmp(&a.end)
+                .then(a.len().cmp(&b.len()))
+                .then(bn.id.cmp(&an.id))
+        });
 
-        nodes_at.sort_by(|(a, _), (b, _)| b.start.cmp(&a.start).then(a.len().cmp(&b.len())));
+        nodes_at.sort_by(|(a, an), (b, bn)| {
+            b.start
+                .cmp(&a.start)
+                .then(a.len().cmp(&b.len()))
+                .then(bn.id.cmp(&an.id))
+        });
 
-        nodes_after.sort_by(|(a, _), (b, _)| a.start.cmp(&b.start).then(a.len().cmp(&b.len())));
+        nodes_after.sort_by(|(a, an), (b, bn)| {
+            a.start
+                .cmp(&b.start)
+                .then(a.len().cmp(&b.len()))
+                .then(bn.id.cmp(&an.id))
+        });
 
         (
             nodes_before.first().map(|(_, n)| *n),

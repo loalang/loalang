@@ -1,22 +1,19 @@
 #![feature(try_trait)]
 
+extern crate clap;
 extern crate jsonrpc_stdio_server;
 extern crate log;
 extern crate log_panics;
 extern crate lsp_server;
 extern crate lsp_types;
+extern crate rustyline;
 extern crate serde_json;
 extern crate simple_logging;
 
-use loa::Error;
-use loa::*;
-use lsp_server::*;
-use lsp_types::*;
-use serde_json::Value;
-
+mod repl;
 mod server_handler;
 
-fn main() {
+fn main() -> Result<(), clap::Error> {
     log_panics::init();
     let log_file = std::fs::OpenOptions::new()
         .append(true)
@@ -25,124 +22,24 @@ fn main() {
         .unwrap();
     simple_logging::log_to(log_file, log::LevelFilter::Info);
 
-    let (conn, _threads) = Connection::stdio();
-    let conn = Arc::new(conn);
+    let mut app = clap::App::new("loa").subcommands(vec![
+        clap::SubCommand::with_name("server"),
+        clap::SubCommand::with_name("repl"),
+    ]);
+    let cli = app.clone().get_matches();
 
-    let sender = Arc::new(NotificationSender { conn: conn.clone() });
-    let mut context = server_handler::ServerContext::new(sender);
-    let initialize_params = init(&conn, &server_handler::ServerHandler::capabilities()).unwrap();
-
-    conn.sender
-        .send(Message::Request(Request::new(
-            RequestId::from(loa::Id::new().as_usize() as u64),
-            "client/registerCapability".into(),
-            RegistrationParams {
-                registrations: vec![Registration {
-                    id: "workspace-files".into(),
-                    method: "workspace/didChangeWatchedFiles".into(),
-                    register_options: Some(
-                        serde_json::to_value(DidChangeWatchedFilesRegistrationOptions {
-                            watchers: vec![FileSystemWatcher {
-                                kind: None,
-                                glob_pattern: "**/*.loa".into(),
-                            }],
-                        })
-                        .unwrap(),
-                    ),
-                }],
-            },
-        )))
-        .unwrap();
-
-    if let Some(mut root_path) = initialize_params.root_path.map(std::path::PathBuf::from) {
-        root_path.push("**");
-        root_path.push("*.loa");
-
-        match root_path.to_str().map(glob::glob) {
-            Some(Ok(sources)) => {
-                for source in sources.filter_map(|r| r.ok()) {
-                    if let Ok(code) = std::fs::read_to_string(&source) {
-                        if let Ok(uri) = lsp_types::Url::from_file_path(source)
-                            .as_ref()
-                            .map(server_handler::convert::from_lsp::url_to_uri)
-                        {
-                            context.server.set(uri, code);
-                        }
-                    }
-                }
-            }
-            _ => (),
-        }
+    if let None = cli.subcommand_name() {
+        app.print_help()?;
+        println!();
+        return Ok(());
     }
 
-    let mut handler = server_handler::ServerHandler::new(context);
+    match cli.subcommand() {
+        ("repl", _) => repl::repl(),
 
-    loop {
-        match next(&mut handler, &conn) {
-            Err(_) => break,
-            Ok(()) => (),
-        }
-    }
-}
+        ("server", _) => server_handler::server(),
 
-struct NotificationSender {
-    conn: Arc<Connection>,
-}
-
-impl server_handler::NotificationSender for NotificationSender {
-    fn send(&self, method: &str, params: Value) {
-        let _ = self.conn.sender.send(Message::Notification(Notification {
-            method: method.into(),
-            params,
-        }));
-    }
-}
-
-fn init(
-    conn: &Connection,
-    capabilities: &ServerCapabilities,
-) -> Result<InitializeParams, Box<dyn Error>> {
-    Ok(serde_json::from_value::<InitializeParams>(
-        conn.initialize(serde_json::to_value(capabilities)?)?,
-    )?)
-}
-
-fn next(
-    handler: &mut server_handler::ServerHandler,
-    conn: &Connection,
-) -> Result<(), Box<dyn Error>> {
-    let message = conn.receiver.recv()?;
-
-    match message {
-        Message::Notification(Notification { method, params }) => {
-            match handler.handle(method.as_ref(), params) {
-                _ => (),
-            }
-        }
-
-        Message::Request(Request { method, params, id }) => {
-            let mut error = None;
-            let mut result = None;
-
-            match handler.handle(method.as_ref(), params) {
-                Ok(r) => result = Some(r),
-                Err(err) => match err {
-                    server_handler::ServerError::Empty => result = Some(serde_json::Value::Null),
-                    err => {
-                        error = Some(ResponseError {
-                            code: err.code(),
-                            message: err.message(),
-                            data: None,
-                        })
-                    }
-                },
-            }
-
-            conn.sender
-                .send(Message::Response(Response { id, error, result }))?;
-        }
-
-        _ => (),
+        _ => eprintln!("{}", cli.usage()),
     }
 
     Ok(())

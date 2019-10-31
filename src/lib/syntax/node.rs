@@ -34,7 +34,7 @@ impl Node {
 
     pub fn is_scope_root(&self) -> bool {
         match self.kind {
-            Module { .. } | Class { .. } | Method { .. } => true,
+            REPLLine { .. } | Module { .. } | Class { .. } | Method { .. } => true,
             _ => false,
         }
     }
@@ -173,6 +173,29 @@ pub enum NodeKind {
         namespace_directive: Id,
         import_directives: Vec<Id>,
         module_declarations: Vec<Id>,
+    },
+
+    /// ```bnf
+    /// REPLLine ::=
+    ///   REPLStatement+
+    /// ```
+    REPLLine { statements: Vec<Id> },
+
+    /// ```bnf
+    /// REPLStatement ::=
+    ///   REPLExpression |
+    ///   ImportDirective |
+    ///   Declaration
+    /// ```
+
+    /// ```bnf
+    /// REPLExpression ::=
+    ///   Expression
+    ///   PERIOD
+    /// ```
+    REPLExpression {
+        expression: Id,
+        period: Option<Token>,
     },
 
     /// ```bnf
@@ -500,6 +523,8 @@ pub use NodeKind::*;
 impl NodeKind {
     pub fn leaves(&self) -> Vec<&Token> {
         let option_tokens: Vec<Option<&Token>> = match self {
+            REPLExpression { ref period, .. } => vec![period.as_ref()],
+
             Exported(ref token, _) => vec![Some(token)],
 
             NamespaceDirective {
@@ -599,6 +624,12 @@ impl NodeKind {
                 children.push(namespace_directive);
                 children.extend(import_directives);
                 children.extend(module_declarations);
+            }
+            REPLLine { statements, .. } => {
+                children.extend(statements);
+            }
+            REPLExpression { expression, .. } => {
+                children.push(expression);
             }
             Exported(_, declaration) => {
                 children.push(declaration);

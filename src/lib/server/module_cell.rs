@@ -44,11 +44,20 @@ impl ModuleCell {
 
         let new_code = new_code.into_iter().collect();
 
-        let new_source = Source::new(self.source.uri.clone(), new_code);
+        let new_source = Source::new(self.source.kind.clone(), self.source.uri.clone(), new_code);
         let (tree, diagnostics) = Parser::new(new_source.clone()).parse();
 
         self.source = new_source;
         self.tree = tree;
         self.diagnostics = diagnostics;
+    }
+
+    pub fn ends_with_error(&self) -> bool {
+        for d in self.diagnostics.iter() {
+            if d.span().end.offset == self.source.code.len() {
+                return true;
+            }
+        }
+        false
     }
 }

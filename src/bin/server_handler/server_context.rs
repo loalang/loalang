@@ -1,22 +1,14 @@
 use crate::server_handler::*;
-use serde_json::Value;
 use std::sync::atomic::Ordering;
-
-pub trait NotificationSender
-where
-    Self: Send + Sync,
-{
-    fn send(&self, method: &str, params: Value);
-}
 
 pub struct ServerContext {
     pub server: server::Server,
-    notification: Arc<dyn NotificationSender>,
+    notification: Arc<NotificationSender>,
     diagnostics_handle: Option<Cancellable>,
 }
 
 impl ServerContext {
-    pub fn new(notification: Arc<dyn NotificationSender>) -> ServerContext {
+    pub fn new(notification: Arc<NotificationSender>) -> ServerContext {
         ServerContext {
             server: server::Server::new(),
             notification,

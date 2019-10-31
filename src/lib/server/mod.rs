@@ -39,17 +39,20 @@ pub struct NamedNode {
     pub node: syntax::Node,
 }
 
+#[derive(Debug)]
 pub enum Completion {
-    Behaviours(Vec<Behaviour>),
-    VariablesInScope(Vec<Variable>),
+    Behaviours(String, Vec<Behaviour>),
+    VariablesInScope(String, Vec<Variable>),
 }
 
+#[derive(Debug)]
 pub struct Variable {
     pub name: String,
     pub type_: Type,
     pub kind: VariableKind,
 }
 
+#[derive(Debug)]
 pub enum VariableKind {
     Unknown,
     Class,

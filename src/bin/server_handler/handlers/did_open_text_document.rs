@@ -7,7 +7,9 @@ impl NotificationHandler for DidOpenTextDocumentNotificationHandler {
 
     fn handle(context: &mut ServerContext, params: DidOpenTextDocumentParams) -> Option<()> {
         let uri = convert::from_lsp::url_to_uri(&params.text_document.uri);
-        context.server.set(uri, params.text_document.text);
+        context
+            .server
+            .set(uri, params.text_document.text, loa::SourceKind::Module);
         context.postpone_publish_updated_diagnostics();
         Some(())
     }
