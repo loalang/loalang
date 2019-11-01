@@ -1,6 +1,6 @@
+use crate::syntax::characters_to_string;
 use crate::*;
 use std::cmp::Ordering;
-use crate::syntax::characters_to_string;
 
 #[derive(Clone, Debug, Eq)]
 pub struct Location {
@@ -51,7 +51,10 @@ impl Location {
         }
         let last_line_before = &mut lines_before[lines_before.len() - 1];
         if last_line_before.len() < character - 1 {
-            info!("LINE\n{}", characters_to_string(last_line_before.iter().cloned()));
+            info!(
+                "LINE\n{}",
+                characters_to_string(last_line_before.iter().cloned())
+            );
             warn!(
                 "Tried to get position on character {} but the line had {} characters.",
                 character,

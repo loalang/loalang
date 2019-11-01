@@ -1,5 +1,6 @@
 use crate::*;
 use std::fmt;
+use crate::syntax::characters_to_string;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
@@ -55,7 +56,7 @@ impl Token {
 
         match &self.kind {
             EOF => "\0".into(),
-            Unknown(c) => c.to_string(),
+            Unknown(c) => characters_to_string([*c].iter().cloned()),
 
             AsKeyword => "as".into(),
             InKeyword => "in".into(),

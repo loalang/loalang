@@ -25,6 +25,16 @@ impl Navigator {
         }
     }
 
+    pub fn traverse_all_repl_lines<F: FnMut(&Node) -> bool>(&self, f: &mut F) {
+        for module in self.modules.values() {
+            if let Some(root) = module.root() {
+                if root.is_repl_line() {
+                    self.traverse(root, f);
+                }
+            }
+        }
+    }
+
     pub fn modules(&self) -> Vec<Node> {
         self.modules
             .values()
@@ -387,11 +397,11 @@ impl Navigator {
             None => None,
             Some(scope_root) => {
                 let mut result = None;
-                self.traverse(&scope_root, &mut |node| {
+                let mut traverse = |node: &Node| {
                     // We do not traverse down scope roots, since
                     // declarations declared there is not reachable
                     // to the original reference.
-                    if node.id != scope_root.id && node.is_scope_root() {
+                    if node.id != scope_root.id && node.is_scope_root() && !node.is_repl_line() {
                         // Classes exist outside their own scope, though.
                         if node.is_class() {
                             if let Some((n, _)) = self.symbol_of(node) {
@@ -414,14 +424,14 @@ impl Navigator {
                             if let Some(qualified_symbol) = self.find_child(node, qualified_symbol)
                             {
                                 if let syntax::QualifiedSymbol { ref symbols, .. } =
-                                    qualified_symbol.kind
+                                qualified_symbol.kind
                                 {
                                     if let Some(mut imported_symbol) = symbols.last().cloned() {
                                         if symbol != Id::NULL {
                                             imported_symbol = symbol;
                                         }
                                         if let Some(imported_symbol) =
-                                            self.find_child(&qualified_symbol, imported_symbol)
+                                        self.find_child(&qualified_symbol, imported_symbol)
                                         {
                                             if let syntax::Symbol(t) = imported_symbol.kind {
                                                 if t.lexeme() == name {
@@ -453,7 +463,14 @@ impl Navigator {
                     }
 
                     true
-                });
+                };
+
+                if scope_root.is_repl_line() {
+                    self.traverse_all_repl_lines(&mut traverse);
+                } else {
+                    self.traverse(&scope_root, &mut traverse);
+                }
+
                 if result.is_some() {
                     return result;
                 }

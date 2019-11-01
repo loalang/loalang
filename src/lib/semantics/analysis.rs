@@ -37,9 +37,9 @@ impl Analysis {
         let mut declarations = HashMap::new();
 
         while let Some(scope_root) = navigator.closest_scope_root_upwards(&from) {
-            navigator.traverse(&scope_root, &mut |n| {
+            let mut traverse = |n: &syntax::Node| {
                 // Don't traverse into lower scopes.
-                if n.is_scope_root() && n.id != scope_root.id {
+                if n.id != scope_root.id && n.is_scope_root() && !n.is_repl_line() {
                     // Classes exist outside their own scope, though.
                     if n.is_class() {
                         if let Some((name, _)) = navigator.symbol_of(&n) {
@@ -65,7 +65,12 @@ impl Analysis {
                 }
 
                 true
-            });
+            };
+            if scope_root.is_repl_line() {
+                navigator.traverse_all_repl_lines(&mut traverse);
+            } else {
+                navigator.traverse(&scope_root, &mut traverse);
+            }
 
             if let Some(parent) = scope_root
                 .parent_id

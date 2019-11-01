@@ -32,6 +32,13 @@ impl Node {
         }
     }
 
+    pub fn is_repl_line(&self) -> bool {
+        match self.kind {
+            REPLLine { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn is_scope_root(&self) -> bool {
         match self.kind {
             REPLLine { .. } | Module { .. } | Class { .. } | Method { .. } => true,

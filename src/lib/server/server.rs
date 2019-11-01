@@ -47,6 +47,10 @@ impl Server {
         self.analysis = Analysis::new(Arc::new(modules));
     }
 
+    pub fn get(&self, uri: &URI) -> Option<server::ModuleCell> {
+        self.module_cells.get(uri).cloned()
+    }
+
     pub fn set(&mut self, uri: URI, code: String, kind: SourceKind) {
         self.module_cells.insert(
             uri.clone(),
@@ -336,6 +340,13 @@ impl Server {
             syntax::ReturnType { .. } => self.completion_on_declarations_in_scope(
                 &before,
                 DeclarationKind::Type,
+                &self.analysis.types,
+                prefix,
+            ),
+
+            syntax::REPLLine { .. } => self.completion_on_declarations_in_scope(
+                &before,
+                DeclarationKind::Value,
                 &self.analysis.types,
                 prefix,
             ),

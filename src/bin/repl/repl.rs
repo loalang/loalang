@@ -1,7 +1,7 @@
 use crate::*;
 use colored::Colorize;
 use loa::server::Server;
-use loa::syntax::{tokenize, TokenKind, string_to_characters};
+use loa::syntax::{string_to_characters, tokenize, TokenKind};
 use loa::*;
 use rustyline::completion::{Candidate, Completer};
 use rustyline::config::Configurer;
@@ -55,25 +55,21 @@ impl Completer for EditorHelper {
         if let Some(location) = server.location(&self.uri, (1, realpos + 1)) {
             if let Some(completion) = server.completion(location, String::new()) {
                 let candidates = match completion {
-                    server::Completion::VariablesInScope(prefix, vars) => {
-                        vars
-                            .into_iter()
-                            .map(|v| CompletionCandidate {
-                                display: format!("{} ({})", v.name, v.type_),
-                                replacement: format!("{}", &v.name[prefix.len()..]),
-                            })
-                            .collect()
-                    },
+                    server::Completion::VariablesInScope(prefix, vars) => vars
+                        .into_iter()
+                        .map(|v| CompletionCandidate {
+                            display: format!("{} ({})", v.name, v.type_),
+                            replacement: format!("{}", &v.name[prefix.len()..]),
+                        })
+                        .collect(),
 
-                    server::Completion::Behaviours(prefix, behaviours) => {
-                        behaviours
-                            .into_iter()
-                            .map(|behaviour| CompletionCandidate {
-                                display: behaviour.to_string(),
-                                replacement: format!("{}", &behaviour.selector()[prefix.len()..]),
-                            })
-                            .collect()
-                    },
+                    server::Completion::Behaviours(prefix, behaviours) => behaviours
+                        .into_iter()
+                        .map(|behaviour| CompletionCandidate {
+                            display: behaviour.to_string(),
+                            replacement: format!("{}", &behaviour.selector()[prefix.len()..]),
+                        })
+                        .collect(),
                 };
                 return Ok((pos, candidates));
             }
@@ -84,11 +80,10 @@ impl Completer for EditorHelper {
 
 impl Highlighter for EditorHelper {
     fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
-        let tokens = tokenize(Source::new(
-            SourceKind::REPLLine,
-            self.uri.clone(),
-            line.into(),
-        ));
+        let mut server = self.server.lock().unwrap();
+        server.set(self.uri.clone(), line.into(), SourceKind::REPLLine);
+        let source = server.get(&self.uri).unwrap().source;
+        let tokens = tokenize(source);
         Owned(
             tokens
                 .into_iter()
