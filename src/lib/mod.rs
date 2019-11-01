@@ -44,4 +44,6 @@ pub mod syntax;
 
 pub mod semantics;
 
+pub mod generation;
+
 pub mod server;

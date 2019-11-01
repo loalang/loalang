@@ -1,5 +1,6 @@
 use crate::*;
 use colored::Colorize;
+use loa::generation::Generator;
 use loa::server::Server;
 use loa::syntax::{string_to_characters, tokenize, TokenKind};
 use loa::*;
@@ -197,8 +198,6 @@ impl REPL {
                 continue;
             }
             let line = std::mem::replace(&mut line, String::new());
-            info!("{}", line);
-
             self.editor.add_history_entry(&line);
             n += 1;
 
@@ -215,6 +214,15 @@ impl REPL {
             }
             if failure {
                 server.remove(uri);
+                continue;
+            }
+
+            match Generator::new(&server.analysis).generate(&uri) {
+                Err(err) => {
+                    server.remove(uri);
+                    println!("{:?}", err)
+                }
+                Ok(bytecode) => println!("{:?}", bytecode),
             }
         }
     }

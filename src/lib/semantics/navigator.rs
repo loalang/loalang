@@ -424,14 +424,14 @@ impl Navigator {
                             if let Some(qualified_symbol) = self.find_child(node, qualified_symbol)
                             {
                                 if let syntax::QualifiedSymbol { ref symbols, .. } =
-                                qualified_symbol.kind
+                                    qualified_symbol.kind
                                 {
                                     if let Some(mut imported_symbol) = symbols.last().cloned() {
                                         if symbol != Id::NULL {
                                             imported_symbol = symbol;
                                         }
                                         if let Some(imported_symbol) =
-                                        self.find_child(&qualified_symbol, imported_symbol)
+                                            self.find_child(&qualified_symbol, imported_symbol)
                                         {
                                             if let syntax::Symbol(t) = imported_symbol.kind {
                                                 if t.lexeme() == name {
@@ -867,5 +867,10 @@ impl Navigator {
             _ => (),
         }
         None
+    }
+
+    pub fn root_of(&self, uri: &URI) -> Option<Node> {
+        let tree = self.modules.get(uri)?;
+        tree.root().cloned()
     }
 }

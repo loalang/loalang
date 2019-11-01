@@ -1,6 +1,6 @@
+use crate::syntax::characters_to_string;
 use crate::*;
 use std::fmt;
-use crate::syntax::characters_to_string;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
