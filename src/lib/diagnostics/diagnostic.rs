@@ -1,4 +1,3 @@
-use crate::semantics::Navigator;
 use crate::*;
 use std::fmt;
 
@@ -63,15 +62,12 @@ impl Diagnostic {
         }
     }
 
-    /// Report the diagnostics with the reporter, returning true
-    /// if the diagnostics contained errors, false otherwise.
-    pub fn report<R: Reporter>(diagnostics: Vec<Diagnostic>, navigator: &Navigator) -> bool {
+    pub fn failed(diagnostics: &Vec<Diagnostic>) -> bool {
         let mut failed = false;
-        for diagnostic in diagnostics {
+        for diagnostic in diagnostics.iter() {
             if let DiagnosticLevel::Error = diagnostic.level() {
                 failed = true;
             }
-            R::report(diagnostic, navigator);
         }
         failed
     }

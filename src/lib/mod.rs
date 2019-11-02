@@ -1,4 +1,4 @@
-#![feature(box_patterns, try_trait)]
+#![feature(box_patterns, try_trait, matches_macro)]
 
 pub use std::any::Any;
 pub use std::borrow::Cow;
@@ -15,17 +15,11 @@ extern crate log;
 
 pub use log::*;
 
-extern crate matches;
-
-use matches::*;
+extern crate glob;
 
 extern crate num_bigint;
 
-extern crate glob;
-
 extern crate bincode;
-
-use glob::glob;
 
 mod source;
 

@@ -37,7 +37,7 @@ impl Source {
 
     pub fn files<S: AsRef<str>>(s: S) -> io::Result<Vec<Arc<Source>>> {
         let mut sources = vec![];
-        match glob(s.as_ref()) {
+        match glob::glob(s.as_ref()) {
             Ok(paths) => {
                 for path in paths {
                     if let Ok(path) = path {

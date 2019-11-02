@@ -10,6 +10,8 @@ pub enum URI {
     File(PathBuf),
     Stdin,
     REPLLine(usize),
+
+    Main,
 }
 
 impl URI {
@@ -62,6 +64,8 @@ impl fmt::Display for URI {
             URI::File(path) => write!(f, "file://{}", path.display()),
             URI::Stdin => write!(f, "stdin:"),
             URI::REPLLine(n) => write!(f, "repl:{}", n),
+
+            URI::Main => write!(f, "main"),
         }
     }
 }

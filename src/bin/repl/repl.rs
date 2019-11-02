@@ -1,5 +1,5 @@
 use crate::*;
-use colored::{Colorize, Color};
+use colored::{Color, Colorize};
 use loa::generation::Generator;
 use loa::server::Server;
 use loa::syntax::{string_to_characters, tokenize, TokenKind};
@@ -88,7 +88,9 @@ pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
             let lexeme = token.lexeme();
 
             for (color, span) in markers.iter() {
-                if span.contains_location(&token.span.start) {
+                if span.contains_location(&token.span.start)
+                    && span.contains_location(&token.span.end)
+                {
                     return lexeme.color(color.clone()).underline().to_string();
                 }
             }
@@ -173,9 +175,10 @@ impl REPL {
 
         let mut failure = false;
         for (_, diagnostics) in server.diagnostics() {
-            if Diagnostic::report::<R>(diagnostics, &server.analysis.navigator) {
+            if Diagnostic::failed(&diagnostics) {
                 failure = true;
             }
+            R::report(diagnostics, &server.analysis.navigator);
         }
 
         let mut vm = VM::new();
@@ -244,9 +247,10 @@ impl REPL {
             let mut failure = false;
             for (d_uri, diagnostics) in server.diagnostics() {
                 if d_uri == uri {
-                    if Diagnostic::report::<R>(diagnostics, &server.analysis.navigator) {
+                    if Diagnostic::failed(&diagnostics) {
                         failure = true;
                     }
+                    R::report(diagnostics, &server.analysis.navigator);
                 }
             }
             if failure {

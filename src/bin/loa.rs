@@ -16,7 +16,7 @@ mod reporting;
 mod server_handler;
 pub use self::reporting::*;
 
-fn main() -> Result<(), clap::Error> {
+fn log_to_file() {
     log_panics::init();
     let log_file = std::fs::OpenOptions::new()
         .append(true)
@@ -24,7 +24,9 @@ fn main() -> Result<(), clap::Error> {
         .open("/usr/local/var/log/loa.log")
         .unwrap();
     simple_logging::log_to(log_file, log::LevelFilter::Info);
+}
 
+fn main() -> Result<(), clap::Error> {
     let project_name = std::env::current_dir()
         .ok()
         .as_ref()
@@ -70,10 +72,16 @@ fn main() -> Result<(), clap::Error> {
     match cli.subcommand() {
         ("repl", _) => repl::repl(),
 
-        ("server", _) => server_handler::server(),
+        ("server", _) => {
+            log_to_file();
+            server_handler::server()
+        },
 
         ("exec", Some(matches)) => match matches.value_of("loabin") {
-            None => app.print_help()?,
+            None => {
+                app.print_help()?;
+                println!();
+            }
             Some(file) => {
                 let instructions = std::fs::read(file)
                     .map(|bytes| Instructions::from_bytes(bytes.as_slice()).unwrap())?;
@@ -85,18 +93,18 @@ fn main() -> Result<(), clap::Error> {
             }
         },
 
-        ("run", Some(matches)) => match build(matches.value_of("main").unwrap()) {
-            Err(err) => eprintln!("ERROR during generation: {:?}", err),
-            Ok(instructions) => {
-                if let Some(result) = loa::vm::VM::new().eval(&instructions) {
-                    println!("{}", result);
-                }
-            }
-        },
+        ("run", Some(matches)) => {
+            let instructions = build(matches.value_of("main").unwrap());
 
-        ("build", Some(matches)) => match build(matches.value_of("main").unwrap()) {
-            Err(err) => eprintln!("ERROR during generation: {:?}", err),
-            Ok(instructions) => match matches.value_of("out") {
+            if let Some(result) = loa::vm::VM::new().eval(&instructions) {
+                println!("{}", result);
+            }
+        }
+
+        ("build", Some(matches)) => {
+            let instructions = build(matches.value_of("main").unwrap());
+
+            match matches.value_of("out") {
                 None => {
                     stdout()
                         .write(instructions.to_bytes().unwrap().as_slice())
@@ -105,8 +113,8 @@ fn main() -> Result<(), clap::Error> {
                 Some(outfile) => {
                     std::fs::write(outfile, instructions.to_bytes().unwrap()).unwrap();
                 }
-            },
-        },
+            }
+        }
 
         _ => eprintln!("{}", cli.usage()),
     }
@@ -114,17 +122,18 @@ fn main() -> Result<(), clap::Error> {
     Ok(())
 }
 
-use loa::generation::{GenerationResult, Instructions};
+use loa::generation::Instructions;
 use loa::vm::VM;
 use std::io::{stdout, Write};
+use std::process::exit;
 
-fn build(main: &str) -> GenerationResult {
+fn build(main: &str) -> Instructions {
     let mut sources = loa::Source::files("**/*.loa").expect("failed to read in sources");
 
     sources.push(loa::Source::new(
         loa::SourceKind::REPLLine,
-        loa::URI::REPLLine(0),
-        format!("import {} as Main. Main run.", main),
+        loa::URI::Main,
+        format!("import {} as Main.\n\nMain run.", main),
     ));
 
     let mut diagnostics = vec![];
@@ -141,14 +150,22 @@ fn build(main: &str) -> GenerationResult {
     let mut analysis = loa::semantics::Analysis::new(loa::Arc::new(modules));
     diagnostics.extend(analysis.check());
 
-    if loa::Diagnostic::report::<PrettyReporter>(diagnostics, &analysis.navigator) {
-        return Ok(vec![].into());
+    if loa::Diagnostic::failed(&diagnostics) {
+        <PrettyReporter as loa::Reporter>::report(diagnostics, &analysis.navigator);
+        exit(1);
     }
+    <PrettyReporter as loa::Reporter>::report(diagnostics, &analysis.navigator);
 
     let mut generator = loa::generation::Generator::new(&mut analysis);
     let mut instructions = Instructions::new();
     for source in sources {
-        instructions.extend(generator.generate(&source.uri)?);
+        match generator.generate(&source.uri) {
+            Err(err) => {
+                eprintln!("{:?}", err);
+                exit(1);
+            }
+            Ok(i) => instructions.extend(i),
+        }
     }
-    Ok(instructions)
+    instructions
 }
