@@ -12,7 +12,9 @@ extern crate serde_json;
 extern crate simple_logging;
 
 mod repl;
+mod reporting;
 mod server_handler;
+pub use self::reporting::*;
 
 fn main() -> Result<(), clap::Error> {
     log_panics::init();
@@ -139,15 +141,7 @@ fn build(main: &str) -> GenerationResult {
     let mut analysis = loa::semantics::Analysis::new(loa::Arc::new(modules));
     diagnostics.extend(analysis.check());
 
-    let mut failure = false;
-    for diagnostic in diagnostics {
-        if let loa::DiagnosticLevel::Error = diagnostic.level() {
-            failure = true;
-        }
-        eprintln!("{:?}", diagnostic);
-    }
-
-    if failure {
+    if loa::Diagnostic::report::<PrettyReporter>(diagnostics, &analysis.navigator) {
         return Ok(vec![].into());
     }
 

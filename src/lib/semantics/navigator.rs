@@ -35,6 +35,10 @@ impl Navigator {
         }
     }
 
+    pub fn source(&self, uri: &URI) -> Option<Arc<Source>> {
+        self.modules.get(uri).map(|t| t.source.clone())
+    }
+
     pub fn modules(&self) -> Vec<Node> {
         self.modules
             .values()

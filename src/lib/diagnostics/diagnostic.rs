@@ -1,3 +1,4 @@
+use crate::semantics::Navigator;
 use crate::*;
 use std::fmt;
 
@@ -60,6 +61,19 @@ impl Diagnostic {
             UnassignableType { .. } => 7,
             DuplicatedDeclaration(_, _, _) => 8,
         }
+    }
+
+    /// Report the diagnostics with the reporter, returning true
+    /// if the diagnostics contained errors, false otherwise.
+    pub fn report<R: Reporter>(diagnostics: Vec<Diagnostic>, navigator: &Navigator) -> bool {
+        let mut failed = false;
+        for diagnostic in diagnostics {
+            if let DiagnosticLevel::Error = diagnostic.level() {
+                failed = true;
+            }
+            R::report(diagnostic, navigator);
+        }
+        failed
     }
 }
 

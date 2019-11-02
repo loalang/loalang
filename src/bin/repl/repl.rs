@@ -1,5 +1,5 @@
 use crate::*;
-use colored::Colorize;
+use colored::{Colorize, Color};
 use loa::generation::Generator;
 use loa::server::Server;
 use loa::syntax::{string_to_characters, tokenize, TokenKind};
@@ -80,56 +80,65 @@ impl Completer for EditorHelper {
     }
 }
 
+pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
+    let tokens = tokenize(source);
+    tokens
+        .into_iter()
+        .map(|token| {
+            let lexeme = token.lexeme();
+
+            for (color, span) in markers.iter() {
+                if span.contains_location(&token.span.start) {
+                    return lexeme.color(color.clone()).underline().to_string();
+                }
+            }
+
+            match token.kind {
+                TokenKind::EOF => lexeme,
+                TokenKind::Unknown(_) => lexeme.red().underline().to_string(),
+                TokenKind::Whitespace(_) => lexeme,
+
+                TokenKind::Arrow
+                | TokenKind::FatArrow
+                | TokenKind::Period
+                | TokenKind::Comma
+                | TokenKind::OpenCurly
+                | TokenKind::CloseCurly
+                | TokenKind::LineComment(_)
+                | TokenKind::Underscore => lexeme.bright_black().to_string(),
+
+                TokenKind::AsKeyword
+                | TokenKind::InKeyword
+                | TokenKind::IsKeyword
+                | TokenKind::OutKeyword
+                | TokenKind::InoutKeyword
+                | TokenKind::ClassKeyword
+                | TokenKind::PrivateKeyword
+                | TokenKind::PublicKeyword
+                | TokenKind::NamespaceKeyword
+                | TokenKind::SelfKeyword
+                | TokenKind::ImportKeyword
+                | TokenKind::ExportKeyword
+                | TokenKind::PartialKeyword => lexeme.blue().to_string(),
+                TokenKind::Plus => lexeme,
+                TokenKind::Colon => lexeme,
+                TokenKind::Slash => lexeme,
+                TokenKind::EqualSign => lexeme,
+                TokenKind::OpenAngle => lexeme,
+                TokenKind::CloseAngle => lexeme,
+                TokenKind::SimpleInteger(_) => lexeme.red().to_string(),
+                TokenKind::SimpleSymbol(_) => lexeme,
+            }
+        })
+        .collect::<String>()
+}
+
 impl Highlighter for EditorHelper {
     fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
         let mut server = self.server.lock().unwrap();
         server.set(self.uri.clone(), line.into(), SourceKind::REPLLine);
         let source = server.get(&self.uri).unwrap().source;
-        let tokens = tokenize(source);
-        Owned(
-            tokens
-                .into_iter()
-                .map(|token| {
-                    let lexeme = token.lexeme();
-                    match token.kind {
-                        TokenKind::EOF => lexeme,
-                        TokenKind::Unknown(_) => lexeme.red().underline().to_string(),
-                        TokenKind::Whitespace(_) => lexeme,
-
-                        TokenKind::Arrow
-                        | TokenKind::FatArrow
-                        | TokenKind::Period
-                        | TokenKind::Comma
-                        | TokenKind::OpenCurly
-                        | TokenKind::CloseCurly
-                        | TokenKind::LineComment(_)
-                        | TokenKind::Underscore => lexeme.bright_black().to_string(),
-
-                        TokenKind::AsKeyword
-                        | TokenKind::InKeyword
-                        | TokenKind::IsKeyword
-                        | TokenKind::OutKeyword
-                        | TokenKind::InoutKeyword
-                        | TokenKind::ClassKeyword
-                        | TokenKind::PrivateKeyword
-                        | TokenKind::PublicKeyword
-                        | TokenKind::NamespaceKeyword
-                        | TokenKind::SelfKeyword
-                        | TokenKind::ImportKeyword
-                        | TokenKind::ExportKeyword
-                        | TokenKind::PartialKeyword => lexeme.blue().to_string(),
-                        TokenKind::Plus => lexeme,
-                        TokenKind::Colon => lexeme,
-                        TokenKind::Slash => lexeme,
-                        TokenKind::EqualSign => lexeme,
-                        TokenKind::OpenAngle => lexeme,
-                        TokenKind::CloseAngle => lexeme,
-                        TokenKind::SimpleInteger(_) => lexeme.red().to_string(),
-                        TokenKind::SimpleSymbol(_) => lexeme,
-                    }
-                })
-                .collect::<String>(),
-        )
+        Owned(highlight(source, vec![]))
     }
 
     fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
@@ -156,31 +165,37 @@ pub struct REPL {
 }
 
 impl REPL {
-    pub fn new() -> REPL {
+    pub fn new<R: Reporter>() -> REPL {
         let mut server = Server::new();
 
         let sources = Source::files("**/*.loa").unwrap_or(vec![]);
         server.add_all(sources.clone());
 
+        let mut failure = false;
         for (_, diagnostics) in server.diagnostics() {
-            for diagnostic in diagnostics {
-                println!("{:?}", diagnostic);
-            }
-        }
-
-        let mut generator = server.generator();
-        let mut instructions = Instructions::new();
-        for source in sources {
-            match generator.generate(&source.uri) {
-                Err(err) => eprintln!("{:?}", err),
-                Ok(i) => {
-                    instructions.extend(i);
-                }
+            if Diagnostic::report::<R>(diagnostics, &server.analysis.navigator) {
+                failure = true;
             }
         }
 
         let mut vm = VM::new();
-        vm.eval(&instructions);
+
+        if failure {
+            server = Server::new();
+        } else {
+            let mut generator = server.generator();
+            let mut instructions = Instructions::new();
+            for source in sources {
+                match generator.generate(&source.uri) {
+                    Err(err) => eprintln!("{:?}", err),
+                    Ok(i) => {
+                        instructions.extend(i);
+                    }
+                }
+            }
+
+            vm.eval(&instructions);
+        }
 
         let server = Arc::new(Mutex::new(server));
 
@@ -195,7 +210,7 @@ impl REPL {
         REPL { editor, server, vm }
     }
 
-    pub fn start(&mut self) {
+    pub fn start<R: Reporter>(&mut self) {
         let mut n = 1;
         let mut line = String::new();
         loop {
@@ -229,11 +244,8 @@ impl REPL {
             let mut failure = false;
             for (d_uri, diagnostics) in server.diagnostics() {
                 if d_uri == uri {
-                    for d in diagnostics {
-                        if let DiagnosticLevel::Error = d.level() {
-                            failure = true;
-                        }
-                        println!("{:?}", d);
+                    if Diagnostic::report::<R>(diagnostics, &server.analysis.navigator) {
+                        failure = true;
                     }
                 }
             }

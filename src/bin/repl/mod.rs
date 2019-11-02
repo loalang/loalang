@@ -2,7 +2,7 @@ mod repl;
 pub use self::repl::*;
 
 pub fn repl() {
-    let mut repl = repl::REPL::new();
+    let mut repl = repl::REPL::new::<crate::PrettyReporter>();
 
-    repl.start();
+    repl.start::<crate::PrettyReporter>();
 }
