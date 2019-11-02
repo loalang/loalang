@@ -1,6 +1,5 @@
 use crate::generation::{Instruction, Instructions};
 use crate::{Arc, HashMap, Id};
-use log::*;
 use std::fmt;
 use std::mem::replace;
 
@@ -25,9 +24,9 @@ impl VM {
     fn log_stack(&self) {
         #[cfg(debug_assertions)]
         {
-            info!("Stack ({})", self.stack.len());
+            log::info!("Stack ({})", self.stack.len());
             for (i, o) in self.stack.iter().rev().enumerate() {
-                info!("{:0>2}  {}", i, o);
+                log::info!("{:0>2}  {}", i, o);
             }
         }
     }

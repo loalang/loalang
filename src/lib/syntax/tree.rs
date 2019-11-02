@@ -3,7 +3,7 @@ use crate::*;
 
 #[derive(Debug)]
 pub struct Tree {
-    source: Arc<Source>,
+    pub source: Arc<Source>,
     nodes: HashMap<Id, Node>,
     root: Id,
 }

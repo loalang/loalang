@@ -1,7 +1,8 @@
 use crate::*;
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-#[derive(Eq, PartialEq, Copy, Clone, Hash, PartialOrd, Ord)]
+#[derive(Eq, PartialEq, Copy, Clone, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Id(usize);
 
 static NODE_GEN: AtomicUsize = AtomicUsize::new(0xffff);

@@ -6,12 +6,12 @@ use crate::*;
 pub type GenerationResult = Result<Instructions, GenerationError>;
 
 pub struct Generator<'a> {
-    analysis: &'a Analysis,
+    analysis: &'a mut Analysis,
     local_count: usize,
 }
 
 impl<'a> Generator<'a> {
-    pub fn new(analysis: &'a Analysis) -> Generator<'a> {
+    pub fn new(analysis: &'a mut Analysis) -> Generator<'a> {
         Generator {
             analysis,
             local_count: 0,
@@ -20,6 +20,7 @@ impl<'a> Generator<'a> {
 
     pub fn generate(&mut self, uri: &URI) -> GenerationResult {
         let root = self.analysis.navigator.root_of(uri)?;
+
         match root.kind {
             Module { .. } => self.generate_module(&root),
             REPLLine { .. } => self.generate_repl_line(&root),
@@ -80,6 +81,7 @@ impl<'a> Generator<'a> {
                     .find_child(&repl_statement, expression)?;
                 self.generate_expression(&expression)
             }
+            ImportDirective { .. } => Ok(vec![].into()),
             _ => self.generate_declaration(&repl_statement),
         }
     }

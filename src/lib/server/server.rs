@@ -5,7 +5,7 @@ use crate::*;
 #[derive(Clone)]
 pub struct Server {
     pub analysis: semantics::Analysis,
-    module_cells: HashMap<URI, server::ModuleCell>,
+    pub module_cells: HashMap<URI, server::ModuleCell>,
 }
 
 impl Server {
@@ -14,6 +14,14 @@ impl Server {
             analysis: semantics::Analysis::new(Arc::new(HashMap::new())),
             module_cells: HashMap::new(),
         }
+    }
+
+    pub fn add_all(&mut self, sources: Vec<Arc<Source>>) {
+        for source in sources {
+            self.module_cells
+                .insert(source.uri.clone(), server::ModuleCell::new(source));
+        }
+        self.reset_analysis()
     }
 
     /// Sweep the entire program for all diagnostics,
@@ -35,6 +43,10 @@ impl Server {
             }
         }
         all
+    }
+
+    pub fn generator(&mut self) -> generation::Generator {
+        generation::Generator::new(&mut self.analysis)
     }
 
     // SOURCE CODE MANIPULATION

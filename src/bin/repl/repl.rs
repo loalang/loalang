@@ -133,7 +133,6 @@ impl Highlighter for EditorHelper {
     }
 
     fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
-        info!("HIGHLIGHT HINT");
         Borrowed(hint)
     }
 
@@ -142,7 +141,6 @@ impl Highlighter for EditorHelper {
         candidate: &'c str,
         _completion: CompletionType,
     ) -> Cow<'c, str> {
-        info!("HIGHLIGHT CANDIDATE");
         Borrowed(candidate)
     }
 
@@ -159,7 +157,32 @@ pub struct REPL {
 
 impl REPL {
     pub fn new() -> REPL {
-        let server = Arc::new(Mutex::new(Server::new()));
+        let mut server = Server::new();
+
+        let sources = Source::files("**/*.loa").unwrap_or(vec![]);
+        server.add_all(sources.clone());
+
+        for (_, diagnostics) in server.diagnostics() {
+            for diagnostic in diagnostics {
+                println!("{:?}", diagnostic);
+            }
+        }
+
+        let mut generator = server.generator();
+        let mut instructions = Instructions::new();
+        for source in sources {
+            match generator.generate(&source.uri) {
+                Err(err) => eprintln!("{:?}", err),
+                Ok(i) => {
+                    instructions.extend(i);
+                }
+            }
+        }
+
+        let mut vm = VM::new();
+        vm.eval(&instructions);
+
+        let server = Arc::new(Mutex::new(server));
 
         let mut editor = Editor::new();
         editor.set_edit_mode(EditMode::Vi);
@@ -169,11 +192,7 @@ impl REPL {
             uri: URI::REPLLine(0),
         }));
 
-        REPL {
-            editor,
-            server,
-            vm: VM::new(),
-        }
+        REPL { editor, server, vm }
     }
 
     pub fn start(&mut self) {
@@ -223,13 +242,12 @@ impl REPL {
                 continue;
             }
 
-            match Generator::new(&server.analysis).generate(&uri) {
+            match Generator::new(&mut server.analysis).generate(&uri) {
                 Err(err) => {
                     server.remove(uri);
                     println!("{:?}", err)
                 }
                 Ok(instructions) => {
-                    info!("{:#?}", instructions);
                     let tos = self.vm.eval(&instructions);
                     if let Some(o) = tos {
                         println!("{}", o);

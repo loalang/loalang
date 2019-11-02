@@ -23,6 +23,8 @@ extern crate num_bigint;
 
 extern crate glob;
 
+extern crate bincode;
+
 use glob::glob;
 
 mod source;

@@ -1,6 +1,7 @@
 use crate::*;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Instruction {
     ReferenceToClass(Id),
     LoadLocal(u16),
@@ -12,6 +13,7 @@ pub enum Instruction {
     Return(u8),
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Instructions(Vec<Instruction>);
 
 impl Instructions {
@@ -33,6 +35,14 @@ impl Instructions {
 
     pub fn reverse(&mut self) {
         self.0.reverse();
+    }
+
+    pub fn to_bytes(&self) -> bincode::Result<Vec<u8>> {
+        bincode::serialize(self)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> bincode::Result<Instructions> {
+        bincode::deserialize(bytes)
     }
 }
 
