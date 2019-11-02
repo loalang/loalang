@@ -873,4 +873,71 @@ impl Navigator {
         let tree = self.modules.get(uri)?;
         tree.root().cloned()
     }
+
+    pub fn methods_of_class(&self, class: &Node) -> Vec<Node> {
+        let mut methods = vec![];
+
+        if let Class { class_body, .. } = class.kind {
+            if let Some(class_body) = self.find_child(class, class_body) {
+                if let ClassBody {
+                    ref class_members, ..
+                } = class_body.kind
+                {
+                    for class_member in class_members.iter() {
+                        if let Some(class_member) = self.find_child(&class_body, *class_member) {
+                            if let Method { .. } = class_member.kind {
+                                methods.push(class_member);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        methods
+    }
+
+    pub fn method_arity(&self, method: &Node) -> Option<usize> {
+        if let Method { signature, .. } = method.kind {
+            let signature = self.find_child(method, signature)?;
+            if let Signature {
+                message_pattern, ..
+            } = signature.kind
+            {
+                let message_pattern = self.find_child(&signature, message_pattern)?;
+
+                match message_pattern.kind {
+                    UnaryMessagePattern { .. } => return Some(1),
+                    BinaryMessagePattern { .. } => return Some(2),
+                    KeywordMessagePattern { keyword_pairs, .. } => {
+                        return Some(keyword_pairs.len() + 1)
+                    }
+                    _ => {}
+                }
+            }
+        }
+        None
+    }
+
+    pub fn index_of_parameter(&self, parameter: &Node) -> Option<usize> {
+        let parent = self.parent(parameter)?;
+
+        if let BinaryMessagePattern { .. } = parent.kind {
+            return Some(0);
+        }
+
+        if let KeywordPair { .. } = parent.kind {
+            let pattern = self.parent(&parent)?;
+
+            if let KeywordMessagePattern { keyword_pairs, .. } = pattern.kind {
+                for (index, pair_id) in keyword_pairs.iter().enumerate() {
+                    if *pair_id == parent.id {
+                        return Some(index);
+                    }
+                }
+            }
+        }
+
+        None
+    }
 }

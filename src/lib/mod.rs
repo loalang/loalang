@@ -46,4 +46,6 @@ pub mod semantics;
 
 pub mod generation;
 
+pub mod vm;
+
 pub mod server;

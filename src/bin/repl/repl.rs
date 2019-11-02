@@ -3,6 +3,7 @@ use colored::Colorize;
 use loa::generation::Generator;
 use loa::server::Server;
 use loa::syntax::{string_to_characters, tokenize, TokenKind};
+use loa::vm::VM;
 use loa::*;
 use rustyline::completion::{Candidate, Completer};
 use rustyline::config::Configurer;
@@ -153,6 +154,7 @@ impl Highlighter for EditorHelper {
 pub struct REPL {
     editor: Editor<EditorHelper>,
     server: Arc<Mutex<Server>>,
+    vm: VM,
 }
 
 impl REPL {
@@ -167,7 +169,11 @@ impl REPL {
             uri: URI::REPLLine(0),
         }));
 
-        REPL { editor, server }
+        REPL {
+            editor,
+            server,
+            vm: VM::new(),
+        }
     }
 
     pub fn start(&mut self) {
@@ -222,7 +228,13 @@ impl REPL {
                     server.remove(uri);
                     println!("{:?}", err)
                 }
-                Ok(bytecode) => println!("{:?}", bytecode),
+                Ok(instructions) => {
+                    info!("{:#?}", instructions);
+                    let tos = self.vm.eval(&instructions);
+                    if let Some(o) = tos {
+                        println!("{}", o);
+                    }
+                }
             }
         }
     }

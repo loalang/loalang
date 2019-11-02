@@ -1,7 +1,16 @@
 use crate::*;
 
-#[derive(Debug)]
-pub enum Instruction {}
+#[derive(Debug, Clone)]
+pub enum Instruction {
+    ReferenceToClass(Id),
+    LoadLocal(u16),
+    DeclareClass(Id, String),
+    SendMessage(Id),
+    LoadArgument(u8),
+    BeginMethod(String),
+    EndMethod(Id),
+    Return(u8),
+}
 
 pub struct Instructions(Vec<Instruction>);
 
@@ -16,6 +25,32 @@ impl Instructions {
 
     pub fn push(&mut self, instruction: Instruction) {
         self.0.push(instruction)
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<Instruction> {
+        self.0.iter()
+    }
+
+    pub fn reverse(&mut self) {
+        self.0.reverse();
+    }
+}
+
+impl Into<Vec<Instruction>> for Instructions {
+    fn into(self) -> Vec<Instruction> {
+        self.0
+    }
+}
+
+impl AsRef<Vec<Instruction>> for Instructions {
+    fn as_ref(&self) -> &Vec<Instruction> {
+        &self.0
+    }
+}
+
+impl From<Instruction> for Instructions {
+    fn from(i: Instruction) -> Self {
+        Instructions(vec![i])
     }
 }
 
