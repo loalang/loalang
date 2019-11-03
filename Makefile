@@ -14,10 +14,13 @@ test:
 install:
 	cp target/release/loa /usr/local/bin/loa
 	cp target/release/loavm /usr/local/bin/loavm
+	mkdir -p /usr/local/lib/loa/std
+	cp -r std /usr/local/lib/loa/std
 
 clean:
 	rm /usr/local/bin/loa
 	rm /usr/local/bin/loavm
+	rm -rf /usr/local/lib/loa
 
 docker/base:
 	docker build -t loalang/base:latest -f docker/base.dockerfile .

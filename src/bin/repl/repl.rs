@@ -170,7 +170,8 @@ impl REPL {
     pub fn new<R: Reporter>() -> REPL {
         let mut server = Server::new();
 
-        let sources = Source::files("**/*.loa").unwrap_or(vec![]);
+        let mut sources = Source::files("**/*.loa").unwrap_or(vec![]);
+        sources.extend(Source::stdlib().expect("failed to load stdlib"));
         server.add_all(sources.clone());
 
         let mut failure = false;

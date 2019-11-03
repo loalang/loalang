@@ -7,7 +7,7 @@ pub type GenerationResult = Result<Instructions, GenerationError>;
 
 pub struct Generator<'a> {
     analysis: &'a mut Analysis,
-    local_count: usize,
+    local_count: u16,
 }
 
 impl<'a> Generator<'a> {
@@ -97,8 +97,8 @@ impl<'a> Generator<'a> {
                 let result = match declaration.kind {
                     Class { .. } => Ok(Instruction::ReferenceToClass(declaration.id).into()),
                     ParameterPattern { .. } => Ok(Instruction::LoadLocal(
-                        (self.analysis.navigator.index_of_parameter(&declaration)?
-                            + self.local_count) as u16,
+                        (self.analysis.navigator.index_of_parameter(&declaration)?) as u16
+                            + self.local_count,
                     )
                     .into()),
                     _ => Err(invalid_node(&declaration, "Expected declaration.")),
@@ -110,6 +110,8 @@ impl<'a> Generator<'a> {
 
                 result
             }
+
+            SelfExpression(_) => Ok(Instruction::LoadLocal(self.local_count - 1).into()),
 
             MessageSendExpression {
                 expression: receiver,
@@ -217,22 +219,22 @@ impl<'a> Generator<'a> {
                     _ => return Err(invalid_node(&signature, "Expected signature.")),
                 }
 
-                let method_body = self.analysis.navigator.find_child(method, method_body)?;
-                match method_body.kind {
-                    MethodBody { expression, .. } => {
-                        let expression = self
-                            .analysis
-                            .navigator
-                            .find_child(&method_body, expression)?;
-                        instructions.extend(self.generate_expression(&expression)?);
+                if let Some(method_body) = self.analysis.navigator.find_child(method, method_body) {
+                    match method_body.kind {
+                        MethodBody { expression, .. } => {
+                            let expression = self
+                                .analysis
+                                .navigator
+                                .find_child(&method_body, expression)?;
+                            instructions.extend(self.generate_expression(&expression)?);
+                        }
+                        _ => return Err(invalid_node(&method_body, "Expected method body.")),
                     }
-                    _ => return Err(invalid_node(&method_body, "Expected method body.")),
+
+                    instructions.push(Instruction::Return(
+                        self.analysis.navigator.method_arity(method)? as u8,
+                    ));
                 }
-
-                instructions.push(Instruction::Return(
-                    self.analysis.navigator.method_arity(method)? as u8,
-                ));
-
                 instructions.push(Instruction::EndMethod(method.id));
             }
             _ => return Err(invalid_node(method, "Expected method.")),

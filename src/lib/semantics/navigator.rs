@@ -120,6 +120,9 @@ impl Navigator {
                 ts.iter().map(|t| t.lexeme()).collect::<Vec<_>>().join(""),
                 node.clone(),
             )),
+            SelfTypeExpression { .. } | SelfExpression { .. } => {
+                Some(("self".into(), node.clone()))
+            }
             Class { symbol, .. }
             | ReferenceTypeExpression { symbol, .. }
             | ReferenceExpression { symbol, .. }
@@ -387,8 +390,13 @@ impl Navigator {
     }
 
     pub fn find_declaration(&self, reference: &Node, kind: DeclarationKind) -> Option<Node> {
-        let (name, _) = self.symbol_of(reference)?;
-        self.find_declaration_above(reference, name, kind)
+        match reference.kind {
+            SelfExpression(_) | SelfTypeExpression(_) => self.closest_class_upwards(reference),
+            _ => {
+                let (name, _) = self.symbol_of(reference)?;
+                self.find_declaration_above(reference, name, kind)
+            }
+        }
     }
 
     pub fn find_declaration_above(
@@ -760,6 +768,10 @@ impl Navigator {
 
     pub fn all_type_expressions_downwards(&self, from: &Node) -> Vec<Node> {
         self.all_downwards(from, &|n| n.is_type_expression())
+    }
+
+    pub fn closest_class_upwards(&self, from: &Node) -> Option<Node> {
+        self.closest_upwards(from, |n| n.is_class())
     }
 
     pub fn closest_scope_root_upwards(&self, from: &Node) -> Option<Node> {

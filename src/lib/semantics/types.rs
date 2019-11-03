@@ -19,7 +19,7 @@ impl Types {
     pub fn get_type_of_expression(&self, expression: &Node) -> Type {
         self.types_cache
             .gate(&expression.id, || match expression.kind {
-                ReferenceExpression { .. } => self.get_type_of_declaration(
+                ReferenceExpression { .. } | SelfExpression(_) => self.get_type_of_declaration(
                     &self
                         .navigator
                         .find_declaration(expression, DeclarationKind::Value)?,

@@ -32,6 +32,7 @@ pub fn server() {
 
     let sender = Arc::new(NotificationSender { conn: conn.clone() });
     let mut context = ServerContext::new(sender);
+    context.server.load_std().expect("failed to load stdlib");
     let initialize_params = init(&conn, &ServerHandler::capabilities()).unwrap();
 
     conn.sender

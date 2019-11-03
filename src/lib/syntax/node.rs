@@ -103,13 +103,15 @@ impl Node {
         match self.kind {
             ReferenceTypeExpression { .. } => kind.is_type(),
             ReferenceExpression { .. } => kind.is_value(),
+            SelfTypeExpression(_) => kind.is_type(),
+            SelfExpression(_) => kind.is_value(),
             _ => false,
         }
     }
 
     pub fn is_expression(&self) -> bool {
         match self.kind {
-            ReferenceExpression { .. } | MessageSendExpression { .. } => true,
+            ReferenceExpression { .. } | MessageSendExpression { .. } | SelfExpression(_) => true,
             _ => false,
         }
     }

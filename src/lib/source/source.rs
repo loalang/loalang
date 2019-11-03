@@ -50,6 +50,10 @@ impl Source {
         Ok(sources)
     }
 
+    pub fn stdlib() -> io::Result<Vec<Arc<Source>>> {
+        Self::files("/usr/local/lib/loa/std/**/*.loa")
+    }
+
     #[cfg(test)]
     pub fn test(code: &str) -> Arc<Source> {
         Self::new(SourceKind::Module, URI::Test, code.into())

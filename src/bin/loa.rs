@@ -128,7 +128,8 @@ use std::io::{stdout, Write};
 use std::process::exit;
 
 fn build(main: &str) -> Instructions {
-    let mut sources = loa::Source::files("**/*.loa").expect("failed to read in sources");
+    let mut sources = loa::Source::stdlib().expect("failed to load stdlib");
+    sources.extend(loa::Source::files("**/*.loa").expect("failed to read in sources"));
 
     sources.push(loa::Source::new(
         loa::SourceKind::REPLLine,

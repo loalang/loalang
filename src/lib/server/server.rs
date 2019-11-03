@@ -51,6 +51,13 @@ impl Server {
 
     // SOURCE CODE MANIPULATION
 
+    pub fn load_std(&mut self) -> std::io::Result<()> {
+        for source in Source::stdlib()? {
+            self.set_source(source);
+        }
+        Ok(())
+    }
+
     fn reset_analysis(&mut self) {
         let mut modules = HashMap::new();
         for (uri, cell) in self.module_cells.iter() {
@@ -64,10 +71,12 @@ impl Server {
     }
 
     pub fn set(&mut self, uri: URI, code: String, kind: SourceKind) {
-        self.module_cells.insert(
-            uri.clone(),
-            server::ModuleCell::new(Source::new(kind, uri, code)),
-        );
+        self.set_source(Source::new(kind, uri, code));
+    }
+
+    fn set_source(&mut self, source: Arc<Source>) {
+        self.module_cells
+            .insert(source.uri.clone(), server::ModuleCell::new(source));
         self.reset_analysis();
     }
 
