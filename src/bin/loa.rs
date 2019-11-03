@@ -75,7 +75,7 @@ fn main() -> Result<(), clap::Error> {
         ("server", _) => {
             log_to_file();
             server_handler::server()
-        },
+        }
 
         ("exec", Some(matches)) => match matches.value_of("loabin") {
             None => {
