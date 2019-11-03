@@ -7,14 +7,18 @@ impl GotoTypeDefinitionRequestHandler {
         context: &mut ServerContext,
         type_: semantics::Type,
     ) -> Option<request::GotoTypeDefinitionResponse> {
+        let navigator = &context.server.analysis.navigator;
         match type_ {
             semantics::Type::Self_(t) => Self::handle_for(context, *t),
             semantics::Type::Unknown => None,
             semantics::Type::Class(_, id, _) | semantics::Type::Parameter(_, id, _) => {
-                let navigator = &context.server.analysis.navigator;
                 let declaration = navigator.find_node(id)?;
                 let (_, s) = navigator.symbol_of(&declaration)?;
                 Some(convert::from_loa::span_to_location(s.span).into())
+            }
+            semantics::Type::Behaviour(b) => {
+                let method = navigator.find_node(b.method_id)?;
+                Some(convert::from_loa::span_to_location(method.span).into())
             }
         }
     }

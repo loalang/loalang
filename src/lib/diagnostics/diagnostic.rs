@@ -14,6 +14,18 @@ pub enum Diagnostic {
         assignability: semantics::TypeAssignability,
     },
     DuplicatedDeclaration(Span, String, usize),
+    InvalidInherit {
+        span: Span,
+        super_type: semantics::Type,
+        sub_type: semantics::Type,
+        violations: Vec<InheritanceViolation>,
+    },
+}
+
+#[derive(Clone)]
+pub enum InheritanceViolation {
+    BehaviourNotImplemented(semantics::Behaviour),
+    OverrideNotSound(semantics::Behaviour, semantics::TypeAssignability),
 }
 
 impl Diagnostic {
@@ -27,8 +39,9 @@ impl Diagnostic {
             UndefinedBehaviour(ref s, _, _) => s,
             UndefinedImport(ref s, _) => s,
             UnexportedImport(ref s, _) => s,
-            UnassignableType { ref span, .. } => span,
+            UnassignableType { span: ref s, .. } => s,
             DuplicatedDeclaration(ref s, _, _) => s,
+            InvalidInherit { span: ref s, .. } => s,
         }
     }
 
@@ -44,6 +57,7 @@ impl Diagnostic {
             UnexportedImport(_, _) => DiagnosticLevel::Error,
             UnassignableType { .. } => DiagnosticLevel::Error,
             DuplicatedDeclaration(_, _, _) => DiagnosticLevel::Error,
+            InvalidInherit { .. } => DiagnosticLevel::Error,
         }
     }
 
@@ -59,6 +73,7 @@ impl Diagnostic {
             UnexportedImport(_, _) => 6,
             UnassignableType { .. } => 7,
             DuplicatedDeclaration(_, _, _) => 8,
+            InvalidInherit { .. } => 9,
         }
     }
 
@@ -87,12 +102,47 @@ impl fmt::Debug for Diagnostic {
             SyntaxError(_, s) => write!(f, "{}", s),
             UndefinedTypeReference(_, s) => write!(f, "`{}` is undefined.", s),
             UndefinedReference(_, s) => write!(f, "`{}` is undefined.", s),
-            UndefinedBehaviour(_, t, s) => write!(f, "`{}` is not a behaviour of `{}`.", s, t),
+            UndefinedBehaviour(_, t, s) => write!(f, "`{}` doesn't respond to `{}`.", t, s),
             UndefinedImport(_, s) => write!(f, "`{}` is undefined.", s),
             UnexportedImport(_, s) => write!(f, "`{}` is not exported.", s),
             UnassignableType { assignability, .. } => write!(f, "{}", assignability),
             DuplicatedDeclaration(_, s, n) => {
                 write!(f, "`{}` is defined {} times in this scope.", s, n)
+            }
+            InvalidInherit {
+                sub_type,
+                super_type,
+                violations,
+                ..
+            } => {
+                write!(f, "`{}` doesn't act as `{}` because:", sub_type, super_type)?;
+                for violation in violations.iter() {
+                    match violation {
+                        InheritanceViolation::BehaviourNotImplemented(ref b) => {
+                            write!(f, "\n  - it doesn't respond to `{}`", b)?
+                        }
+                        InheritanceViolation::OverrideNotSound(ref b, ref t) => {
+                            write!(
+                                f,
+                                "\n• it doesn't respond to `{}` like `{}` would",
+                                b.selector(),
+                                super_type,
+                            )?;
+                            if let semantics::TypeAssignability::Invalid {
+                                assignee,
+                                assigned,
+                                because,
+                                invariant,
+                            } = t
+                            {
+                                semantics::format_invalid_type_assignability(
+                                    f, 2, assignee, assigned, &because, *invariant,
+                                )?;
+                            }
+                        }
+                    }
+                }
+                Ok(())
             }
         }
     }

@@ -74,6 +74,13 @@ impl Node {
         }
     }
 
+    pub fn is_is_directive(&self) -> bool {
+        match self.kind {
+            IsDirective { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn is_qualified_symbol(&self) -> bool {
         match self.kind {
             QualifiedSymbol { .. } => true,

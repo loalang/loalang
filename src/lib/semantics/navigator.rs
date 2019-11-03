@@ -271,6 +271,10 @@ impl Navigator {
         self.all_matching(|n| n.is_message())
     }
 
+    pub fn all_is_directives(&self) -> Vec<Node> {
+        self.all_matching(|n| n.is_is_directive())
+    }
+
     pub fn all_imports(&self) -> Vec<Node> {
         self.all_matching(|n| n.is_import_directive())
     }

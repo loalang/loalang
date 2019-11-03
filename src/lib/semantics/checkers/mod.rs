@@ -15,15 +15,19 @@ pub use self::type_assignment::*;
 mod duplicate_declaration;
 pub use self::duplicate_declaration::*;
 
-mod valid_import;
-pub use self::valid_import::*;
+mod invalid_import;
+pub use self::invalid_import::*;
+
+mod valid_inherit;
+pub use self::valid_inherit::*;
 
 const UNDEFINED_TYPE_REFERENCE: UndefinedTypeReference = UndefinedTypeReference;
 const UNDEFINED_REFERENCE: UndefinedReference = UndefinedReference;
 const UNDEFINED_BEHAVIOUR: UndefinedBehaviour = UndefinedBehaviour;
 const TYPE_ASSIGNMENT: TypeAssignment = TypeAssignment;
 const DUPLICATE_DECLARATION: DuplicateDeclaration = DuplicateDeclaration;
-const VALID_IMPORT: ValidImport = ValidImport;
+const INVALID_IMPORT: InvalidImport = InvalidImport;
+const INVALID_INHERIT: InvalidInherit = InvalidInherit;
 
 #[inline]
 pub fn checkers() -> Vec<&'static dyn Checker> {
@@ -33,6 +37,7 @@ pub fn checkers() -> Vec<&'static dyn Checker> {
         &UNDEFINED_BEHAVIOUR,
         &TYPE_ASSIGNMENT,
         &DUPLICATE_DECLARATION,
-        &VALID_IMPORT,
+        &INVALID_IMPORT,
+        &INVALID_INHERIT,
     ]
 }

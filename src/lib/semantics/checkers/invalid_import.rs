@@ -2,9 +2,9 @@ use crate::semantics::*;
 use crate::syntax::*;
 use crate::*;
 
-pub struct ValidImport;
+pub struct InvalidImport;
 
-impl Checker for ValidImport {
+impl Checker for InvalidImport {
     fn check(&self, analysis: &mut Analysis, diagnostics: &mut Vec<Diagnostic>) {
         for import in analysis.navigator.all_imports() {
             if let ImportDirective {

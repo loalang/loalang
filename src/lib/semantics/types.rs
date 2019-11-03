@@ -47,7 +47,7 @@ impl Types {
 
                     for behaviour in behaviours {
                         if behaviour.selector() == selector {
-                            return behaviour.return_type().with_self(receiver_type);
+                            return behaviour.return_type().with_self(&receiver_type);
                         }
                     }
                     Type::Unknown
@@ -181,6 +181,7 @@ impl Types {
                 .get_behaviours_from_class(*class_id, args)
                 .unwrap_or(vec![]),
             Type::Self_(of) => self.get_behaviours(of),
+            Type::Behaviour(box b) => vec![b.clone()],
         }
     }
 
@@ -361,6 +362,10 @@ impl Types {
         }
         None
     }
+
+    pub fn get_type_of_behaviour(&self, behaviour: &Behaviour) -> Type {
+        Type::Behaviour(Box::new(behaviour.clone()))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -369,6 +374,7 @@ pub enum Type {
     Class(String, Id, Vec<Type>),
     Parameter(String, Id, Vec<Type>),
     Self_(Box<Type>),
+    Behaviour(Box<Behaviour>),
 }
 
 impl Type {
@@ -380,17 +386,21 @@ impl Type {
             Unknown => Unknown,
             Class(s, i, _) => Class(s, i, args),
             Parameter(s, i, _) => Parameter(s, i, args),
+            Behaviour(b) => Behaviour(b),
         }
     }
 
-    pub fn with_self(self, self_: Type) -> Type {
+    pub fn with_self(self, self_: &Type) -> Type {
         use Type::*;
 
         match self {
-            Self_(_) => self_,
+            Self_(_) => self_.clone(),
 
             // Non-recursive types
             Unknown | Class(_, _, _) | Parameter(_, _, _) => self,
+
+            // Recursive types
+            Behaviour(box b) => Behaviour(Box::new(b.with_self(self_))),
         }
     }
 
@@ -408,7 +418,8 @@ impl Type {
                     .map(|a| a.with_applied_type_arguments(map))
                     .collect(),
             ),
-            other => other,
+            Type::Behaviour(box b) => Type::Behaviour(Box::new(b.with_applied_type_arguments(map))),
+            t => t,
         }
     }
 
@@ -445,6 +456,7 @@ impl Type {
                     )
                 }
             }
+            Type::Behaviour(box b) => b.to_markdown(navigator),
         }
     }
 }
@@ -469,6 +481,7 @@ impl fmt::Display for Type {
                     )
                 }
             }
+            Type::Behaviour(b) => write!(f, "{} → {}", b.message, b.return_type),
         }
     }
 }
@@ -524,6 +537,23 @@ impl Behaviour {
         }
     }
 
+    pub fn with_self(self, self_: &Type) -> Behaviour {
+        Behaviour {
+            receiver_type: self.receiver_type.with_self(self_),
+            method_id: self.method_id,
+            message: match self.message {
+                BehaviourMessage::Unary(s) => BehaviourMessage::Unary(s),
+                BehaviourMessage::Binary(o, pt) => BehaviourMessage::Binary(o, pt.with_self(self_)),
+                BehaviourMessage::Keyword(kws) => BehaviourMessage::Keyword(
+                    kws.into_iter()
+                        .map(|(s, t)| (s, t.with_self(self_)))
+                        .collect(),
+                ),
+            },
+            return_type: self.return_type.with_self(self_),
+        }
+    }
+
     pub fn return_type(&self) -> Type {
         self.return_type.clone()
     }
@@ -575,22 +605,34 @@ impl Behaviour {
     }
 }
 
-impl fmt::Display for Behaviour {
+impl fmt::Display for BehaviourMessage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} ", self.receiver_type)?;
-        match self.message {
+        match self {
             BehaviourMessage::Unary(ref selector) => {
-                write!(f, "{} ", selector)?;
+                write!(f, "{}", selector)?;
             }
             BehaviourMessage::Binary(ref operator, ref operand_type) => {
-                write!(f, "{} {} ", operator, operand_type)?;
+                write!(f, "{} {}", operator, operand_type)?;
             }
             BehaviourMessage::Keyword(ref kwd) => {
-                for (arg, type_) in kwd.iter() {
-                    write!(f, "{}: {} ", arg, type_)?;
+                for (i, (arg, type_)) in kwd.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "{}: {}", arg, type_)?;
                 }
             }
         }
-        write!(f, "→ {}", self.return_type)
+        Ok(())
+    }
+}
+
+impl fmt::Display for Behaviour {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{} {} → {}",
+            self.receiver_type, self.message, self.return_type
+        )
     }
 }
