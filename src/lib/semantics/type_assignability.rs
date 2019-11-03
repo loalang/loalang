@@ -28,6 +28,14 @@ impl TypeAssignability {
             false
         }
     }
+
+    pub fn expect<F: FnOnce(Vec<TypeAssignability>) -> TypeAssignability>(self, f: F) -> TypeAssignability {
+        if self.is_valid() {
+            self
+        } else {
+            f(vec![self])
+        }
+    }
 }
 
 impl std::ops::Try for TypeAssignability {

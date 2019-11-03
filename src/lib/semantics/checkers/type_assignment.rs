@@ -14,6 +14,20 @@ impl TypeAssignment {
     ) -> TypeAssignability {
         match (&assignee, &assigned) {
             (
+                Type::Class(_, _, _),
+                Type::Self_(box of),
+            ) => {
+                return self.check_assignment(assignee.clone(), of.clone(), analysis, invariant).expect(|because| {
+                    TypeAssignability::Invalid {
+                        assignee,
+                        assigned,
+                        invariant,
+                        because,
+                    }
+                });
+            }
+
+            (
                 Type::Class(_, assignee_class, assignee_args),
                 Type::Class(_, assigned_class, assigned_args),
             ) => {
