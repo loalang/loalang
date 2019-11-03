@@ -3,10 +3,10 @@
 .PHONY: build install test debug docker/base docker/loa docker/vm docker/all docker/push
 
 build:
-	cargo build --release
+	cargo build --release --features build-binary
 
 debug:
-	cargo build
+	cargo build --features build-binary
 
 test:
 	cargo test --lib

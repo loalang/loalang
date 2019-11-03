@@ -25,7 +25,7 @@ impl RenameRequestHandler {
                 &node.node.span.start.uri,
                 &mut edits,
                 TextEdit {
-                    range: convert::from_loa::span_to_range(node.node.span.clone()),
+                    range: convert::from_loa::span_to_range(node.name_span.clone()),
                     new_text: new_name.clone(),
                 },
             );

@@ -16,6 +16,7 @@ required-features = ["build-binary"]
 [[bin]]
 name = "loavm"
 path = "src/bin/loavm.rs"
+required-features = ["build-binary"]
 
 [features]
 build-binary = ["jsonrpc-stdio-server", "lsp-server", "lsp-types", "serde_json", "log-panics", "simple-logging", "rustyline", "colored", "clap"]
