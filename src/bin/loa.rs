@@ -70,7 +70,10 @@ fn main() -> Result<(), clap::Error> {
     }
 
     match cli.subcommand() {
-        ("repl", _) => repl::repl(),
+        ("repl", _) => {
+            log_to_file();
+            repl::repl()
+        }
 
         ("server", _) => {
             log_to_file();

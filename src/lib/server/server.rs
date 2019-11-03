@@ -316,8 +316,13 @@ impl Server {
                 let type_ = self.analysis.types.get_type_of_expression(&before);
 
                 Some(server::Completion::Behaviours(
-                    prefix,
-                    self.analysis.types.get_behaviours(&type_),
+                    prefix.clone(),
+                    self.analysis
+                        .types
+                        .get_behaviours(&type_)
+                        .into_iter()
+                        .filter(|b| b.selector().starts_with(&prefix))
+                        .collect(),
                 ))
             }
 
@@ -389,9 +394,10 @@ impl Server {
         let declarations = self.analysis.declarations_in_scope(from.clone(), kind);
 
         Some(server::Completion::VariablesInScope(
-            prefix,
+            prefix.clone(),
             declarations
                 .into_iter()
+                .filter(|(s, _)| s.starts_with(&prefix))
                 .filter_map(|(name, dec)| {
                     Some(server::Variable {
                         name,

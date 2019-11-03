@@ -19,11 +19,19 @@ impl Types {
     pub fn get_type_of_expression(&self, expression: &Node) -> Type {
         self.types_cache
             .gate(&expression.id, || match expression.kind {
-                ReferenceExpression { .. } | SelfExpression(_) => self.get_type_of_declaration(
+                ReferenceExpression { .. } => self.get_type_of_declaration(
                     &self
                         .navigator
                         .find_declaration(expression, DeclarationKind::Value)?,
                 ),
+
+                SelfExpression(_) => Type::Self_(Box::new(
+                    self.get_type_of_declaration(
+                        &self
+                            .navigator
+                            .find_declaration(expression, DeclarationKind::Value)?,
+                    ),
+                )),
 
                 MessageSendExpression {
                     expression,
@@ -39,7 +47,7 @@ impl Types {
 
                     for behaviour in behaviours {
                         if behaviour.selector() == selector {
-                            return behaviour.return_type();
+                            return behaviour.return_type().with_self(receiver_type);
                         }
                     }
                     Type::Unknown
@@ -172,6 +180,7 @@ impl Types {
             Type::Class(_, class_id, args) => self
                 .get_behaviours_from_class(*class_id, args)
                 .unwrap_or(vec![]),
+            Type::Self_(of) => self.get_behaviours(of),
         }
     }
 
@@ -359,6 +368,7 @@ pub enum Type {
     Unknown,
     Class(String, Id, Vec<Type>),
     Parameter(String, Id, Vec<Type>),
+    Self_(Box<Type>),
 }
 
 impl Type {
@@ -366,9 +376,21 @@ impl Type {
         use Type::*;
 
         match self {
+            Self_(box t) => Self_(Box::new(t.with_args(args))),
             Unknown => Unknown,
             Class(s, i, _) => Class(s, i, args),
             Parameter(s, i, _) => Parameter(s, i, args),
+        }
+    }
+
+    pub fn with_self(self, self_: Type) -> Type {
+        use Type::*;
+
+        match self {
+            Self_(_) => self_,
+
+            // Non-recursive types
+            Unknown | Class(_, _, _) | Parameter(_, _, _) => self,
         }
     }
 
@@ -392,6 +414,7 @@ impl Type {
 
     pub fn to_markdown(&self, navigator: &Navigator) -> String {
         match self {
+            Type::Self_(_) => format!("self"),
             Type::Unknown => format!("?"),
             Type::Class(ref name, id, ref args) | Type::Parameter(ref name, id, ref args) => {
                 let start = if let Some(dec) = navigator
@@ -429,6 +452,7 @@ impl Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Type::Self_(_) => write!(f, "self"),
             Type::Unknown => write!(f, "?"),
             Type::Class(ref name, _, ref args) | Type::Parameter(ref name, _, ref args) => {
                 if args.is_empty() {

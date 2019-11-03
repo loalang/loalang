@@ -2,7 +2,7 @@ use crate::*;
 use colored::{Color, Colorize};
 use loa::generation::Generator;
 use loa::server::Server;
-use loa::syntax::{string_to_characters, tokenize, TokenKind};
+use loa::syntax::{characters_to_string, string_to_characters, tokenize, TokenKind};
 use loa::vm::VM;
 use loa::*;
 use rustyline::completion::{Candidate, Completer};
@@ -55,7 +55,9 @@ impl Completer for EditorHelper {
         server.set(self.uri.clone(), line.into(), SourceKind::REPLLine);
 
         if let Some(location) = server.location(&self.uri, (1, realpos + 1)) {
-            if let Some(completion) = server.completion(location, String::new()) {
+            if let Some(completion) =
+                server.completion(location, characters_to_string(chars_before.into_iter()))
+            {
                 let candidates = match completion {
                     server::Completion::VariablesInScope(prefix, vars) => vars
                         .into_iter()
