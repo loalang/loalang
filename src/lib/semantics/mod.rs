@@ -1,52 +1,46 @@
-#[cfg(test)]
-mod test_utils;
-#[cfg(test)]
-pub use self::test_utils::*;
+mod analysis;
+pub use self::analysis::*;
 
-mod program;
-pub use self::program::*;
+mod usage;
+pub use self::usage::*;
 
-mod class;
-pub use self::class::*;
+mod navigator;
+pub use self::navigator::*;
 
-mod symbol;
-pub use self::symbol::*;
+mod types;
+pub use self::types::*;
 
-mod typ;
-pub use self::typ::*;
+mod type_assignability;
+pub use self::type_assignability::*;
 
-mod method;
-pub use self::method::*;
+mod checker;
+pub use self::checker::*;
 
-mod signature;
-pub use self::signature::*;
+pub mod checkers;
 
-mod expression;
-pub use self::expression::*;
+#[cfg(debug_assertions)]
+use crate::*;
 
-mod message;
-pub use self::message::*;
+#[cfg(debug_assertions)]
+use std::time::{Duration, Instant};
 
-mod type_constructor;
-pub use self::type_constructor::*;
+#[cfg(debug_assertions)]
+const CACHE_CANDIDATE_WARNING_LIMIT: Duration = Duration::from_millis(10);
 
-mod type_parameter;
-pub use self::type_parameter::*;
+#[allow(unused_variables)]
+fn cache_candidate<T, F: FnOnce() -> T>(name: &str, f: F) -> T {
+    #[cfg(debug_assertions)]
+    {
+        let now = Instant::now();
+        let result = f();
+        if now.elapsed() > CACHE_CANDIDATE_WARNING_LIMIT {
+            warn!("Cache candidate {:?} took {:?}.", name, now.elapsed());
+        }
+        result
+    }
 
-mod pattern;
-pub use self::pattern::*;
-
-mod variable;
-pub use self::variable::*;
-
-mod reference;
-pub use self::reference::*;
-
-mod resolver;
-pub use self::resolver::*;
-
-mod lexical_scope;
-pub use self::lexical_scope::*;
-
-mod type_resolver;
-pub use self::type_resolver::*;
+    #[cfg(not(debug_assertions))]
+    {
+        f()
+    }
+}
