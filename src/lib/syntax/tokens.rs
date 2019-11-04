@@ -39,6 +39,7 @@ pub enum TokenKind {
     CloseCurly,
 
     SimpleInteger(String),
+    SimpleFloat(String),
     SimpleSymbol(String),
 
     Underscore,
@@ -91,7 +92,7 @@ impl Token {
 
             LineComment(s) => format!("//{}", s),
 
-            Whitespace(s) | SimpleInteger(s) | SimpleSymbol(s) => s.clone(),
+            Whitespace(s) | SimpleFloat(s) | SimpleInteger(s) | SimpleSymbol(s) => s.clone(),
         }
     }
 }

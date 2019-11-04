@@ -21,6 +21,8 @@ extern crate num_bigint;
 
 extern crate bincode;
 
+extern crate peekmore;
+
 mod source;
 
 pub use self::source::*;

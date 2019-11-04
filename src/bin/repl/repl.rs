@@ -130,7 +130,9 @@ pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
                 TokenKind::EqualSign => lexeme,
                 TokenKind::OpenAngle => lexeme,
                 TokenKind::CloseAngle => lexeme,
-                TokenKind::SimpleInteger(_) => lexeme.red().to_string(),
+                TokenKind::SimpleInteger(_) | TokenKind::SimpleFloat(_) => {
+                    lexeme.magenta().to_string()
+                }
                 TokenKind::SimpleSymbol(_) => lexeme,
             }
         })

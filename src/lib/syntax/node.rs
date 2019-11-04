@@ -118,7 +118,11 @@ impl Node {
 
     pub fn is_expression(&self) -> bool {
         match self.kind {
-            ReferenceExpression { .. } | MessageSendExpression { .. } | SelfExpression(_) => true,
+            ReferenceExpression { .. }
+            | MessageSendExpression { .. }
+            | SelfExpression(_)
+            | IntegerExpression(_)
+            | FloatExpression(_) => true,
             _ => false,
         }
     }
@@ -485,7 +489,9 @@ pub enum NodeKind {
     /// Expression ::=
     ///   ReferenceExpression |
     ///   MessageSendExpression |
-    ///   SelfExpression
+    ///   SelfExpression |
+    ///   IntegerExpression |
+    ///   FloatExpression
     /// ```
 
     /// ```bnf
@@ -499,6 +505,18 @@ pub enum NodeKind {
     ///   SELF_KEYWORD
     /// ```
     SelfExpression(Token),
+
+    /// ```bnf
+    /// IntegerExpression ::=
+    ///   SIMPLE_INTEGER
+    /// ```
+    IntegerExpression(Token),
+
+    /// ```bnf
+    /// FloatExpression ::=
+    ///   SIMPLE_FLOAT
+    /// ```
+    FloatExpression(Token),
 
     /// ```bnf
     /// MessageSendExpression ::=
@@ -621,6 +639,10 @@ impl NodeKind {
                 ref close_angle,
                 ..
             } => vec![open_angle.as_ref(), close_angle.as_ref()],
+
+            IntegerExpression(ref token) => vec![Some(token)],
+
+            FloatExpression(ref token) => vec![Some(token)],
 
             _ => vec![],
         };
@@ -768,6 +790,8 @@ impl NodeKind {
                 children.push(expression);
                 children.push(message);
             }
+            IntegerExpression(_) => {}
+            FloatExpression(_) => {}
             UnaryMessage { symbol } => {
                 children.push(symbol);
             }

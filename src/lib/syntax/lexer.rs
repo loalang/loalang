@@ -1,9 +1,10 @@
 use crate::syntax::*;
 use crate::*;
-use core::iter::{Enumerate, Peekable};
+use core::iter::Enumerate;
+use peekmore::{PeekMore, PeekMoreIterator};
 use std::str::EncodeUtf16;
 
-type CharStream<'a> = Peekable<Enumerate<EncodeUtf16<'a>>>;
+type CharStream<'a> = PeekMoreIterator<Enumerate<EncodeUtf16<'a>>>;
 
 pub fn is_valid_symbol(string: &String) -> bool {
     let source = Source::new(SourceKind::Module, URI::Exact("tmp".into()), string.clone());
@@ -57,7 +58,7 @@ pub fn is_valid_keyword_selector(string: &String, length: usize) -> bool {
 }
 
 pub fn tokenize(source: Arc<Source>) -> Vec<Token> {
-    let mut chars = source.code.encode_utf16().enumerate().peekable();
+    let mut chars = source.code.encode_utf16().enumerate().peekmore();
     let mut end_offset = 0;
     let mut tokens = vec![];
 
@@ -141,9 +142,10 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
             kind = TokenKind::LineComment(characters_to_string(chars.into_iter()));
         }
 
-        // SimpleInteger
+        // SimpleInteger & SimpleFloat
         (n, _) if (n as u8 as char).is_numeric() => {
             let mut chars = vec![ch];
+            let mut is_float = false;
             loop {
                 match stream.peek() {
                     Some((_, s)) if (*s as u8 as char).is_numeric() || *s == UNDERSCORE => {
@@ -151,10 +153,30 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
                         end_offset = o;
                         chars.push(c);
                     }
+                    Some((_, PERIOD)) if !is_float => {
+                        stream.move_next();
+                        is_float = match stream.peek() {
+                            Some((_, ns)) if (*ns as u8 as char).is_numeric() => true,
+                            _ => false,
+                        };
+                        stream.reset_view();
+                        if !is_float {
+                            break;
+                        } else {
+                            let (o, c) = stream.next().unwrap();
+                            end_offset = o;
+                            chars.push(c);
+                        }
+                    }
                     _ => break,
                 }
             }
-            kind = TokenKind::SimpleInteger(characters_to_string(chars.into_iter()));
+            info!("is_float {}", is_float);
+            if is_float {
+                kind = TokenKind::SimpleFloat(characters_to_string(chars.into_iter()));
+            } else {
+                kind = TokenKind::SimpleInteger(characters_to_string(chars.into_iter()));
+            }
         }
 
         // SimpleSymbol
