@@ -134,6 +134,8 @@ pub fn check_assignment(
     invariant: bool,
 ) -> TypeAssignability {
     match (&assignee, &assigned) {
+        (Type::Unknown, _) | (_, Type::Unknown) => TypeAssignability::Valid,
+
         (Type::Class(_, _, _), Type::Self_(box of)) => {
             return check_assignment(assignee.clone(), of.clone(), analysis, invariant).expect(
                 |because| TypeAssignability::Invalid {
@@ -253,8 +255,6 @@ pub fn check_assignment(
             }
             TypeAssignability::Valid
         }
-
-        (Type::Unknown, _) | (_, Type::Unknown) => TypeAssignability::Valid,
 
         // TODO: Implement constraints on type parameters
         // which would be checked here

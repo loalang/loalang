@@ -139,6 +139,15 @@ impl Types {
                     )
                     .with_args(args)
                 }
+
+                SelfTypeExpression(_) => Type::Self_(Box::new(
+                    self.get_type_of_declaration(
+                        &self
+                            .navigator
+                            .find_declaration(type_expression, DeclarationKind::Type)?,
+                    ),
+                )),
+
                 _ => Type::Unknown,
             })
     }
