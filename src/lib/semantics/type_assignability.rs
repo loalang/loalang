@@ -306,18 +306,17 @@ pub fn check_assignment(
                 ) => {
                     for ((_, assignee_arg), (_, assigned_arg)) in
                         assignee_kws.iter().zip(assigned_kws.iter())
-                        {
-                            check_message_argument(
-                                assignee_arg.clone(),
-                                assigned_arg.clone(),
-                                analysis,
-                                &mut issues,
-                            );
-                        }
+                    {
+                        check_message_argument(
+                            assignee_arg.clone(),
+                            assigned_arg.clone(),
+                            analysis,
+                            &mut issues,
+                        );
+                    }
                 }
                 _ => {}
             }
-
 
             if issues.len() == 0 {
                 TypeAssignability::Valid

@@ -109,8 +109,22 @@ impl PrettyReporter {
                             "{:gutter$}{pipe}{:space$}{}\n",
                             "",
                             "",
-                            format!("↑ {:?}", diagnostic)
-                                .color(Self::color_of_diagnostic(diagnostic)),
+                            format!(
+                                "↑ {}",
+                                format!("{:?}", diagnostic).replace(
+                                    "\n",
+                                    format!(
+                                        "\n{:gutter$}{pipe}{:space$}",
+                                        "",
+                                        "",
+                                        pipe = FOLDED_GUTTER_SEPARATOR.bright_black(),
+                                        gutter = gutter_width,
+                                        space = d.start.character
+                                    )
+                                    .as_ref()
+                                )
+                            )
+                            .color(Self::color_of_diagnostic(diagnostic)),
                             pipe = FOLDED_GUTTER_SEPARATOR.bright_black(),
                             gutter = gutter_width,
                             space = d.start.character

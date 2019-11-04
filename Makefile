@@ -15,7 +15,11 @@ install:
 	cp target/release/loa /usr/local/bin/loa
 	cp target/release/loavm /usr/local/bin/loavm
 	mkdir -p /usr/local/lib/loa/std
+	rm -rf /usr/local/lib/loa/std
 	cp -r std /usr/local/lib/loa/std
+	mkdir -p /usr/local/var/log
+	touch /usr/local/var/log/loa.log
+	chmod 777 /usr/local/var/log/loa.log
 
 clean:
 	rm /usr/local/bin/loa
