@@ -1,3 +1,4 @@
+use crate::syntax::TokenKind::{SimpleFloat, SimpleInteger};
 use crate::syntax::*;
 use crate::*;
 use core::iter::Enumerate;
@@ -98,10 +99,11 @@ const CLOSE_ANGLE: u16 = '>' as u16;
 const OPEN_CURLY: u16 = '{' as u16;
 const CLOSE_CURLY: u16 = '}' as u16;
 const EQUAL_SIGN: u16 = '=' as u16;
+const HASH: u16 = '#' as u16;
 
 fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
     let (offset, ch) = stream.next()?;
-    let kind;
+    let mut kind;
     let mut end_offset = offset;
 
     let peek = stream.peek();
@@ -144,38 +146,9 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
 
         // SimpleInteger & SimpleFloat
         (n, _) if (n as u8 as char).is_numeric() => {
-            let mut chars = vec![ch];
-            let mut is_float = false;
-            loop {
-                match stream.peek() {
-                    Some((_, s)) if (*s as u8 as char).is_numeric() || *s == UNDERSCORE => {
-                        let (o, c) = stream.next().unwrap();
-                        end_offset = o;
-                        chars.push(c);
-                    }
-                    Some((_, PERIOD)) if !is_float => {
-                        stream.move_next();
-                        is_float = match stream.peek() {
-                            Some((_, ns)) if (*ns as u8 as char).is_numeric() => true,
-                            _ => false,
-                        };
-                        stream.reset_view();
-                        if !is_float {
-                            break;
-                        } else {
-                            let (o, c) = stream.next().unwrap();
-                            end_offset = o;
-                            chars.push(c);
-                        }
-                    }
-                    _ => break,
-                }
-            }
-            if is_float {
-                kind = TokenKind::SimpleFloat(characters_to_string(chars.into_iter()));
-            } else {
-                kind = TokenKind::SimpleInteger(characters_to_string(chars.into_iter()));
-            }
+            kind = TokenKind::Unknown(n);
+            consume_number(n, &mut end_offset, stream, &mut kind);
+            stream.reset_view();
         }
 
         // SimpleSymbol
@@ -272,6 +245,99 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
         kind,
         span: Span::at_range(source, offset..end_offset + 1),
     })
+}
+
+const INTEGER_CHARS: [u16; 36] = [
+    '0' as u16, '1' as u16, '2' as u16, '3' as u16, '4' as u16, '5' as u16, '6' as u16, '7' as u16,
+    '8' as u16, '9' as u16, 'A' as u16, 'B' as u16, 'C' as u16, 'D' as u16, 'E' as u16, 'F' as u16,
+    'G' as u16, 'H' as u16, 'I' as u16, 'J' as u16, 'K' as u16, 'L' as u16, 'M' as u16, 'N' as u16,
+    'O' as u16, 'P' as u16, 'Q' as u16, 'R' as u16, 'S' as u16, 'T' as u16, 'U' as u16, 'V' as u16,
+    'W' as u16, 'X' as u16, 'Y' as u16, 'Z' as u16,
+];
+
+fn consume_integer(
+    first_char: u16,
+    end_offset: &mut usize,
+    stream: &mut CharStream,
+    base: usize,
+) -> String {
+    let candidates = &INTEGER_CHARS[..base];
+    let mut chars = vec![first_char];
+
+    loop {
+        match stream.peek() {
+            None => break,
+            Some((index, character)) => {
+                if candidates.contains(&uppercase(*character)) {
+                    let (index, character) = stream.next().unwrap();
+                    chars.push(character);
+                    *end_offset = index;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    characters_to_string(chars.into_iter())
+}
+
+fn uppercase(n: u16) -> u16 {
+    (n as u8 as char).to_ascii_uppercase() as u16
+}
+
+fn consume_number(
+    first_char: u16,
+    end_offset: &mut usize,
+    stream: &mut CharStream,
+    kind: &mut TokenKind,
+) {
+    let first_int = consume_integer(first_char, end_offset, stream, 10);
+    let mut base = 10;
+    let mut hash = None;
+    let mut after_hash = String::new();
+
+    if let Some((_, HASH)) = stream.peek() {
+        base = u64::from_str_radix(first_int.as_str(), 10).unwrap() as usize;
+
+        stream.move_next();
+        if let Some((_, n)) = stream.peek() {
+            if INTEGER_CHARS[..base].contains(&uppercase(*n)) {
+                let (_, h) = stream.next().unwrap();
+                hash = Some(h);
+                let (i, n) = stream.next().unwrap();
+                *end_offset = i;
+                after_hash = consume_integer(n, end_offset, stream, base);
+            }
+        }
+    }
+    stream.reset_view();
+
+    if let Some((_, PERIOD)) = stream.peek() {
+        stream.move_next();
+        if let Some((_, n)) = stream.peek() {
+            if INTEGER_CHARS[..base].contains(&uppercase(*n)) {
+                let (_, p) = stream.next().unwrap();
+                let (i, n) = stream.next().unwrap();
+                *end_offset = i;
+                let decimal = consume_integer(n, end_offset, stream, base);
+
+                if hash.is_some() {
+                    *kind = SimpleFloat(format!("{}#{}.{}", first_int, after_hash, decimal))
+                } else {
+                    *kind = SimpleFloat(format!("{}.{}", first_int, decimal))
+                }
+                return;
+            }
+        }
+    }
+    stream.reset_view();
+
+    if hash.is_some() {
+        *kind = SimpleInteger(format!("{}#{}", first_int, after_hash))
+    } else {
+        *kind = SimpleInteger(first_int)
+    }
 }
 
 #[cfg(test)]

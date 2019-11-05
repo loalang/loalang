@@ -18,6 +18,9 @@ pub use log::*;
 extern crate glob;
 
 extern crate num_bigint;
+extern crate num_rational;
+pub use num_bigint::{BigInt, BigUint};
+pub use num_rational::BigRational;
 
 extern crate bincode;
 

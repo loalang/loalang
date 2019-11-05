@@ -111,6 +111,8 @@ impl<'a> Generator<'a> {
                 result
             }
 
+            IntegerExpression(_) | FloatExpression(_) => self.generate_literal(expression),
+
             SelfExpression(_) => Ok(Instruction::LoadLocal(self.local_count - 1).into()),
 
             MessageSendExpression {
@@ -136,6 +138,35 @@ impl<'a> Generator<'a> {
 
             _ => Err(invalid_node(expression, "Expected expression.")),
         }
+    }
+
+    pub fn generate_literal(&mut self, literal: &Node) -> GenerationResult {
+        let type_ = self.analysis.types.get_type_of_expression(literal);
+
+        if let Type::Class(_, class, _) = type_ {
+            let class = self.analysis.navigator.find_node(class)?;
+            let (qn, _, _) = self.analysis.navigator.qualified_name_of(&class)?;
+
+            /*
+            match qn.as_str() {
+                "Loa/Int8" => self.generate_int(literal, 8),
+                "Loa/Int16" => self.generate_int(literal, 16),
+                "Loa/Int32" => self.generate_int(literal, 32),
+                "Loa/Int64" => self.generate_int(literal, 64),
+                "Loa/Int128" => self.generate_int(literal, 128),
+                "Loa/UInt8" => self.generate_uint(literal, 8),
+                "Loa/UInt16" => self.generate_uint(literal, 16),
+                "Loa/UInt32" => self.generate_uint(literal, 32),
+                "Loa/UInt64" => self.generate_uint(literal, 64),
+                "Loa/UInt128" => self.generate_uint(literal, 128),
+                _ => (),
+            }
+            */
+        }
+        Err(invalid_node(
+            literal,
+            format!("Invalid type for a literal: {}", type_).as_ref(),
+        ))
     }
 
     pub fn generate_message(&mut self, message: &Node) -> GenerationResult {
