@@ -231,7 +231,7 @@ impl Navigator {
             self.parent(declaration).map(|n| (n.parent_id, n.kind))
         {
             if let Some(module) = self.find_node_in(&declaration.span.start.uri, module_id) {
-                if let Some(namespace) = self.namespace_of_module(&module) {
+                if let Some((namespace, _)) = self.namespace_of_module(&module) {
                     if let Some((name, _)) = self.symbol_of(declaration) {
                         let qualified_exported_name = format!("{}/{}", namespace, name);
 
@@ -287,6 +287,24 @@ impl Navigator {
         }
 
         None
+    }
+
+    pub fn namespace_of_uri(&self, uri: &URI) -> Option<(String, Node)> {
+        let module = self.modules.get(uri)?.root()?;
+        self.namespace_of_module(module)
+    }
+
+    pub fn qualified_name_of(&self, declaration: &Node) -> Option<(String, Option<Node>, Node)> {
+        let (name, name_node) = self.symbol_of(&declaration)?;
+
+        match self.namespace_of_uri(&declaration.span.start.uri) {
+            None => Some((name, None, name_node)),
+            Some((namespace, namespace_node)) => Some((
+                format!("{}/{}", namespace, name),
+                Some(namespace_node),
+                name_node,
+            )),
+        }
     }
 
     pub fn usage_target_from_symbol(&self, symbol: &Node) -> Option<Node> {
@@ -503,7 +521,7 @@ impl Navigator {
         kind: DeclarationKind,
     ) -> Vec<syntax::Node> {
         let mut references = vec![];
-        if let Some(namespace) = self.namespace_of_module(&module) {
+        if let Some((namespace, _)) = self.namespace_of_module(&module) {
             let name = format!("{}/{}", namespace, exported_name);
             for module in self.modules() {
                 for import_directive in self.import_directives_of_module(&module) {
@@ -559,14 +577,16 @@ impl Navigator {
     }
 
     pub fn modules_in_namespace(&self, namespace: String) -> Vec<Node> {
-        let namespace = Some(namespace);
         self.modules()
             .into_iter()
-            .filter(|module| self.namespace_of_module(module) == namespace)
+            .filter(|module| match self.namespace_of_module(module) {
+                Some((n, _)) if n == namespace => true,
+                _ => false,
+            })
             .collect()
     }
 
-    pub fn namespace_of_module(&self, module: &Node) -> Option<String> {
+    pub fn namespace_of_module(&self, module: &Node) -> Option<(String, Node)> {
         if let Module {
             namespace_directive,
             ..
@@ -576,9 +596,8 @@ impl Navigator {
                 qualified_symbol, ..
             } = self.find_child(module, namespace_directive)?.kind
             {
-                return Some(
-                    self.qualified_symbol_to_string(&self.find_child(module, qualified_symbol)?),
-                );
+                let qs = self.find_child(module, qualified_symbol)?;
+                return Some((self.qualified_symbol_to_string(&qs), qs));
             }
         }
         None

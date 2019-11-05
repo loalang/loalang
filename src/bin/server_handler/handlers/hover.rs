@@ -7,6 +7,23 @@ impl RequestHandler for HoverRequestHandler {
     fn handle(context: &mut ServerContext, params: TextDocumentPositionParams) -> Option<Hover> {
         let (uri, location) = convert::from_lsp::position_params(params);
         let location = context.server.location(&uri, location)?;
+
+        if let Some(expression) = context.server.literal_expression_at(location.clone()) {
+            let type_ = context
+                .server
+                .analysis
+                .types
+                .get_type_of_expression(&expression);
+
+            return Some(Hover {
+                range: Some(convert::from_loa::span_to_range(expression.span)),
+                contents: HoverContents::Markup(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: type_.to_markdown(&context.server.analysis.navigator),
+                }),
+            });
+        }
+
         let usage = context.server.usage(location.clone())?;
         let markdown = if usage.declaration.node.is_method() {
             let behaviour = context.server.behaviour_at(location)?;

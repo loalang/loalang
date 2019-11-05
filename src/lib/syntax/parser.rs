@@ -840,6 +840,12 @@ impl Parser {
     }
 
     fn parse_leaf_expression(&mut self, builder: NodeBuilder) -> Id {
+        if sees!(self, SimpleInteger(_)) {
+            return self.parse_integer_expression(builder);
+        }
+        if sees!(self, SimpleFloat(_)) {
+            return self.parse_float_expression(builder);
+        }
         if sees!(self, SelfKeyword) {
             return self.parse_self_expression(builder);
         }
@@ -848,6 +854,24 @@ impl Parser {
         }
         self.syntax_error_end("Expected expression.");
         Id::NULL
+    }
+
+    fn parse_integer_expression(&mut self, builder: NodeBuilder) -> Id {
+        if !sees!(self, SimpleInteger(_)) {
+            self.syntax_error("Expected integer.");
+            return Id::NULL;
+        }
+        let token = self.next();
+        self.finalize(builder, IntegerExpression(token))
+    }
+
+    fn parse_float_expression(&mut self, builder: NodeBuilder) -> Id {
+        if !sees!(self, SimpleFloat(_)) {
+            self.syntax_error("Expected float.");
+            return Id::NULL;
+        }
+        let token = self.next();
+        self.finalize(builder, FloatExpression(token))
     }
 
     fn parse_unary_message_send(&mut self, mut builder: NodeBuilder, receiver: Id) -> Id {

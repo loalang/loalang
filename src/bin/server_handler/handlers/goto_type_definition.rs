@@ -11,6 +11,8 @@ impl GotoTypeDefinitionRequestHandler {
         match type_ {
             semantics::Type::Self_(t) => Self::handle_for(context, *t),
             semantics::Type::Unknown => None,
+            semantics::Type::UnresolvedInteger(_, _) => None,
+            semantics::Type::UnresolvedFloat(_, _) => None,
             semantics::Type::Class(_, id, _) | semantics::Type::Parameter(_, id, _) => {
                 let declaration = navigator.find_node(id)?;
                 let (_, s) = navigator.symbol_of(&declaration)?;

@@ -16,6 +16,28 @@ impl Types {
         }
     }
 
+    pub fn attempt_type_coercion(&self, id: Id, to: &Type) -> Option<Type> {
+        match self.types_cache.get(&id) {
+            None | Some(Type::UnresolvedInteger(_, _)) | Some(Type::UnresolvedFloat(_, _)) => {
+                self.types_cache.set(id, to.clone());
+                None
+            }
+            Some(t) => Some(t.clone()),
+        }
+    }
+
+    pub fn coerced_type(&self, unresolved: &Type) -> Option<Type> {
+        match unresolved {
+            Type::UnresolvedFloat(_, id) | Type::UnresolvedInteger(_, id) => {
+                match self.types_cache.get(id) {
+                    Some(Type::UnresolvedFloat(_, _)) | Some(Type::UnresolvedInteger(_, _)) => None,
+                    coerced => coerced,
+                }
+            }
+            _ => None,
+        }
+    }
+
     pub fn get_type_of_expression(&self, expression: &Node) -> Type {
         self.types_cache
             .gate(&expression.id, || match expression.kind {
@@ -32,6 +54,9 @@ impl Types {
                             .find_declaration(expression, DeclarationKind::Value)?,
                     ),
                 )),
+
+                IntegerExpression(ref t) => Type::UnresolvedInteger(t.lexeme(), expression.id),
+                FloatExpression(ref t) => Type::UnresolvedFloat(t.lexeme(), expression.id),
 
                 MessageSendExpression {
                     expression,
@@ -185,6 +210,9 @@ impl Types {
     pub fn get_behaviours(&self, type_: &Type) -> Vec<Behaviour> {
         match type_ {
             Type::Unknown => vec![],
+            // TODO: Connect stdlib to literals
+            Type::UnresolvedInteger(_, _) => vec![],
+            Type::UnresolvedFloat(_, _) => vec![],
             Type::Parameter(_, _, _) => vec![],
             Type::Class(_, class_id, args) => self
                 .get_behaviours_from_class(*class_id, args)
@@ -384,6 +412,8 @@ pub enum Type {
     Parameter(String, Id, Vec<Type>),
     Self_(Box<Type>),
     Behaviour(Box<Behaviour>),
+    UnresolvedInteger(String, Id),
+    UnresolvedFloat(String, Id),
 }
 
 impl Type {
@@ -396,6 +426,8 @@ impl Type {
             Class(s, i, _) => Class(s, i, args),
             Parameter(s, i, _) => Parameter(s, i, args),
             Behaviour(b) => Behaviour(b),
+            UnresolvedInteger(s, id) => UnresolvedInteger(s, id),
+            UnresolvedFloat(s, id) => UnresolvedFloat(s, id),
         }
     }
 
@@ -406,7 +438,11 @@ impl Type {
             Self_(_) => self_.clone(),
 
             // Non-recursive types
-            Unknown | Class(_, _, _) | Parameter(_, _, _) => self,
+            Unknown
+            | UnresolvedInteger(_, _)
+            | UnresolvedFloat(_, _)
+            | Class(_, _, _)
+            | Parameter(_, _, _) => self,
 
             // Recursive types
             Behaviour(box b) => Behaviour(Box::new(b.with_self(self_))),
@@ -436,6 +472,8 @@ impl Type {
         match self {
             Type::Self_(_) => format!("self"),
             Type::Unknown => format!("?"),
+            Type::UnresolvedFloat(s, _) => s.clone(),
+            Type::UnresolvedInteger(s, _) => s.clone(),
             Type::Class(ref name, id, ref args) | Type::Parameter(ref name, id, ref args) => {
                 let start = if let Some(dec) = navigator
                     .find_node(*id)
@@ -475,6 +513,8 @@ impl fmt::Display for Type {
         match self {
             Type::Self_(_) => write!(f, "self"),
             Type::Unknown => write!(f, "?"),
+            Type::UnresolvedFloat(s, _) => write!(f, "{}", s),
+            Type::UnresolvedInteger(s, _) => write!(f, "{}", s),
             Type::Class(ref name, _, ref args) | Type::Parameter(ref name, _, ref args) => {
                 if args.is_empty() {
                     write!(f, "{}", name)

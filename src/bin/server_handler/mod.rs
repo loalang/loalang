@@ -21,10 +21,10 @@ pub use self::server_handler::*;
 mod cancellable;
 pub use self::cancellable::*;
 
-use loa::*;
-use lsp_server::*;
-use lsp_types::*;
-use serde_json::Value;
+pub use loa::*;
+pub use lsp_server::*;
+pub use lsp_types::*;
+pub use serde_json::Value;
 
 pub fn server() {
     let (conn, _threads) = Connection::stdio();

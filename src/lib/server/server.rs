@@ -293,6 +293,16 @@ impl Server {
         })
     }
 
+    pub fn literal_expression_at(&mut self, location: Location) -> Option<syntax::Node> {
+        let cell = self.module_cells.get(&location.uri)?;
+        let node = cell.tree.node_at(location)?;
+
+        match node.kind {
+            syntax::IntegerExpression(_) | syntax::FloatExpression(_) => Some(node.clone()),
+            _ => None,
+        }
+    }
+
     pub fn completion(&mut self, location: Location, prefix: String) -> Option<server::Completion> {
         let tree = &self.module_cells.get(&location.uri)?.tree;
         let (before, _at, _after) = tree.nodes_around(location.clone());

@@ -11,6 +11,12 @@ pub enum TypeAssignability {
         invariant: bool,
         because: Vec<TypeAssignability>,
     },
+    Uncoercable {
+        from: Type,
+        to: Type,
+        already_coerced_to: Option<Type>,
+        because: Vec<TypeAssignability>,
+    },
 }
 
 impl TypeAssignability {
@@ -23,10 +29,10 @@ impl TypeAssignability {
     }
 
     pub fn is_invalid(&self) -> bool {
-        if let TypeAssignability::Invalid { .. } = self {
-            true
-        } else {
-            false
+        match self {
+            TypeAssignability::Invalid { .. } => true,
+            TypeAssignability::Uncoercable { .. } => true,
+            _ => false,
         }
     }
 
@@ -99,11 +105,42 @@ pub fn format_invalid_type_assignability(
 
 fn format_type_assignability(
     f: &mut fmt::Formatter,
-    indentation: usize,
+    mut indentation: usize,
     assignability: &TypeAssignability,
 ) -> fmt::Result {
     match assignability {
         TypeAssignability::Valid => Ok(()),
+        TypeAssignability::Uncoercable {
+            from,
+            to,
+            already_coerced_to,
+            because,
+        } => {
+            for _ in 0..indentation {
+                write!(f, "  ")?;
+            }
+
+            if indentation > 0 {
+                write!(f, "because ")?;
+            }
+
+            write!(f, "`{}` cannot be coerced into `{}`", from, to)?;
+
+            if let Some(at) = already_coerced_to {
+                write!(f, "\n")?;
+                indentation += 1;
+                for _ in 0..indentation {
+                    write!(f, "  ")?;
+                }
+                write!(f, "because it's already coerced to `{}` and", at)?;
+            }
+
+            for b in because.iter() {
+                format_type_assignability(f, indentation + 1, b)?;
+            }
+
+            Ok(())
+        }
         TypeAssignability::Invalid {
             assignee,
             assigned,
@@ -127,6 +164,61 @@ impl fmt::Display for TypeAssignability {
     }
 }
 
+fn resolve_number(
+    unresolved: &Type,
+    proposed: &Type,
+    analysis: &mut Analysis,
+) -> Option<TypeAssignability> {
+    if let Type::Class(_, class, _) = proposed {
+        let class = analysis.navigator.find_node(*class)?;
+        let (name, _, _) = analysis.navigator.qualified_name_of(&class)?;
+
+        match (unresolved, name.as_ref()) {
+            (Type::UnresolvedFloat(_, id), "Loa/Number")
+            | (Type::UnresolvedFloat(_, id), "Loa/Float")
+            | (Type::UnresolvedFloat(_, id), "Loa/Float16")
+            | (Type::UnresolvedFloat(_, id), "Loa/Float32")
+            | (Type::UnresolvedFloat(_, id), "Loa/Float64")
+            | (Type::UnresolvedFloat(_, id), "Loa/BigFloat")
+            | (Type::UnresolvedInteger(_, id), "Loa/Number")
+            | (Type::UnresolvedInteger(_, id), "Loa/Float")
+            | (Type::UnresolvedInteger(_, id), "Loa/Float16")
+            | (Type::UnresolvedInteger(_, id), "Loa/Float32")
+            | (Type::UnresolvedInteger(_, id), "Loa/Float64")
+            | (Type::UnresolvedInteger(_, id), "Loa/BigFloat")
+            | (Type::UnresolvedInteger(_, id), "Loa/Integer")
+            | (Type::UnresolvedInteger(_, id), "Loa/Natural")
+            | (Type::UnresolvedInteger(_, id), "Loa/Int8")
+            | (Type::UnresolvedInteger(_, id), "Loa/Int16")
+            | (Type::UnresolvedInteger(_, id), "Loa/Int32")
+            | (Type::UnresolvedInteger(_, id), "Loa/Int64")
+            | (Type::UnresolvedInteger(_, id), "Loa/BigInteger")
+            | (Type::UnresolvedInteger(_, id), "Loa/UInt8")
+            | (Type::UnresolvedInteger(_, id), "Loa/UInt16")
+            | (Type::UnresolvedInteger(_, id), "Loa/UInt32")
+            | (Type::UnresolvedInteger(_, id), "Loa/UInt64")
+            | (Type::UnresolvedInteger(_, id), "Loa/BigNatural") => {
+                if let Some(existing) = analysis.types.attempt_type_coercion(*id, proposed) {
+                    Some(
+                        check_assignment(existing.clone(), proposed.clone(), analysis, false)
+                            .expect(|because| TypeAssignability::Uncoercable {
+                                from: unresolved.clone(),
+                                to: proposed.clone(),
+                                already_coerced_to: Some(existing),
+                                because,
+                            }),
+                    )
+                } else {
+                    Some(TypeAssignability::Valid)
+                }
+            }
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
 pub fn check_assignment(
     assignee: Type,
     assigned: Type,
@@ -135,6 +227,25 @@ pub fn check_assignment(
 ) -> TypeAssignability {
     match (&assignee, &assigned) {
         (Type::Unknown, _) | (_, Type::Unknown) => TypeAssignability::Valid,
+
+        // TODO: Implement type coercion
+        (u @ Type::UnresolvedInteger(_, _), p)
+        | (p, u @ Type::UnresolvedInteger(_, _))
+        | (u @ Type::UnresolvedFloat(_, _), p)
+        | (p, u @ Type::UnresolvedFloat(_, _)) => resolve_number(u, p, analysis).unwrap_or(
+            TypeAssignability::Invalid {
+                assignee: assignee.clone(),
+                assigned: assigned.clone(),
+                invariant,
+                because: vec![],
+            }
+            .expect(|because| TypeAssignability::Uncoercable {
+                from: u.clone(),
+                to: p.clone(),
+                already_coerced_to: None,
+                because,
+            }),
+        ),
 
         (Type::Class(_, _, _), Type::Self_(box of)) => {
             return check_assignment(assignee.clone(), of.clone(), analysis, invariant).expect(

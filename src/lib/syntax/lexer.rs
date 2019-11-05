@@ -171,7 +171,6 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
                     _ => break,
                 }
             }
-            info!("is_float {}", is_float);
             if is_float {
                 kind = TokenKind::SimpleFloat(characters_to_string(chars.into_iter()));
             } else {

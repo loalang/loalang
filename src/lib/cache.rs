@@ -50,6 +50,21 @@ where
     T: Clone,
     K: Hash + Eq + Clone,
 {
+    pub fn set(&self, key: K, value: T) {
+        self.mutex
+            .lock()
+            .expect("failed to set value in cache")
+            .insert(key, value);
+    }
+
+    pub fn get(&self, key: &K) -> Option<T> {
+        self.mutex
+            .lock()
+            .expect("failed to set value in cache")
+            .get(key)
+            .cloned()
+    }
+
     pub fn gate_not_loop_safe<F: FnOnce() -> T>(&self, key: &K, f: F) -> T {
         {
             if let Ok(cache) = self.mutex.lock() {
