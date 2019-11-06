@@ -163,7 +163,7 @@ fn build(main: &str) -> Instructions {
     let mut generator = loa::generation::Generator::new(&mut analysis);
     let mut instructions = Instructions::new();
     for source in sources {
-        match generator.generate(&source.uri) {
+        match generator.generate::<()>(&source.uri) {
             Err(err) => {
                 eprintln!("{:?}", err);
                 exit(1);

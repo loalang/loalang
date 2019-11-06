@@ -1,6 +1,7 @@
 use crate::*;
 use colored::{Color, Colorize};
-use loa::generation::Generator;
+use loa::generation::{Generator, REPLDirectives};
+use loa::semantics::Type;
 use loa::server::Server;
 use loa::syntax::{characters_to_string, string_to_characters, tokenize, TokenKind};
 use loa::vm::VM;
@@ -194,7 +195,7 @@ impl REPL {
             let mut generator = server.generator();
             let mut instructions = Instructions::new();
             for source in sources {
-                match generator.generate(&source.uri) {
+                match generator.generate::<()>(&source.uri) {
                     Err(err) => eprintln!("{:?}", err),
                     Ok(i) => {
                         instructions.extend(i);
@@ -245,6 +246,7 @@ impl REPL {
                 server.remove(uri);
                 continue;
             }
+
             let line = std::mem::replace(&mut line, String::new());
             self.editor.add_history_entry(&line);
             n += 1;
@@ -263,7 +265,7 @@ impl REPL {
                 continue;
             }
 
-            match Generator::new(&mut server.analysis).generate(&uri) {
+            match Generator::new(&mut server.analysis).generate::<REPLDirectivesImpl>(&uri) {
                 Err(err) => {
                     server.remove(uri);
                     println!("{:?}", err)
@@ -275,6 +277,20 @@ impl REPL {
                     }
                 }
             }
+        }
+    }
+}
+
+struct REPLDirectivesImpl;
+
+impl REPLDirectives for REPLDirectivesImpl {
+    fn show_type(type_: Type) {
+        println!("{}", type_.to_string().blue());
+    }
+
+    fn show_behaviours(type_: Type, types: &semantics::Types) {
+        for b in types.get_behaviours(&type_) {
+            println!("{}", b.to_string().magenta());
         }
     }
 }

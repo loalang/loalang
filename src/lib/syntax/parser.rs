@@ -98,13 +98,40 @@ impl Parser {
     }
 
     fn parse_repl_statement(&mut self, builder: NodeBuilder) -> Id {
-        if sees!(self, ImportKeyword) {
+        if sees!(self, Colon) {
+            self.parse_repl_directive(builder)
+        } else if sees!(self, ImportKeyword) {
             self.parse_import_directive(builder)
         } else if sees!(self, PartialKeyword | ClassKeyword) {
             self.parse_class(builder)
         } else {
             self.parse_repl_expression(builder)
         }
+    }
+
+    fn parse_repl_directive(&mut self, mut builder: NodeBuilder) -> Id {
+        let colon = self.next();
+        if !sees!(self, SimpleSymbol(_)) {
+            self.syntax_error_end("Expected symbol.");
+            return Id::NULL;
+        }
+        let symbol = self.parse_symbol(self.child(&mut builder));
+        let expression = self.parse_expression(self.child(&mut builder));
+        let mut period = None;
+
+        if sees!(self, Period) {
+            period = Some(self.next());
+        }
+
+        self.finalize(
+            builder,
+            REPLDirective {
+                colon,
+                symbol,
+                expression,
+                period,
+            },
+        )
     }
 
     fn parse_repl_expression(&mut self, mut builder: NodeBuilder) -> Id {

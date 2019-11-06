@@ -88,6 +88,13 @@ impl Node {
         }
     }
 
+    pub fn is_number_literal(&self) -> bool {
+        match self.kind {
+            IntegerExpression(_, _) | FloatExpression(_, _) => true,
+            _ => false,
+        }
+    }
+
     pub fn declaration_kind(&self) -> DeclarationKind {
         match self.kind {
             Class { .. } => DeclarationKind::Any,
@@ -203,15 +210,30 @@ pub enum NodeKind {
 
     /// ```bnf
     /// REPLStatement ::=
+    ///   REPLDirective |
     ///   REPLExpression |
     ///   ImportDirective |
     ///   Declaration
     /// ```
 
     /// ```bnf
+    /// REPLDirective ::=
+    ///   COLON
+    ///   Symbol
+    ///   Expression
+    ///   PERIOD?
+    /// ```
+    REPLDirective {
+        colon: Token,
+        symbol: Id,
+        expression: Id,
+        period: Option<Token>,
+    },
+
+    /// ```bnf
     /// REPLExpression ::=
     ///   Expression
-    ///   PERIOD
+    ///   PERIOD?
     /// ```
     REPLExpression {
         expression: Id,
@@ -557,6 +579,12 @@ pub use NodeKind::*;
 impl NodeKind {
     pub fn leaves(&self) -> Vec<&Token> {
         let option_tokens: Vec<Option<&Token>> = match self {
+            REPLDirective {
+                ref colon,
+                ref period,
+                ..
+            } => vec![Some(colon), period.as_ref()],
+
             REPLExpression { ref period, .. } => vec![period.as_ref()],
 
             Exported(ref token, _) => vec![Some(token)],
@@ -665,6 +693,12 @@ impl NodeKind {
             }
             REPLLine { statements, .. } => {
                 children.extend(statements);
+            }
+            REPLDirective {
+                symbol, expression, ..
+            } => {
+                children.push(symbol);
+                children.push(expression);
             }
             REPLExpression { expression, .. } => {
                 children.push(expression);

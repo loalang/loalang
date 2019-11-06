@@ -6,6 +6,16 @@ use num_traits::ToPrimitive;
 
 pub type GenerationResult = Result<Instructions, GenerationError>;
 
+pub trait REPLDirectives {
+    fn show_type(type_: Type);
+    fn show_behaviours(type_: Type, types: &Types);
+}
+
+impl REPLDirectives for () {
+    fn show_type(_: Type) {}
+    fn show_behaviours(_: Type, _: &Types) {}
+}
+
 pub struct Generator<'a> {
     analysis: &'a mut Analysis,
     local_count: u16,
@@ -19,12 +29,12 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn generate(&mut self, uri: &URI) -> GenerationResult {
+    pub fn generate<D: REPLDirectives>(&mut self, uri: &URI) -> GenerationResult {
         let root = self.analysis.navigator.root_of(uri)?;
 
         match root.kind {
             Module { .. } => self.generate_module(&root),
-            REPLLine { .. } => self.generate_repl_line(&root),
+            REPLLine { .. } => self.generate_repl_line::<D>(&root),
             _ => Err(invalid_node(&root, "Module or REPLLine expected.")),
         }
     }
@@ -59,13 +69,13 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn generate_repl_line(&mut self, repl_line: &Node) -> GenerationResult {
+    pub fn generate_repl_line<D: REPLDirectives>(&mut self, repl_line: &Node) -> GenerationResult {
         match repl_line.kind {
             REPLLine { ref statements } => {
                 let mut instructions = Instructions::new();
                 for statement in statements.iter() {
                     let statement = self.analysis.navigator.find_child(repl_line, *statement)?;
-                    instructions.extend(self.generate_repl_statement(&statement)?);
+                    instructions.extend(self.generate_repl_statement::<D>(&statement)?);
                 }
                 Ok(instructions)
             }
@@ -73,7 +83,10 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn generate_repl_statement(&mut self, repl_statement: &Node) -> GenerationResult {
+    pub fn generate_repl_statement<D: REPLDirectives>(
+        &mut self,
+        repl_statement: &Node,
+    ) -> GenerationResult {
         match repl_statement.kind {
             REPLExpression { expression, .. } => {
                 let expression = self
@@ -81,6 +94,29 @@ impl<'a> Generator<'a> {
                     .navigator
                     .find_child(&repl_statement, expression)?;
                 self.generate_expression(&expression)
+            }
+            REPLDirective {
+                symbol, expression, ..
+            } => {
+                let symbol = self.analysis.navigator.find_child(repl_statement, symbol)?;
+                let expression = self
+                    .analysis
+                    .navigator
+                    .find_child(repl_statement, expression)?;
+                if let syntax::Symbol(ref token) = symbol.kind {
+                    match token.lexeme().as_ref() {
+                        "t" | "type" => {
+                            let type_ = self.analysis.types.get_type_of_expression(&expression);
+                            D::show_type(type_);
+                        }
+                        "b" | "behaviours" => {
+                            let type_ = self.analysis.types.get_type_of_expression(&expression);
+                            D::show_behaviours(type_, &self.analysis.types);
+                        }
+                        _ => return Err(invalid_node(&symbol, "Invalid REPL directive.")),
+                    }
+                }
+                Ok(vec![].into())
             }
             ImportDirective { .. } => Ok(vec![].into()),
             _ => self.generate_declaration(&repl_statement),

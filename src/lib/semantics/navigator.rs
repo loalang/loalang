@@ -809,6 +809,10 @@ impl Navigator {
         self.all_matching(|n| n.is_scope_root())
     }
 
+    pub fn all_number_literals(&self) -> Vec<Node> {
+        self.all_matching(|n| n.is_number_literal())
+    }
+
     pub fn closest_declaration_upwards(&self, from: &Node, kind: DeclarationKind) -> Option<Node> {
         self.closest_upwards(from, |n| n.is_declaration(kind))
     }
