@@ -55,8 +55,8 @@ impl Types {
                     ),
                 )),
 
-                IntegerExpression(ref t) => Type::UnresolvedInteger(t.lexeme(), expression.id),
-                FloatExpression(ref t) => Type::UnresolvedFloat(t.lexeme(), expression.id),
+                IntegerExpression(ref t, _) => Type::UnresolvedInteger(t.lexeme(), expression.id),
+                FloatExpression(ref t, _) => Type::UnresolvedFloat(t.lexeme(), expression.id),
 
                 MessageSendExpression {
                     expression,

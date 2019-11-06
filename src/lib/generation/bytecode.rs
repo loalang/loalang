@@ -11,6 +11,22 @@ pub enum Instruction {
     BeginMethod(String),
     EndMethod(Id),
     Return(u8),
+
+    LoadConstU8(u8),
+    LoadConstU16(u16),
+    LoadConstU32(u32),
+    LoadConstU64(u64),
+    LoadConstU128(u128),
+    LoadConstUBig(BigUint),
+    LoadConstI8(i8),
+    LoadConstI16(i16),
+    LoadConstI32(i32),
+    LoadConstI64(i64),
+    LoadConstI128(i128),
+    LoadConstIBig(BigInt),
+    LoadConstF32(f32),
+    LoadConstF64(f64),
+    LoadConstFBig(BigFraction),
 }
 
 #[derive(Serialize, Deserialize)]

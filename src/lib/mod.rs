@@ -17,10 +17,12 @@ pub use log::*;
 
 extern crate glob;
 
+extern crate fraction;
 extern crate num_bigint;
-extern crate num_rational;
+extern crate num_traits;
+pub use fraction::BigFraction;
 pub use num_bigint::{BigInt, BigUint};
-pub use num_rational::BigRational;
+pub use num_traits::pow::Pow;
 
 extern crate bincode;
 

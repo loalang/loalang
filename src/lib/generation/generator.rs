@@ -2,6 +2,7 @@ use crate::generation::*;
 use crate::semantics::*;
 use crate::syntax::*;
 use crate::*;
+use num_traits::ToPrimitive;
 
 pub type GenerationResult = Result<Instructions, GenerationError>;
 
@@ -111,7 +112,7 @@ impl<'a> Generator<'a> {
                 result
             }
 
-            IntegerExpression(_) | FloatExpression(_) => self.generate_literal(expression),
+            IntegerExpression(_, _) | FloatExpression(_, _) => self.generate_literal(expression),
 
             SelfExpression(_) => Ok(Instruction::LoadLocal(self.local_count - 1).into()),
 
@@ -141,32 +142,79 @@ impl<'a> Generator<'a> {
     }
 
     pub fn generate_literal(&mut self, literal: &Node) -> GenerationResult {
-        let type_ = self.analysis.types.get_type_of_expression(literal);
+        let type_ = self.analysis.types.get_type_of_expression(&literal);
+
+        if let Type::UnresolvedInteger(_, _) = type_ {
+            return self.generate_int(literal, BitSize::SizeBig, true);
+        }
+
+        if let Type::UnresolvedFloat(_, _) = type_ {
+            return self.generate_float(literal, BitSize::SizeBig);
+        }
 
         if let Type::Class(_, class, _) = type_ {
             let class = self.analysis.navigator.find_node(class)?;
             let (qn, _, _) = self.analysis.navigator.qualified_name_of(&class)?;
 
-            /*
             match qn.as_str() {
-                "Loa/Int8" => self.generate_int(literal, 8),
-                "Loa/Int16" => self.generate_int(literal, 16),
-                "Loa/Int32" => self.generate_int(literal, 32),
-                "Loa/Int64" => self.generate_int(literal, 64),
-                "Loa/Int128" => self.generate_int(literal, 128),
-                "Loa/UInt8" => self.generate_uint(literal, 8),
-                "Loa/UInt16" => self.generate_uint(literal, 16),
-                "Loa/UInt32" => self.generate_uint(literal, 32),
-                "Loa/UInt64" => self.generate_uint(literal, 64),
-                "Loa/UInt128" => self.generate_uint(literal, 128),
+                "Loa/Int8" => return self.generate_int(literal, BitSize::Size8, true),
+                "Loa/Int16" => return self.generate_int(literal, BitSize::Size16, true),
+                "Loa/Int32" => return self.generate_int(literal, BitSize::Size32, true),
+                "Loa/Int64" => return self.generate_int(literal, BitSize::Size64, true),
+                "Loa/Int128" => return self.generate_int(literal, BitSize::Size128, true),
+                "Loa/BigInteger" => return self.generate_int(literal, BitSize::SizeBig, true),
+                "Loa/UInt8" => return self.generate_int(literal, BitSize::Size8, false),
+                "Loa/UInt16" => return self.generate_int(literal, BitSize::Size16, false),
+                "Loa/UInt32" => return self.generate_int(literal, BitSize::Size32, false),
+                "Loa/UInt64" => return self.generate_int(literal, BitSize::Size64, false),
+                "Loa/UInt128" => return self.generate_int(literal, BitSize::Size128, false),
+                "Loa/BigNatural" => return self.generate_int(literal, BitSize::SizeBig, false),
+                "Loa/Float32" => return self.generate_float(literal, BitSize::Size32),
+                "Loa/Float64" => return self.generate_float(literal, BitSize::Size64),
+                "Loa/BigFloat" => return self.generate_float(literal, BitSize::SizeBig),
                 _ => (),
             }
-            */
         }
         Err(invalid_node(
             literal,
             format!("Invalid type for a literal: {}", type_).as_ref(),
         ))
+    }
+
+    pub fn generate_int(&self, literal: &Node, size: BitSize, signed: bool) -> GenerationResult {
+        match (&literal.kind, signed) {
+            (IntegerExpression(_, ref int), true) => match size {
+                BitSize::Size8 => Ok(Instruction::LoadConstI8(int.to_i8().unwrap()).into()),
+                BitSize::Size16 => Ok(Instruction::LoadConstI16(int.to_i16().unwrap()).into()),
+                BitSize::Size32 => Ok(Instruction::LoadConstI32(int.to_i32().unwrap()).into()),
+                BitSize::Size64 => Ok(Instruction::LoadConstI64(int.to_i64().unwrap()).into()),
+                BitSize::Size128 => Ok(Instruction::LoadConstI128(int.to_i128().unwrap()).into()),
+                BitSize::SizeBig => Ok(Instruction::LoadConstIBig(int.clone()).into()),
+            },
+            (IntegerExpression(_, ref int), false) => match size {
+                BitSize::Size8 => Ok(Instruction::LoadConstU8(int.to_u8().unwrap()).into()),
+                BitSize::Size16 => Ok(Instruction::LoadConstU16(int.to_u16().unwrap()).into()),
+                BitSize::Size32 => Ok(Instruction::LoadConstU32(int.to_u32().unwrap()).into()),
+                BitSize::Size64 => Ok(Instruction::LoadConstU64(int.to_u64().unwrap()).into()),
+                BitSize::Size128 => Ok(Instruction::LoadConstU128(int.to_u128().unwrap()).into()),
+                BitSize::SizeBig => {
+                    Ok(Instruction::LoadConstUBig(int.to_biguint().unwrap()).into())
+                }
+            },
+            _ => Err(invalid_node(literal, "Expected integer expression.")),
+        }
+    }
+
+    pub fn generate_float(&self, literal: &Node, size: BitSize) -> GenerationResult {
+        match literal.kind {
+            FloatExpression(_, ref fraction) => match size {
+                BitSize::Size32 => Ok(Instruction::LoadConstF32(fraction.to_f32().unwrap()).into()),
+                BitSize::Size64 => Ok(Instruction::LoadConstF64(fraction.to_f64().unwrap()).into()),
+                BitSize::SizeBig => Ok(Instruction::LoadConstFBig(fraction.clone()).into()),
+                _ => Err(invalid_node(literal, "Invalid bit size of float.")),
+            },
+            _ => Err(invalid_node(literal, "Expected float expression.")),
+        }
     }
 
     pub fn generate_message(&mut self, message: &Node) -> GenerationResult {
@@ -327,4 +375,13 @@ impl<'a> Generator<'a> {
 
 fn invalid_node(node: &Node, message: &str) -> GenerationError {
     GenerationError::InvalidNode(node.clone(), message.into())
+}
+
+pub enum BitSize {
+    Size8,
+    Size16,
+    Size32,
+    Size64,
+    Size128,
+    SizeBig,
 }

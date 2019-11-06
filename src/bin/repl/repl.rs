@@ -202,7 +202,7 @@ impl REPL {
                 }
             }
 
-            vm.eval(&instructions);
+            vm.eval(instructions);
         }
 
         let server = Arc::new(Mutex::new(server));
@@ -269,7 +269,7 @@ impl REPL {
                     println!("{:?}", err)
                 }
                 Ok(instructions) => {
-                    let tos = self.vm.eval(&instructions);
+                    let tos = self.vm.eval(instructions);
                     if let Some(o) = tos {
                         println!("{}", o);
                     }

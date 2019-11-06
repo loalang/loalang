@@ -121,8 +121,8 @@ impl Node {
             ReferenceExpression { .. }
             | MessageSendExpression { .. }
             | SelfExpression(_)
-            | IntegerExpression(_)
-            | FloatExpression(_) => true,
+            | IntegerExpression(_, _)
+            | FloatExpression(_, _) => true,
             _ => false,
         }
     }
@@ -510,13 +510,13 @@ pub enum NodeKind {
     /// IntegerExpression ::=
     ///   SIMPLE_INTEGER
     /// ```
-    IntegerExpression(Token),
+    IntegerExpression(Token, BigInt),
 
     /// ```bnf
     /// FloatExpression ::=
     ///   SIMPLE_FLOAT
     /// ```
-    FloatExpression(Token),
+    FloatExpression(Token, BigFraction),
 
     /// ```bnf
     /// MessageSendExpression ::=
@@ -640,9 +640,9 @@ impl NodeKind {
                 ..
             } => vec![open_angle.as_ref(), close_angle.as_ref()],
 
-            IntegerExpression(ref token) => vec![Some(token)],
+            IntegerExpression(ref token, _) => vec![Some(token)],
 
-            FloatExpression(ref token) => vec![Some(token)],
+            FloatExpression(ref token, _) => vec![Some(token)],
 
             _ => vec![],
         };
@@ -790,8 +790,8 @@ impl NodeKind {
                 children.push(expression);
                 children.push(message);
             }
-            IntegerExpression(_) => {}
-            FloatExpression(_) => {}
+            IntegerExpression(_, _) => {}
+            FloatExpression(_, _) => {}
             UnaryMessage { symbol } => {
                 children.push(symbol);
             }

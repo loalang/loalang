@@ -267,7 +267,7 @@ fn consume_integer(
     loop {
         match stream.peek() {
             None => break,
-            Some((index, character)) => {
+            Some((_, character)) => {
                 if candidates.contains(&uppercase(*character)) {
                     let (index, character) = stream.next().unwrap();
                     chars.push(character);
@@ -317,7 +317,7 @@ fn consume_number(
         stream.move_next();
         if let Some((_, n)) = stream.peek() {
             if INTEGER_CHARS[..base].contains(&uppercase(*n)) {
-                let (_, p) = stream.next().unwrap();
+                let (_, _) = stream.next().unwrap();
                 let (i, n) = stream.next().unwrap();
                 *end_offset = i;
                 let decimal = consume_integer(n, end_offset, stream, base);

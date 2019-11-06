@@ -1,6 +1,7 @@
 use self::TokenKind::*;
 use crate::syntax::*;
 use crate::*;
+use num_traits::pow::Pow;
 
 macro_rules! sees {
     ($self:expr, $($pattern:tt)+) => {
@@ -857,21 +858,48 @@ impl Parser {
     }
 
     fn parse_integer_expression(&mut self, builder: NodeBuilder) -> Id {
-        if !sees!(self, SimpleInteger(_)) {
+        if let SimpleInteger(ref lexeme) = &self.tokens[0].kind {
+            let (base, rest) = Self::split_number_base(lexeme);
+
+            let int = BigInt::parse_bytes(rest.as_bytes(), base).unwrap();
+            let token = self.next();
+
+            self.finalize(builder, IntegerExpression(token, int))
+        } else {
             self.syntax_error("Expected integer.");
-            return Id::NULL;
+            Id::NULL
         }
-        let token = self.next();
-        self.finalize(builder, IntegerExpression(token))
+    }
+
+    fn split_number_base(lexeme: &str) -> (u32, &str) {
+        let base_split = lexeme.split("#").collect::<Vec<_>>();
+
+        if base_split.len() == 2 {
+            (
+                u32::from_str_radix(base_split[0], 10).unwrap(),
+                &base_split[1],
+            )
+        } else {
+            (10, base_split[0])
+        }
     }
 
     fn parse_float_expression(&mut self, builder: NodeBuilder) -> Id {
-        if !sees!(self, SimpleFloat(_)) {
+        if let SimpleFloat(ref lexeme) = &self.tokens[0].kind {
+            let (base, rest) = Self::split_number_base(lexeme);
+
+            let split = rest.split(".").collect::<Vec<_>>();
+            let precision = split[1].len();
+            let as_int = format!("{}{}", split[0], split[1]);
+            let int = BigUint::parse_bytes(as_int.as_bytes(), base).unwrap();
+            let fraction = BigFraction::new(int, BigUint::from(base).pow(precision));
+
+            let token = self.next();
+            self.finalize(builder, FloatExpression(token, fraction))
+        } else {
             self.syntax_error("Expected float.");
-            return Id::NULL;
+            Id::NULL
         }
-        let token = self.next();
-        self.finalize(builder, FloatExpression(token))
     }
 
     fn parse_unary_message_send(&mut self, mut builder: NodeBuilder, receiver: Id) -> Id {

@@ -298,7 +298,7 @@ impl Server {
         let node = cell.tree.node_at(location)?;
 
         match node.kind {
-            syntax::IntegerExpression(_) | syntax::FloatExpression(_) => Some(node.clone()),
+            syntax::IntegerExpression(_, _) | syntax::FloatExpression(_, _) => Some(node.clone()),
             _ => None,
         }
     }
