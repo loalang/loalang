@@ -300,14 +300,16 @@ fn consume_number(
     if let Some((_, HASH)) = stream.peek() {
         base = u64::from_str_radix(first_int.as_str(), 10).unwrap() as usize;
 
-        stream.move_next();
-        if let Some((_, n)) = stream.peek() {
-            if INTEGER_CHARS[..base].contains(&uppercase(*n)) {
-                let (_, h) = stream.next().unwrap();
-                hash = Some(h);
-                let (i, n) = stream.next().unwrap();
-                *end_offset = i;
-                after_hash = consume_integer(n, end_offset, stream, base);
+        if base <= 36 {
+            stream.move_next();
+            if let Some((_, n)) = stream.peek() {
+                if INTEGER_CHARS[..base].contains(&uppercase(*n)) {
+                    let (_, h) = stream.next().unwrap();
+                    hash = Some(h);
+                    let (i, n) = stream.next().unwrap();
+                    *end_offset = i;
+                    after_hash = consume_integer(n, end_offset, stream, base);
+                }
             }
         }
     }
