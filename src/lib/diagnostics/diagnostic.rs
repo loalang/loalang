@@ -20,6 +20,8 @@ pub enum Diagnostic {
         sub_type: semantics::Type,
         violations: Vec<InheritanceViolation>,
     },
+    InvalidLiteralType(Span, semantics::Type),
+    OutOfBounds(Span, semantics::Type, String),
 }
 
 #[derive(Clone)]
@@ -42,6 +44,8 @@ impl Diagnostic {
             UnassignableType { span: ref s, .. } => s,
             DuplicatedDeclaration(ref s, _, _) => s,
             InvalidInherit { span: ref s, .. } => s,
+            InvalidLiteralType(ref s, _) => s,
+            OutOfBounds(ref s, _, _) => s,
         }
     }
 
@@ -58,6 +62,8 @@ impl Diagnostic {
             UnassignableType { .. } => DiagnosticLevel::Error,
             DuplicatedDeclaration(_, _, _) => DiagnosticLevel::Error,
             InvalidInherit { .. } => DiagnosticLevel::Error,
+            InvalidLiteralType(_, _) => DiagnosticLevel::Error,
+            OutOfBounds(_, _, _) => DiagnosticLevel::Error,
         }
     }
 
@@ -74,6 +80,8 @@ impl Diagnostic {
             UnassignableType { .. } => 7,
             DuplicatedDeclaration(_, _, _) => 8,
             InvalidInherit { .. } => 9,
+            InvalidLiteralType(_, _) => 10,
+            OutOfBounds(_, _, _) => 11,
         }
     }
 
@@ -144,6 +152,10 @@ impl fmt::Debug for Diagnostic {
                 }
                 Ok(())
             }
+            InvalidLiteralType(_, type_) => {
+                write!(f, "`{}` is not a valid type for this literal.", type_)
+            }
+            OutOfBounds(_, type_, message) => write!(f, "`{}` must not be {}.", type_, message),
         }
     }
 }

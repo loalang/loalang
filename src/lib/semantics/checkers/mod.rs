@@ -21,8 +21,8 @@ pub use self::invalid_import::*;
 mod valid_inherit;
 pub use self::valid_inherit::*;
 
-mod out_of_bounds_literal;
-pub use self::out_of_bounds_literal::*;
+mod out_of_bounds_integer;
+pub use self::out_of_bounds_integer::*;
 
 const UNDEFINED_TYPE_REFERENCE: UndefinedTypeReference = UndefinedTypeReference;
 const UNDEFINED_REFERENCE: UndefinedReference = UndefinedReference;
@@ -31,7 +31,7 @@ const TYPE_ASSIGNMENT: TypeAssignment = TypeAssignment;
 const DUPLICATE_DECLARATION: DuplicateDeclaration = DuplicateDeclaration;
 const INVALID_IMPORT: InvalidImport = InvalidImport;
 const INVALID_INHERIT: InvalidInherit = InvalidInherit;
-const OUT_OF_BOUNDS_LITERAL: OutOfBoundsLiteral = OutOfBoundsLiteral;
+const OUT_OF_BOUNDS_INTEGER: OutOfBoundsInteger = OutOfBoundsInteger;
 
 #[inline]
 pub fn checkers() -> Vec<&'static dyn Checker> {
@@ -43,6 +43,6 @@ pub fn checkers() -> Vec<&'static dyn Checker> {
         &DUPLICATE_DECLARATION,
         &INVALID_IMPORT,
         &INVALID_INHERIT,
-        &OUT_OF_BOUNDS_LITERAL,
+        &OUT_OF_BOUNDS_INTEGER,
     ]
 }
