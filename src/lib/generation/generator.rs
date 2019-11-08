@@ -150,6 +150,8 @@ impl<'a> Generator<'a> {
 
             StringExpression(_, _) => self.generate_string(expression),
 
+            CharacterExpression(_, _) => self.generate_character(expression),
+
             IntegerExpression(_, _) | FloatExpression(_, _) => self.generate_number(expression),
 
             SelfExpression(_) => Ok(Instruction::LoadLocal(self.local_count - 1).into()),
@@ -183,6 +185,15 @@ impl<'a> Generator<'a> {
         match string.kind {
             StringExpression(_, ref s) => Ok(Instruction::LoadConstString(s.clone()).into()),
             _ => Err(invalid_node(string, "Expected string.")),
+        }
+    }
+
+    pub fn generate_character(&mut self, character: &Node) -> GenerationResult {
+        match character.kind {
+            CharacterExpression(_, Some(ref s)) => {
+                Ok(Instruction::LoadConstCharacter(s.clone()).into())
+            }
+            _ => Err(invalid_node(character, "Expected string.")),
         }
     }
 
@@ -311,6 +322,7 @@ impl<'a> Generator<'a> {
         if class.span.start.uri.is_stdlib() {
             match name.as_str() {
                 "Loa/String" => instructions.push(Instruction::MarkClassString(class.id)),
+                "Loa/Character" => instructions.push(Instruction::MarkClassCharacter(class.id)),
 
                 "Loa/UInt8" => instructions.push(Instruction::MarkClassU8(class.id)),
                 "Loa/UInt16" => instructions.push(Instruction::MarkClassU16(class.id)),

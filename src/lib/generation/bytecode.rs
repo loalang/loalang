@@ -13,6 +13,7 @@ pub enum Instruction {
     Return(u8),
 
     LoadConstString(String),
+    LoadConstCharacter(u16),
 
     LoadConstU8(u8),
     LoadConstU16(u16),
@@ -31,6 +32,7 @@ pub enum Instruction {
     LoadConstFBig(BigFraction),
 
     MarkClassString(Id),
+    MarkClassCharacter(Id),
 
     MarkClassU8(Id),
     MarkClassU16(Id),

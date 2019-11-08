@@ -153,6 +153,37 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
             stream.reset_view();
         }
 
+        // SimpleCharacter
+        (APOSTROPHE, f) => {
+            let mut chars = vec![ch];
+
+            let mut in_escape = false;
+            if f == BACKSLASH {
+                let (i, backslash) = stream.next().unwrap();
+                chars.push(backslash);
+                end_offset = i;
+                in_escape = true;
+            }
+
+            match stream.peek() {
+                None => {}
+                Some((_, APOSTROPHE)) if !in_escape => {}
+                Some((_, _)) => {
+                    let (o, c) = stream.next().unwrap();
+                    end_offset = o;
+                    chars.push(c);
+                }
+            }
+
+            if let Some((_, APOSTROPHE)) = stream.peek() {
+                let (o, c) = stream.next().unwrap();
+                end_offset = o;
+                chars.push(c);
+            }
+
+            kind = TokenKind::SimpleCharacter(characters_to_string(chars.into_iter()));
+        }
+
         // SimpleString
         (DOUBLE_QUOTE, _) => {
             let mut chars = vec![ch];

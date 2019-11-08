@@ -41,6 +41,7 @@ pub enum TokenKind {
     SimpleInteger(String),
     SimpleFloat(String),
     SimpleString(String),
+    SimpleCharacter(String),
     SimpleSymbol(String),
 
     Underscore,
@@ -93,8 +94,8 @@ impl Token {
 
             LineComment(s) => format!("//{}", s),
 
-            Whitespace(s) | SimpleString(s) | SimpleFloat(s) | SimpleInteger(s)
-            | SimpleSymbol(s) => s.clone(),
+            Whitespace(s) | SimpleString(s) | SimpleCharacter(s) | SimpleFloat(s)
+            | SimpleInteger(s) | SimpleSymbol(s) => s.clone(),
         }
     }
 }

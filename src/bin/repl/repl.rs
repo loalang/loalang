@@ -112,7 +112,9 @@ pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
                 | TokenKind::LineComment(_)
                 | TokenKind::Underscore => lexeme.bright_black().to_string(),
 
-                TokenKind::SimpleString(_) => lexeme.green().to_string(),
+                TokenKind::SimpleString(_) | TokenKind::SimpleCharacter(_) => {
+                    lexeme.green().to_string()
+                }
 
                 TokenKind::AsKeyword
                 | TokenKind::InKeyword
