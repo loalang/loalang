@@ -13,7 +13,7 @@ impl NotificationHandler for DidChangeTextDocumentNotificationHandler {
                 .into_iter()
                 .filter_map(|change| match change.range {
                     Some(range) => {
-                        let range = convert::from_lsp::range(change.range?);
+                        let range = convert::from_lsp::range(range);
                         let span = context.server.span(&uri, range)?;
                         Some((span, change.text))
                     }

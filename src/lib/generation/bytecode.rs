@@ -12,6 +12,9 @@ pub enum Instruction {
     EndMethod(Id),
     Return(u8),
 
+    StoreGlobal(Id),
+    LoadGlobal(Id),
+
     LoadConstString(String),
     LoadConstCharacter(u16),
 

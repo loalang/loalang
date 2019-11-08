@@ -126,14 +126,14 @@ impl<'a> Generator<'a> {
     }
 
     pub fn generate_expression(&mut self, expression: &Node) -> GenerationResult {
-        match expression.kind {
+        let result = match expression.kind {
             ReferenceExpression { .. } => {
                 let declaration = self
                     .analysis
                     .navigator
                     .find_declaration(expression, DeclarationKind::Value)?;
 
-                let result = match declaration.kind {
+                match declaration.kind {
                     Class { .. } => Ok(Instruction::ReferenceToClass(declaration.id).into()),
                     ParameterPattern { .. } => Ok(Instruction::LoadLocal(
                         (self.analysis.navigator.index_of_parameter(&declaration)?) as u16
@@ -141,19 +141,17 @@ impl<'a> Generator<'a> {
                             + self.local_count,
                     )
                     .into()),
-                    LetBinding { .. } => Ok(Instruction::LoadLocal({
-                        info!("{:?}", self.local_ids);
-                        self.local_ids.iter().position(|id| *id == declaration.id)? as u16
-                    })
-                    .into()),
+                    LetBinding { .. } => {
+                        Ok(
+                            match self.local_ids.iter().position(|id| *id == declaration.id) {
+                                Some(idx) => Instruction::LoadLocal(idx as u16),
+                                None => Instruction::LoadGlobal(declaration.id),
+                            }
+                            .into(),
+                        )
+                    }
                     _ => Err(invalid_node(&declaration, "Expected declaration.")),
-                };
-
-                // This expression will be pushed to the stack,
-                // which increases the number of locals.
-                self.local_count += 1;
-
-                result
+                }
             }
 
             StringExpression(_, _) => self.generate_string(expression),
@@ -203,7 +201,13 @@ impl<'a> Generator<'a> {
             }
 
             _ => Err(invalid_node(expression, "Expected expression.")),
-        }
+        };
+
+        // This expression will be pushed to the stack,
+        // which increases the number of locals.
+        self.local_count += 1;
+
+        result
     }
 
     pub fn generate_string(&mut self, string: &Node) -> GenerationResult {
@@ -333,7 +337,14 @@ impl<'a> Generator<'a> {
     pub fn generate_declaration(&mut self, declaration: &Node) -> GenerationResult {
         match declaration.kind {
             Class { .. } => self.generate_class(declaration),
-            LetBinding { .. } => self.generate_let_binding(declaration),
+            LetBinding { .. } => {
+                let mut instructions = Instructions::new();
+                instructions.extend(self.generate_let_binding(declaration)?);
+                instructions.push(Instruction::StoreGlobal(declaration.id));
+                self.local_ids.remove(0);
+                self.local_count -= 1;
+                Ok(instructions)
+            }
             _ => Err(invalid_node(declaration, "Expected declaration.")),
         }
     }

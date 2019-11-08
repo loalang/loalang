@@ -11,6 +11,7 @@ pub struct VM {
     last_class_id: Id,
     declaring_method: Option<Method>,
     stack: Vec<Arc<Object>>,
+    globals: HashMap<Id, Arc<Object>>,
 
     string_class: Id,
     character_class: Id,
@@ -39,6 +40,7 @@ impl VM {
             stack: Vec::new(),
             declaring_method: None,
             last_class_id: Id::NULL,
+            globals: HashMap::new(),
 
             string_class: Id::NULL,
             character_class: Id::NULL,
@@ -81,6 +83,7 @@ impl VM {
                     | Instruction::LoadLocal(_)
                     | Instruction::ReferenceToClass(_)
                     | Instruction::SendMessage(_)
+                    | Instruction::LoadGlobal(_)
                     | Instruction::LoadConstString(_)
                     | Instruction::LoadConstCharacter(_)
                     | Instruction::LoadConstU8(_)
@@ -124,6 +127,15 @@ impl VM {
                 Instruction::MarkClassF32(id) => self.f32_class = id,
                 Instruction::MarkClassF64(id) => self.f64_class = id,
                 Instruction::MarkClassFBig(id) => self.fbig_class = id,
+
+                Instruction::LoadGlobal(id) => self
+                    .stack
+                    .push(self.globals.get(&id).expect("global not found").clone()),
+
+                Instruction::StoreGlobal(id) => {
+                    self.globals
+                        .insert(id, self.stack.pop().expect("nothing on stack to store"));
+                }
 
                 Instruction::LoadConstString(value) => {
                     self.stack.push(Arc::new(Object {
