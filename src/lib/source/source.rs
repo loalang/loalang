@@ -21,12 +21,8 @@ impl Source {
     }
 
     pub fn file(path: PathBuf) -> io::Result<Arc<Source>> {
-        let path = path.canonicalize()?;
-        Ok(Self::new(
-            SourceKind::Module,
-            URI::File(path.clone()),
-            std::fs::read_to_string(path)?,
-        ))
+        let uri = URI::File(path.clone());
+        Self::file_with_uri(path, uri)
     }
 
     pub fn stdin() -> io::Result<Arc<Source>> {
@@ -36,12 +32,17 @@ impl Source {
     }
 
     pub fn files<S: AsRef<str>>(s: S) -> io::Result<Vec<Arc<Source>>> {
+        Self::files_with_uri(s.as_ref(), |path| URI::File(path))
+    }
+
+    fn files_with_uri<F: Fn(PathBuf) -> URI>(g: &str, f: F) -> io::Result<Vec<Arc<Source>>> {
         let mut sources = vec![];
-        match glob::glob(s.as_ref()) {
+        match glob::glob(g) {
             Ok(paths) => {
                 for path in paths {
                     if let Ok(path) = path {
-                        sources.push(Self::file(path)?);
+                        let uri = f(path.clone());
+                        sources.push(Self::file_with_uri(path, uri)?);
                     }
                 }
             }
@@ -50,8 +51,17 @@ impl Source {
         Ok(sources)
     }
 
+    fn file_with_uri(path: PathBuf, uri: URI) -> io::Result<Arc<Source>> {
+        let path = path.canonicalize()?;
+        Ok(Self::new(
+            SourceKind::Module,
+            uri,
+            std::fs::read_to_string(path)?,
+        ))
+    }
+
     pub fn stdlib() -> io::Result<Vec<Arc<Source>>> {
-        Self::files("/usr/local/lib/loa/std/**/*.loa")
+        Self::files_with_uri("/usr/local/lib/loa/std/**/*.loa", |path| URI::Stdlib(path))
     }
 
     #[cfg(test)]

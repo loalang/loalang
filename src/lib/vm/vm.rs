@@ -10,6 +10,22 @@ pub struct VM {
     last_class_id: Id,
     declaring_method: Option<Method>,
     stack: Vec<Arc<Object>>,
+
+    u8_class: Id,
+    u16_class: Id,
+    u32_class: Id,
+    u64_class: Id,
+    u128_class: Id,
+    ubig_class: Id,
+    i8_class: Id,
+    i16_class: Id,
+    i32_class: Id,
+    i64_class: Id,
+    i128_class: Id,
+    ibig_class: Id,
+    f32_class: Id,
+    f64_class: Id,
+    fbig_class: Id,
 }
 
 impl VM {
@@ -19,6 +35,22 @@ impl VM {
             stack: Vec::new(),
             declaring_method: None,
             last_class_id: Id::NULL,
+
+            u8_class: Id::NULL,
+            u16_class: Id::NULL,
+            u32_class: Id::NULL,
+            u64_class: Id::NULL,
+            u128_class: Id::NULL,
+            ubig_class: Id::NULL,
+            i8_class: Id::NULL,
+            i16_class: Id::NULL,
+            i32_class: Id::NULL,
+            i64_class: Id::NULL,
+            i128_class: Id::NULL,
+            ibig_class: Id::NULL,
+            f32_class: Id::NULL,
+            f64_class: Id::NULL,
+            fbig_class: Id::NULL,
         }
     }
 
@@ -65,93 +97,169 @@ impl VM {
             }
 
             match instruction {
+                Instruction::MarkClassU8(id) => self.u8_class = id,
+                Instruction::MarkClassU16(id) => self.u16_class = id,
+                Instruction::MarkClassU32(id) => self.u32_class = id,
+                Instruction::MarkClassU64(id) => self.u64_class = id,
+                Instruction::MarkClassU128(id) => self.u128_class = id,
+                Instruction::MarkClassUBig(id) => self.ubig_class = id,
+                Instruction::MarkClassI8(id) => self.i8_class = id,
+                Instruction::MarkClassI16(id) => self.i16_class = id,
+                Instruction::MarkClassI32(id) => self.i32_class = id,
+                Instruction::MarkClassI64(id) => self.i64_class = id,
+                Instruction::MarkClassI128(id) => self.i128_class = id,
+                Instruction::MarkClassIBig(id) => self.ibig_class = id,
+                Instruction::MarkClassF32(id) => self.f32_class = id,
+                Instruction::MarkClassF64(id) => self.f64_class = id,
+                Instruction::MarkClassFBig(id) => self.fbig_class = id,
+
                 Instruction::LoadConstU8(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.u8_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::U8(value),
                     }));
                 }
                 Instruction::LoadConstU16(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.u16_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::U16(value),
                     }));
                 }
                 Instruction::LoadConstU32(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.u32_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::U32(value),
                     }));
                 }
                 Instruction::LoadConstU64(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.u64_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::U64(value),
                     }));
                 }
                 Instruction::LoadConstU128(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.u128_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::U128(value),
                     }));
                 }
                 Instruction::LoadConstUBig(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.ubig_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::UBig(value),
                     }));
                 }
                 Instruction::LoadConstI8(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.i8_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::I8(value),
                     }));
                 }
                 Instruction::LoadConstI16(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.i16_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::I16(value),
                     }));
                 }
                 Instruction::LoadConstI32(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.i32_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::I32(value),
                     }));
                 }
                 Instruction::LoadConstI64(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.i64_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::I64(value),
                     }));
                 }
                 Instruction::LoadConstI128(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.i128_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::I128(value),
                     }));
                 }
                 Instruction::LoadConstIBig(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.ibig_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::IBig(value),
                     }));
                 }
                 Instruction::LoadConstF32(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.f32_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::F32(value),
                     }));
                 }
                 Instruction::LoadConstF64(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.f64_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::F64(value),
                     }));
                 }
                 Instruction::LoadConstFBig(value) => {
                     self.stack.push(Arc::new(Object {
-                        class: self.classes.values().next().unwrap().clone(),
+                        class: self
+                            .classes
+                            .get(&self.fbig_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
                         const_value: ConstValue::FBig(value),
                     }));
                 }

@@ -27,6 +27,22 @@ pub enum Instruction {
     LoadConstF32(f32),
     LoadConstF64(f64),
     LoadConstFBig(BigFraction),
+
+    MarkClassU8(Id),
+    MarkClassU16(Id),
+    MarkClassU32(Id),
+    MarkClassU64(Id),
+    MarkClassU128(Id),
+    MarkClassUBig(Id),
+    MarkClassI8(Id),
+    MarkClassI16(Id),
+    MarkClassI32(Id),
+    MarkClassI64(Id),
+    MarkClassI128(Id),
+    MarkClassIBig(Id),
+    MarkClassF32(Id),
+    MarkClassF64(Id),
+    MarkClassFBig(Id),
 }
 
 #[derive(Serialize, Deserialize)]

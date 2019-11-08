@@ -287,21 +287,44 @@ impl<'a> Generator<'a> {
 
     pub fn generate_declaration(&mut self, declaration: &Node) -> GenerationResult {
         match declaration.kind {
-            Class { .. } => {
-                let (name, _) = self.analysis.navigator.symbol_of(declaration)?;
-                let methods = self.analysis.navigator.methods_of_class(declaration);
-                let mut instructions = Instructions::new();
-
-                instructions.push(Instruction::DeclareClass(declaration.id, name));
-
-                for method in methods {
-                    instructions.extend(self.generate_method(&method)?);
-                }
-
-                Ok(instructions)
-            }
+            Class { .. } => self.generate_class(declaration),
             _ => Err(invalid_node(declaration, "Expected declaration.")),
         }
+    }
+
+    pub fn generate_class(&mut self, class: &Node) -> GenerationResult {
+        let (name, _, _) = self.analysis.navigator.qualified_name_of(class)?;
+        let methods = self.analysis.navigator.methods_of_class(class);
+        let mut instructions = Instructions::new();
+
+        instructions.push(Instruction::DeclareClass(class.id, name.clone()));
+
+        if class.span.start.uri.is_stdlib() {
+            match name.as_str() {
+                "Loa/UInt8" => instructions.push(Instruction::MarkClassU8(class.id)),
+                "Loa/UInt16" => instructions.push(Instruction::MarkClassU16(class.id)),
+                "Loa/UInt32" => instructions.push(Instruction::MarkClassU32(class.id)),
+                "Loa/UInt64" => instructions.push(Instruction::MarkClassU64(class.id)),
+                "Loa/UInt128" => instructions.push(Instruction::MarkClassU128(class.id)),
+                "Loa/BigNatural" => instructions.push(Instruction::MarkClassUBig(class.id)),
+                "Loa/Int8" => instructions.push(Instruction::MarkClassI8(class.id)),
+                "Loa/Int16" => instructions.push(Instruction::MarkClassI16(class.id)),
+                "Loa/Int32" => instructions.push(Instruction::MarkClassI32(class.id)),
+                "Loa/Int64" => instructions.push(Instruction::MarkClassI64(class.id)),
+                "Loa/Int128" => instructions.push(Instruction::MarkClassI128(class.id)),
+                "Loa/BigInteger" => instructions.push(Instruction::MarkClassIBig(class.id)),
+                "Loa/Float32" => instructions.push(Instruction::MarkClassF32(class.id)),
+                "Loa/Float64" => instructions.push(Instruction::MarkClassF64(class.id)),
+                "Loa/BigFloat" => instructions.push(Instruction::MarkClassFBig(class.id)),
+                _ => {}
+            }
+        }
+
+        for method in methods {
+            instructions.extend(self.generate_method(&method)?);
+        }
+
+        Ok(instructions)
     }
 
     pub fn generate_method(&mut self, method: &Node) -> GenerationResult {

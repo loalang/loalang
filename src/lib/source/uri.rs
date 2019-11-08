@@ -8,6 +8,7 @@ pub enum URI {
 
     Exact(String),
     File(PathBuf),
+    Stdlib(PathBuf),
     Stdin,
     REPLLine(usize),
 
@@ -23,7 +24,7 @@ impl URI {
                 segments.push(name.as_ref());
                 Some(URI::Exact(segments.join("/")))
             }
-            URI::File(path) => {
+            URI::File(path) | URI::Stdlib(path) => {
                 let mut path = path.clone();
                 path.pop();
                 Some(URI::File(path))
@@ -38,13 +39,22 @@ impl URI {
                 let mut segments: Vec<_> = s.split("/").collect();
                 segments.pop().map(|s| s.into())
             }
-            URI::File(path) => path.file_name().map(|os| os.to_string_lossy().to_string()),
+            URI::File(path) | URI::Stdlib(path) => {
+                path.file_name().map(|os| os.to_string_lossy().to_string())
+            }
             _ => None,
         }
     }
 
     pub fn matches_basename(&self, basename: &str) -> bool {
         self.basename() == Some(basename.into())
+    }
+
+    pub fn is_stdlib(&self) -> bool {
+        match self {
+            URI::Stdlib(_) => true,
+            _ => false,
+        }
     }
 }
 
@@ -61,7 +71,7 @@ impl fmt::Display for URI {
             URI::Test => write!(f, "test:"),
 
             URI::Exact(s) => write!(f, "{}", s),
-            URI::File(path) => write!(f, "file://{}", path.display()),
+            URI::File(path) | URI::Stdlib(path) => write!(f, "file://{}", path.display()),
             URI::Stdin => write!(f, "stdin:"),
             URI::REPLLine(n) => write!(f, "repl:{}", n),
 
