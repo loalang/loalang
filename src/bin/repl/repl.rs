@@ -270,15 +270,36 @@ impl REPL {
                 continue;
             }
 
+            let is_expression = server
+                .analysis
+                .navigator
+                .root_of(&uri)
+                .and_then(|repl_line| {
+                    if let syntax::REPLLine { mut statements } = repl_line.kind {
+                        statements.pop()
+                    } else {
+                        None
+                    }
+                })
+                .and_then(|statement| server.analysis.navigator.find_node_in(&uri, statement))
+                .map(|statement| match statement.kind {
+                    syntax::REPLExpression { .. } => true,
+                    _ => false,
+                })
+                .unwrap_or(false);
+
             match Generator::new(&mut server.analysis).generate::<REPLDirectivesImpl>(&uri) {
                 Err(err) => {
                     server.remove(uri);
                     println!("{:?}", err)
                 }
                 Ok(instructions) => {
-                    let tos = self.vm.eval(instructions);
-                    if let Some(o) = tos {
-                        println!("{}", o);
+                    if is_expression {
+                        if let Some(o) = self.vm.eval_pop(instructions) {
+                            println!("{}", o);
+                        }
+                    } else {
+                        self.vm.eval(instructions);
                     }
                 }
             }

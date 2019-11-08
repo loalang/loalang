@@ -19,6 +19,7 @@ impl REPLDirectives for () {
 pub struct Generator<'a> {
     analysis: &'a mut Analysis,
     local_count: u16,
+    local_ids: Vec<Id>,
 }
 
 impl<'a> Generator<'a> {
@@ -26,6 +27,7 @@ impl<'a> Generator<'a> {
         Generator {
             analysis,
             local_count: 0,
+            local_ids: vec![],
         }
     }
 
@@ -135,8 +137,14 @@ impl<'a> Generator<'a> {
                     Class { .. } => Ok(Instruction::ReferenceToClass(declaration.id).into()),
                     ParameterPattern { .. } => Ok(Instruction::LoadLocal(
                         (self.analysis.navigator.index_of_parameter(&declaration)?) as u16
+                            + 1 // self
                             + self.local_count,
                     )
+                    .into()),
+                    LetBinding { .. } => Ok(Instruction::LoadLocal({
+                        info!("{:?}", self.local_ids);
+                        self.local_ids.iter().position(|id| *id == declaration.id)? as u16
+                    })
                     .into()),
                     _ => Err(invalid_node(&declaration, "Expected declaration.")),
                 };
@@ -154,7 +162,24 @@ impl<'a> Generator<'a> {
 
             IntegerExpression(_, _) | FloatExpression(_, _) => self.generate_number(expression),
 
-            SelfExpression(_) => Ok(Instruction::LoadLocal(self.local_count - 1).into()),
+            SelfExpression(_) => Ok(Instruction::LoadLocal(self.local_count).into()),
+
+            LetExpression {
+                let_binding,
+                expression: eid,
+                ..
+            } => {
+                let let_binding = self
+                    .analysis
+                    .navigator
+                    .find_child(expression, let_binding)?;
+                let expression = self.analysis.navigator.find_child(expression, eid)?;
+
+                let mut instructions = Instructions::new();
+                instructions.extend(self.generate_let_binding(&let_binding)?);
+                instructions.extend(self.generate_expression(&expression)?);
+                Ok(instructions)
+            }
 
             MessageSendExpression {
                 expression: receiver,
@@ -308,6 +333,7 @@ impl<'a> Generator<'a> {
     pub fn generate_declaration(&mut self, declaration: &Node) -> GenerationResult {
         match declaration.kind {
             Class { .. } => self.generate_class(declaration),
+            LetBinding { .. } => self.generate_let_binding(declaration),
             _ => Err(invalid_node(declaration, "Expected declaration.")),
         }
     }
@@ -351,8 +377,8 @@ impl<'a> Generator<'a> {
     }
 
     pub fn generate_method(&mut self, method: &Node) -> GenerationResult {
-        // The first local is `self`
-        self.local_count = 1;
+        self.local_count = 0;
+        self.local_ids.clear();
 
         let mut instructions = Instructions::new();
         match method.kind {
@@ -452,6 +478,17 @@ impl<'a> Generator<'a> {
     ) -> GenerationResult {
         Ok(Instructions::new())
         // Ok(Instruction::LoadArgument(arity).into())
+    }
+
+    pub fn generate_let_binding(&mut self, binding: &Node) -> GenerationResult {
+        match binding.kind {
+            LetBinding { expression, .. } => {
+                let expression = self.analysis.navigator.find_child(binding, expression)?;
+                self.local_ids.insert(0, binding.id);
+                self.generate_expression(&expression)
+            }
+            _ => Err(invalid_node(binding, "Expected let binding.")),
+        }
     }
 }
 

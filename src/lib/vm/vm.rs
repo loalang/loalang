@@ -363,7 +363,11 @@ impl VM {
         }
     }
 
-    pub fn eval(&mut self, instructions: Instructions) -> Option<Arc<Object>> {
+    pub fn eval(&mut self, instructions: Instructions) {
+        self.do_eval(instructions.into());
+    }
+
+    pub fn eval_pop(&mut self, instructions: Instructions) -> Option<Arc<Object>> {
         self.do_eval(instructions.into());
         let result = self.stack.pop();
         if self.stack.len() > 0 {

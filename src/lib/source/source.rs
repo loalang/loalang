@@ -1,3 +1,4 @@
+use crate::syntax::string_to_characters;
 use crate::*;
 use std::fmt;
 use std::io::{self, Read};
@@ -62,6 +63,10 @@ impl Source {
 
     pub fn stdlib() -> io::Result<Vec<Arc<Source>>> {
         Self::files_with_uri("/usr/local/lib/loa/std/**/*.loa", |path| URI::Stdlib(path))
+    }
+
+    pub fn len(&self) -> usize {
+        string_to_characters(self.code.clone()).len()
     }
 
     #[cfg(test)]
