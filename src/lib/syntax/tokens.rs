@@ -22,6 +22,7 @@ pub enum TokenKind {
     ImportKeyword,
     ExportKeyword,
     PartialKeyword,
+    LetKeyword,
 
     Plus,
     Colon,
@@ -74,6 +75,7 @@ impl Token {
             ImportKeyword => "import".into(),
             ExportKeyword => "export".into(),
             PartialKeyword => "partial".into(),
+            LetKeyword => "let".into(),
 
             Plus => "+".into(),
             Colon => ":".into(),

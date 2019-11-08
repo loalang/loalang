@@ -38,18 +38,6 @@ impl Analysis {
 
         while let Some(scope_root) = navigator.closest_scope_root_upwards(&from) {
             let mut traverse = |n: &syntax::Node| {
-                // Don't traverse into lower scopes.
-                if n.id != scope_root.id && n.is_scope_root() && !n.is_repl_line() {
-                    // Classes exist outside their own scope, though.
-                    if n.is_class() {
-                        if let Some((name, _)) = navigator.symbol_of(&n) {
-                            declarations.insert(name, n.clone());
-                        }
-                    }
-
-                    return false;
-                }
-
                 if n.is_declaration(kind) {
                     if let Some((name, _)) = navigator.symbol_of(&n) {
                         declarations.insert(name, n.clone());
@@ -64,7 +52,8 @@ impl Analysis {
                     }
                 }
 
-                true
+                // Don't traverse into lower scopes.
+                n.id == scope_root.id || !n.is_scope_root() || n.is_repl_line()
             };
             if scope_root.is_repl_line() {
                 navigator.traverse_all_repl_lines(&mut traverse);

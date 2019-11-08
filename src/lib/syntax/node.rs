@@ -41,7 +41,16 @@ impl Node {
 
     pub fn is_scope_root(&self) -> bool {
         match self.kind {
-            REPLLine { .. } | Module { .. } | Class { .. } | Method { .. } => true,
+            REPLLine { .. } | Module { .. } | Class { .. } | Method { .. } | LetBinding { .. } => {
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_let_binding(&self) -> bool {
+        match self.kind {
+            LetBinding { .. } => true,
             _ => false,
         }
     }
@@ -99,7 +108,9 @@ impl Node {
         match self.kind {
             Class { .. } => DeclarationKind::Any,
             TypeParameter { .. } | ReferenceTypeExpression { .. } => DeclarationKind::Type,
-            ParameterPattern { .. } | ReferenceExpression { .. } => DeclarationKind::Value,
+            ParameterPattern { .. } | ReferenceExpression { .. } | LetBinding { .. } => {
+                DeclarationKind::Value
+            }
             _ => DeclarationKind::None,
         }
     }
@@ -108,7 +119,7 @@ impl Node {
         match self.kind {
             Class { .. } => true,
             TypeParameter { .. } => declaration_kind.is_type(),
-            ParameterPattern { .. } => declaration_kind.is_value(),
+            ParameterPattern { .. } | LetBinding { .. } => declaration_kind.is_value(),
             _ => false,
         }
     }
@@ -213,6 +224,7 @@ pub enum NodeKind {
     /// ```bnf
     /// REPLStatement ::=
     ///   REPLDirective |
+    ///   LetBinding |
     ///   REPLExpression |
     ///   ImportDirective |
     ///   Declaration
@@ -588,6 +600,31 @@ pub enum NodeKind {
     ///   KeywordPair<Expression>+
     /// ```
     KeywordMessage { keyword_pairs: Vec<Id> },
+
+    /// ```bnf
+    /// LetExpression ::=
+    ///   LetBinding
+    ///   Expression
+    /// ```
+    LetExpression { let_binding: Id, expression: Id },
+
+    /// ```bnf
+    /// LetBinding ::=
+    ///   LET_KEYWORD
+    ///   TypeExpression?
+    ///   Symbol
+    ///   EQUAL_SIGN
+    ///   Expression
+    ///   Period
+    /// ```
+    LetBinding {
+        let_keyword: Option<Token>,
+        type_expression: Id,
+        symbol: Id,
+        equal_sign: Option<Token>,
+        expression: Id,
+        period: Option<Token>,
+    },
 }
 
 pub use NodeKind::*;
@@ -691,6 +728,15 @@ impl NodeKind {
             IntegerExpression(ref token, _) => vec![Some(token)],
 
             FloatExpression(ref token, _) => vec![Some(token)],
+
+            LetExpression { .. } => vec![],
+
+            LetBinding {
+                ref let_keyword,
+                ref equal_sign,
+                ref period,
+                ..
+            } => vec![let_keyword.as_ref(), equal_sign.as_ref(), period.as_ref()],
 
             _ => vec![],
         };
@@ -860,6 +906,24 @@ impl NodeKind {
             }
             KeywordMessage { keyword_pairs } => {
                 children.extend(keyword_pairs);
+            }
+            LetExpression {
+                let_binding,
+                expression,
+                ..
+            } => {
+                children.push(let_binding);
+                children.push(expression);
+            }
+            LetBinding {
+                type_expression,
+                symbol,
+                expression,
+                ..
+            } => {
+                children.push(type_expression);
+                children.push(symbol);
+                children.push(expression);
             }
         }
 

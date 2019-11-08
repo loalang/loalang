@@ -249,6 +249,7 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
                 "import" => kind = TokenKind::ImportKeyword,
                 "export" => kind = TokenKind::ExportKeyword,
                 "partial" => kind = TokenKind::PartialKeyword,
+                "let" => kind = TokenKind::LetKeyword,
 
                 lexeme => kind = TokenKind::SimpleSymbol(lexeme.into()),
             }

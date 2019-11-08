@@ -135,6 +135,31 @@ impl TypeAssignment {
         }
         None
     }
+
+    fn check_let_binding(
+        &self,
+        let_binding: &Node,
+        analysis: &mut Analysis,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) -> Option<()> {
+        if let LetBinding {
+            expression,
+            type_expression,
+            ..
+        } = let_binding.kind
+        {
+            let expression = analysis.navigator.find_child(let_binding, expression)?;
+            let type_expression = analysis
+                .navigator
+                .find_child(let_binding, type_expression)?;
+
+            let assigned = analysis.types.get_type_of_expression(&expression);
+            let assignee = analysis.types.get_type_of_type_expression(&type_expression);
+
+            self.diagnose_assignment(expression.span, assignee, assigned, analysis, diagnostics);
+        }
+        None
+    }
 }
 
 impl Checker for TypeAssignment {
@@ -145,6 +170,10 @@ impl Checker for TypeAssignment {
             }
             if n.is_message_send() {
                 self.check_message_send(n, analysis, diagnostics)
+                    .unwrap_or(());
+            }
+            if n.is_let_binding() {
+                self.check_let_binding(n, analysis, diagnostics)
                     .unwrap_or(());
             }
             true

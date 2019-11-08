@@ -124,6 +124,7 @@ impl Navigator {
                 Some(("self".into(), node.clone()))
             }
             Class { symbol, .. }
+            | LetBinding { symbol, .. }
             | ReferenceTypeExpression { symbol, .. }
             | ReferenceExpression { symbol, .. }
             | TypeParameter { symbol, .. }
@@ -373,9 +374,9 @@ impl Navigator {
 
             let mut start_scope_root_search_from = declaration.clone();
 
-            if declaration.is_class() {
-                if let Some(class_parent) = self.parent(declaration) {
-                    start_scope_root_search_from = class_parent;
+            if declaration.is_scope_root() {
+                if let Some(parent) = self.parent(declaration) {
+                    start_scope_root_search_from = parent;
                 }
             }
 
@@ -432,22 +433,6 @@ impl Navigator {
             Some(scope_root) => {
                 let mut result = None;
                 let mut traverse = |node: &Node| {
-                    // We do not traverse down scope roots, since
-                    // declarations declared there is not reachable
-                    // to the original reference.
-                    if node.id != scope_root.id && node.is_scope_root() && !node.is_repl_line() {
-                        // Classes exist outside their own scope, though.
-                        if node.is_class() {
-                            if let Some((n, _)) = self.symbol_of(node) {
-                                if n == name {
-                                    result = Some(node.clone());
-                                }
-                            }
-                        }
-
-                        return false;
-                    }
-
                     if node.is_import_directive() {
                         if let syntax::ImportDirective {
                             qualified_symbol,
@@ -496,7 +481,10 @@ impl Navigator {
                         }
                     }
 
-                    true
+                    // We do not traverse down scope roots, since
+                    // declarations declared there is not reachable
+                    // to the original reference.
+                    node.id == scope_root.id || !node.is_scope_root() || node.is_repl_line()
                 };
 
                 if scope_root.is_repl_line() {
@@ -836,19 +824,11 @@ impl Navigator {
     pub fn all_declarations_in_scope(&self, scope_root: &Node, kind: DeclarationKind) -> Vec<Node> {
         let mut declarations = vec![];
         self.traverse(scope_root, &mut |n| {
-            if n.is_scope_root() && n.id != scope_root.id {
-                if n.is_class() {
-                    declarations.push(n.clone());
-                }
-
-                return false;
-            }
-
             if n.is_declaration(kind) || n.is_import_directive() {
                 declarations.push(n.clone());
             }
 
-            true
+            !n.is_scope_root() || n.id == scope_root.id
         });
         declarations
     }

@@ -65,6 +65,11 @@ impl Types {
                 IntegerExpression(ref t, _) => Type::UnresolvedInteger(t.lexeme(), expression.id),
                 FloatExpression(ref t, _) => Type::UnresolvedFloat(t.lexeme(), expression.id),
 
+                LetExpression { expression, .. } => {
+                    let expression = self.navigator.find_node(expression)?;
+                    self.get_type_of_expression(&expression)
+                }
+
                 MessageSendExpression {
                     expression,
                     message,
@@ -131,6 +136,20 @@ impl Types {
                 TypeParameter { .. } => {
                     let (name, _) = self.navigator.symbol_of(declaration)?;
                     Type::Parameter(name, declaration.id, vec![])
+                }
+                LetBinding {
+                    type_expression,
+                    expression,
+                    ..
+                } => {
+                    if type_expression == Id::NULL {
+                        let expression = self.navigator.find_child(declaration, expression)?;
+                        self.get_type_of_expression(&expression)
+                    } else {
+                        let type_expression =
+                            self.navigator.find_child(declaration, type_expression)?;
+                        self.get_type_of_type_expression(&type_expression)
+                    }
                 }
                 _ => Type::Unknown,
             })

@@ -128,7 +128,8 @@ pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
                 | TokenKind::SelfKeyword
                 | TokenKind::ImportKeyword
                 | TokenKind::ExportKeyword
-                | TokenKind::PartialKeyword => lexeme.blue().to_string(),
+                | TokenKind::PartialKeyword
+                | TokenKind::LetKeyword => lexeme.blue().to_string(),
                 TokenKind::Plus => lexeme,
                 TokenKind::Colon => lexeme,
                 TokenKind::Slash => lexeme,

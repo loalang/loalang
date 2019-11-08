@@ -98,7 +98,9 @@ impl Parser {
     }
 
     fn parse_repl_statement(&mut self, builder: NodeBuilder) -> Id {
-        if sees!(self, Colon) {
+        if sees!(self, LetKeyword) {
+            self.parse_let_binding(builder)
+        } else if sees!(self, Colon) {
             self.parse_repl_directive(builder)
         } else if sees!(self, ImportKeyword) {
             self.parse_import_directive(builder)
@@ -860,6 +862,10 @@ impl Parser {
     }
 
     fn parse_expression(&mut self, mut builder: NodeBuilder) -> Id {
+        if sees!(self, LetKeyword) {
+            return self.parse_let_expression(builder);
+        }
+
         let result = self.parse_leaf_expression(self.child(&mut builder));
         let result = self.parse_unary_message_send(self.child(&mut builder), result);
         let result = self.parse_binary_message_send(self.child(&mut builder), result);
@@ -1088,5 +1094,80 @@ impl Parser {
         let symbol = self.parse_symbol(self.child(&mut builder));
 
         self.finalize(builder, ReferenceExpression { symbol })
+    }
+
+    fn parse_let_expression(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut let_binding = Id::NULL;
+
+        if sees!(self, LetKeyword) {
+            let_binding = self.parse_let_binding(self.child(&mut builder));
+        } else {
+            self.syntax_error("Expected let binding.");
+        }
+
+        let expression = self.parse_expression(self.child(&mut builder));
+
+        self.finalize(
+            builder,
+            LetExpression {
+                let_binding,
+                expression,
+            },
+        )
+    }
+
+    fn parse_let_binding(&mut self, mut builder: NodeBuilder) -> Id {
+        let mut let_keyword = None;
+        let mut type_expression = Id::NULL;
+        let mut symbol = Id::NULL;
+        let mut equal_sign = None;
+        let mut period = None;
+
+        if sees!(self, LetKeyword) {
+            let_keyword = Some(self.next());
+        } else {
+            self.syntax_error("Binding must start with `let`.");
+        }
+
+        if self.tokens.len() >= 2
+            && !matches!(
+                (&self.tokens[0].kind, &self.tokens[1].kind),
+                (SimpleSymbol(_), EqualSign)
+            )
+        {
+            type_expression = self.parse_type_expression(self.child(&mut builder));
+        }
+
+        if sees!(self, SimpleSymbol(_)) {
+            symbol = self.parse_symbol(self.child(&mut builder));
+        } else {
+            self.syntax_error_end("Binding must have a name.");
+        }
+
+        if sees!(self, EqualSign) {
+            equal_sign = Some(self.next());
+        } else {
+            self.syntax_error_end("Expected equal sign.");
+        }
+
+        let expression = self.parse_expression(self.child(&mut builder));
+
+        if sees!(self, Period) {
+            period = Some(self.next());
+        } else {
+            self.syntax_error_end("Binding must end with period.");
+        }
+
+        self.finalize(
+            builder,
+            LetBinding {
+                let_keyword,
+                type_expression,
+                symbol,
+                equal_sign,
+                expression,
+                period,
+            },
+        )
     }
 }
