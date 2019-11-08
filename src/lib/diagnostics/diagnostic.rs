@@ -1,4 +1,5 @@
 use crate::*;
+use std::f64::INFINITY;
 use std::fmt;
 
 #[derive(Clone)]
@@ -22,6 +23,7 @@ pub enum Diagnostic {
     },
     InvalidLiteralType(Span, semantics::Type),
     OutOfBounds(Span, semantics::Type, String),
+    TooPreciseFloat(Span, semantics::Type, BigFraction),
 }
 
 #[derive(Clone)]
@@ -46,6 +48,7 @@ impl Diagnostic {
             InvalidInherit { span: ref s, .. } => s,
             InvalidLiteralType(ref s, _) => s,
             OutOfBounds(ref s, _, _) => s,
+            TooPreciseFloat(ref s, _, _) => s,
         }
     }
 
@@ -64,6 +67,7 @@ impl Diagnostic {
             InvalidInherit { .. } => DiagnosticLevel::Error,
             InvalidLiteralType(_, _) => DiagnosticLevel::Error,
             OutOfBounds(_, _, _) => DiagnosticLevel::Error,
+            TooPreciseFloat(_, _, _) => DiagnosticLevel::Warning,
         }
     }
 
@@ -82,6 +86,7 @@ impl Diagnostic {
             InvalidInherit { .. } => 9,
             InvalidLiteralType(_, _) => 10,
             OutOfBounds(_, _, _) => 11,
+            TooPreciseFloat(_, _, _) => 12,
         }
     }
 
@@ -156,6 +161,11 @@ impl fmt::Debug for Diagnostic {
                 write!(f, "`{}` is not a valid type for this literal.", type_)
             }
             OutOfBounds(_, type_, message) => write!(f, "`{}` must not be {}.", type_, message),
+            TooPreciseFloat(_, type_, fraction) => write!(
+                f,
+                "`{:.2$}` is too precise to be coerced to {} without losing precision.",
+                fraction, type_, INFINITY as usize
+            ),
         }
     }
 }

@@ -279,8 +279,8 @@ impl fmt::Display for Object {
             ConstValue::I64(n) => write!(f, "{}", n),
             ConstValue::I128(n) => write!(f, "{}", n),
             ConstValue::IBig(n) => write!(f, "{}", n),
-            ConstValue::F32(n) => write!(f, "{:.1$}", n, 15),
-            ConstValue::F64(n) => write!(f, "{:.1$}", n, 31),
+            ConstValue::F32(n) => write!(f, "{}", n),
+            ConstValue::F64(n) => write!(f, "{}", n),
             ConstValue::FBig(n) => write!(f, "{:.1$}", n, INFINITY as usize),
         }
     }

@@ -2,9 +2,9 @@ use crate::semantics::*;
 use crate::syntax::*;
 use crate::*;
 
-pub struct OutOfBoundsInteger;
+pub struct OutOfBoundsNumber;
 
-impl OutOfBoundsInteger {
+impl OutOfBoundsNumber {
     fn check_literal(
         literal: Node,
         type_: Type,
@@ -17,7 +17,7 @@ impl OutOfBoundsInteger {
 
         match (literal.kind, name.as_str()) {
             (IntegerExpression(_, int), "Loa/UInt8") => {
-                Self::assert_int_in_bound(
+                Self::assert_in_bound(
                     literal.span,
                     type_,
                     int,
@@ -29,7 +29,7 @@ impl OutOfBoundsInteger {
                 );
             }
             (IntegerExpression(_, int), "Loa/UInt16") => {
-                Self::assert_int_in_bound(
+                Self::assert_in_bound(
                     literal.span,
                     type_,
                     int,
@@ -41,7 +41,7 @@ impl OutOfBoundsInteger {
                 );
             }
             (IntegerExpression(_, int), "Loa/UInt32") => {
-                Self::assert_int_in_bound(
+                Self::assert_in_bound(
                     literal.span,
                     type_,
                     int,
@@ -53,7 +53,7 @@ impl OutOfBoundsInteger {
                 );
             }
             (IntegerExpression(_, int), "Loa/UInt64") => {
-                Self::assert_int_in_bound(
+                Self::assert_in_bound(
                     literal.span,
                     type_,
                     int,
@@ -65,7 +65,7 @@ impl OutOfBoundsInteger {
                 );
             }
             (IntegerExpression(_, int), "Loa/UInt128") => {
-                Self::assert_int_in_bound(
+                Self::assert_in_bound(
                     literal.span,
                     type_,
                     int,
@@ -77,7 +77,7 @@ impl OutOfBoundsInteger {
                 );
             }
             (IntegerExpression(_, int), "Loa/Int8") => {
-                Self::assert_int_in_bound(
+                Self::assert_in_bound(
                     literal.span,
                     type_,
                     int,
@@ -89,7 +89,7 @@ impl OutOfBoundsInteger {
                 );
             }
             (IntegerExpression(_, int), "Loa/Int16") => {
-                Self::assert_int_in_bound(
+                Self::assert_in_bound(
                     literal.span,
                     type_,
                     int,
@@ -101,7 +101,7 @@ impl OutOfBoundsInteger {
                 );
             }
             (IntegerExpression(_, int), "Loa/Int32") => {
-                Self::assert_int_in_bound(
+                Self::assert_in_bound(
                     literal.span,
                     type_,
                     int,
@@ -113,7 +113,7 @@ impl OutOfBoundsInteger {
                 );
             }
             (IntegerExpression(_, int), "Loa/Int64") => {
-                Self::assert_int_in_bound(
+                Self::assert_in_bound(
                     literal.span,
                     type_,
                     int,
@@ -125,7 +125,7 @@ impl OutOfBoundsInteger {
                 );
             }
             (IntegerExpression(_, int), "Loa/Int128") => {
-                Self::assert_int_in_bound(
+                Self::assert_in_bound(
                     literal.span,
                     type_,
                     int,
@@ -136,29 +136,53 @@ impl OutOfBoundsInteger {
                     diagnostics,
                 );
             }
+            (FloatExpression(_, fraction), "Loa/Float32") => {
+                Self::assert_in_bound(
+                    literal.span,
+                    type_,
+                    fraction,
+                    std::f32::MIN.into(),
+                    "−(3.4028234664*10ˆ38)",
+                    std::f32::MAX.into(),
+                    "3.4028234664*10ˆ38",
+                    diagnostics,
+                );
+            }
+            (FloatExpression(_, fraction), "Loa/Float64") => {
+                Self::assert_in_bound(
+                    literal.span,
+                    type_,
+                    fraction,
+                    std::f64::MIN.into(),
+                    "-(1.7976931348623157*10ˆ308)",
+                    std::f64::MAX.into(),
+                    "1.7976931348623157*10ˆ308",
+                    diagnostics,
+                );
+            }
             _ => {}
         }
 
         None
     }
 
-    fn assert_int_in_bound(
+    fn assert_in_bound<N: PartialOrd>(
         span: Span,
         type_: Type,
-        int: BigInt,
-        min: BigInt,
+        number: N,
+        min: N,
         min_str: &str,
-        max: BigInt,
+        max: N,
         max_str: &str,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        if int < min {
+        if number < min {
             diagnostics.push(Diagnostic::OutOfBounds(
                 span,
                 type_,
                 format!("less than {}", min_str),
             ));
-        } else if int > max {
+        } else if number > max {
             diagnostics.push(Diagnostic::OutOfBounds(
                 span,
                 type_,
@@ -168,7 +192,7 @@ impl OutOfBoundsInteger {
     }
 }
 
-impl Checker for OutOfBoundsInteger {
+impl Checker for OutOfBoundsNumber {
     fn check(&self, analysis: &mut Analysis, diagnostics: &mut Vec<Diagnostic>) {
         for literal in analysis.navigator.all_number_literals() {
             let type_ = analysis.types.get_type_of_expression(&literal);
