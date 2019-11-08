@@ -82,6 +82,7 @@ pub fn tokenize(source: Arc<Source>) -> Vec<Token> {
 }
 
 const SLASH: u16 = '/' as u16;
+const BACKSLASH: u16 = '\\' as u16;
 const NUL: u16 = '\0' as u16;
 const SPACE: u16 = ' ' as u16;
 const NEWLINE: u16 = '\n' as u16;
@@ -99,6 +100,7 @@ const CLOSE_ANGLE: u16 = '>' as u16;
 const OPEN_CURLY: u16 = '{' as u16;
 const CLOSE_CURLY: u16 = '}' as u16;
 const EQUAL_SIGN: u16 = '=' as u16;
+const DOUBLE_QUOTE: u16 = '"' as u16;
 const HASH: u16 = '#' as u16;
 
 fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
@@ -149,6 +151,32 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
             kind = TokenKind::Unknown(n);
             consume_number(n, &mut end_offset, stream, &mut kind);
             stream.reset_view();
+        }
+
+        // SimpleString
+        (DOUBLE_QUOTE, _) => {
+            let mut chars = vec![ch];
+
+            let mut in_escape = false;
+            loop {
+                match stream.peek() {
+                    Some((_, _)) => {
+                        let (o, c) = stream.next().unwrap();
+                        end_offset = o;
+                        chars.push(c);
+                        if !in_escape && c == BACKSLASH {
+                            in_escape = true;
+                        } else if !in_escape && c == DOUBLE_QUOTE {
+                            break;
+                        } else {
+                            in_escape = false;
+                        }
+                    }
+                    None => break,
+                }
+            }
+
+            kind = TokenKind::SimpleString(characters_to_string(chars.into_iter()));
         }
 
         // SimpleSymbol

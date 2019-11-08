@@ -55,6 +55,10 @@ impl Types {
                     ),
                 )),
 
+                StringExpression(_, _) => {
+                    self.get_type_of_declaration(&self.navigator.find_stdlib_class("Loa/String")?)
+                }
+
                 IntegerExpression(ref t, _) => Type::UnresolvedInteger(t.lexeme(), expression.id),
                 FloatExpression(ref t, _) => Type::UnresolvedFloat(t.lexeme(), expression.id),
 

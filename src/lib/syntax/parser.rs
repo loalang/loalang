@@ -868,6 +868,9 @@ impl Parser {
     }
 
     fn parse_leaf_expression(&mut self, builder: NodeBuilder) -> Id {
+        if sees!(self, SimpleString(_)) {
+            return self.parse_string_expression(builder);
+        }
         if sees!(self, SimpleInteger(_)) {
             return self.parse_integer_expression(builder);
         }
@@ -882,6 +885,37 @@ impl Parser {
         }
         self.syntax_error_end("Expected expression.");
         Id::NULL
+    }
+
+    fn parse_string_expression(&mut self, builder: NodeBuilder) -> Id {
+        if let SimpleString(ref lexeme) = &self.tokens[0].kind {
+            let mut contents = vec![];
+            let chars = string_to_characters(lexeme.clone());
+            let end = chars.len() - 1;
+            let mut in_escape = false;
+            for (i, c) in chars.into_iter().enumerate() {
+                if !in_escape && c == '\\' as u16 {
+                    in_escape = true;
+                    continue;
+                }
+                if !in_escape && c == '"' as u16 && (i == 0 || i == end) {
+                    continue;
+                }
+                in_escape = false;
+                contents.push(c);
+            }
+            let token = self.next();
+            if !token.lexeme().ends_with('"') {
+                self.syntax_error_end("Unterminated string.");
+            }
+            self.finalize(
+                builder,
+                StringExpression(token, characters_to_string(contents.into_iter())),
+            )
+        } else {
+            self.syntax_error("Expected string.");
+            Id::NULL
+        }
     }
 
     fn parse_integer_expression(&mut self, builder: NodeBuilder) -> Id {

@@ -512,6 +512,7 @@ pub enum NodeKind {
     ///   ReferenceExpression |
     ///   MessageSendExpression |
     ///   SelfExpression |
+    ///   StringExpression |
     ///   IntegerExpression |
     ///   FloatExpression
     /// ```
@@ -527,6 +528,12 @@ pub enum NodeKind {
     ///   SELF_KEYWORD
     /// ```
     SelfExpression(Token),
+
+    /// ```bnf
+    /// StringExpression ::=
+    ///   SIMPLE_STRING
+    /// ```
+    StringExpression(Token, String),
 
     /// ```bnf
     /// IntegerExpression ::=
@@ -667,6 +674,8 @@ impl NodeKind {
                 ref close_angle,
                 ..
             } => vec![open_angle.as_ref(), close_angle.as_ref()],
+
+            StringExpression(ref token, _) => vec![Some(token)],
 
             IntegerExpression(ref token, _) => vec![Some(token)],
 
@@ -824,6 +833,7 @@ impl NodeKind {
                 children.push(expression);
                 children.push(message);
             }
+            StringExpression(_, _) => {}
             IntegerExpression(_, _) => {}
             FloatExpression(_, _) => {}
             UnaryMessage { symbol } => {

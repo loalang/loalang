@@ -11,6 +11,8 @@ pub struct VM {
     declaring_method: Option<Method>,
     stack: Vec<Arc<Object>>,
 
+    string_class: Id,
+
     u8_class: Id,
     u16_class: Id,
     u32_class: Id,
@@ -35,6 +37,8 @@ impl VM {
             stack: Vec::new(),
             declaring_method: None,
             last_class_id: Id::NULL,
+
+            string_class: Id::NULL,
 
             u8_class: Id::NULL,
             u16_class: Id::NULL,
@@ -74,6 +78,7 @@ impl VM {
                     | Instruction::LoadLocal(_)
                     | Instruction::ReferenceToClass(_)
                     | Instruction::SendMessage(_)
+                    | Instruction::LoadConstString(_)
                     | Instruction::LoadConstU8(_)
                     | Instruction::LoadConstU16(_)
                     | Instruction::LoadConstU32(_)
@@ -97,6 +102,8 @@ impl VM {
             }
 
             match instruction {
+                Instruction::MarkClassString(id) => self.string_class = id,
+
                 Instruction::MarkClassU8(id) => self.u8_class = id,
                 Instruction::MarkClassU16(id) => self.u16_class = id,
                 Instruction::MarkClassU32(id) => self.u32_class = id,
@@ -112,6 +119,17 @@ impl VM {
                 Instruction::MarkClassF32(id) => self.f32_class = id,
                 Instruction::MarkClassF64(id) => self.f64_class = id,
                 Instruction::MarkClassFBig(id) => self.fbig_class = id,
+
+                Instruction::LoadConstString(value) => {
+                    self.stack.push(Arc::new(Object {
+                        class: self
+                            .classes
+                            .get(&self.string_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
+                        const_value: ConstValue::String(value),
+                    }));
+                }
 
                 Instruction::LoadConstU8(value) => {
                     self.stack.push(Arc::new(Object {
@@ -354,6 +372,7 @@ pub struct Object {
 #[derive(Debug)]
 pub enum ConstValue {
     Nothing,
+    String(String),
     U8(u8),
     U16(u16),
     U32(u32),
@@ -375,6 +394,7 @@ impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.const_value {
             ConstValue::Nothing => write!(f, "a {}", self.class.name),
+            ConstValue::String(s) => write!(f, "{}", s),
             ConstValue::U8(n) => write!(f, "{}", n),
             ConstValue::U16(n) => write!(f, "{}", n),
             ConstValue::U32(n) => write!(f, "{}", n),

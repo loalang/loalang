@@ -821,6 +821,10 @@ impl Navigator {
         self.all_downwards(from, &|n| n.is_declaration(kind))
     }
 
+    pub fn all_classes_downwards(&self, from: &Node) -> Vec<Node> {
+        self.all_downwards(from, &|n| n.is_class())
+    }
+
     pub fn closest_references_upwards(&self, from: &Node, kind: DeclarationKind) -> Option<Node> {
         self.closest_upwards(from, |n| n.is_reference(kind))
     }
@@ -981,6 +985,23 @@ impl Navigator {
             }
         }
 
+        None
+    }
+
+    pub fn find_stdlib_class(&self, name: &str) -> Option<Node> {
+        for (u, t) in self.modules.iter() {
+            if u.is_stdlib() {
+                if let Some(root) = t.root() {
+                    for class in self.all_classes_downwards(root) {
+                        if let Some((qn, _, _)) = self.qualified_name_of(&class) {
+                            if qn == name {
+                                return Some(class);
+                            }
+                        }
+                    }
+                }
+            }
+        }
         None
     }
 }

@@ -12,6 +12,8 @@ pub enum Instruction {
     EndMethod(Id),
     Return(u8),
 
+    LoadConstString(String),
+
     LoadConstU8(u8),
     LoadConstU16(u16),
     LoadConstU32(u32),
@@ -27,6 +29,8 @@ pub enum Instruction {
     LoadConstF32(f32),
     LoadConstF64(f64),
     LoadConstFBig(BigFraction),
+
+    MarkClassString(Id),
 
     MarkClassU8(Id),
     MarkClassU16(Id),

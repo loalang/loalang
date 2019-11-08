@@ -148,7 +148,9 @@ impl<'a> Generator<'a> {
                 result
             }
 
-            IntegerExpression(_, _) | FloatExpression(_, _) => self.generate_literal(expression),
+            StringExpression(_, _) => self.generate_string(expression),
+
+            IntegerExpression(_, _) | FloatExpression(_, _) => self.generate_number(expression),
 
             SelfExpression(_) => Ok(Instruction::LoadLocal(self.local_count - 1).into()),
 
@@ -177,7 +179,14 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn generate_literal(&mut self, literal: &Node) -> GenerationResult {
+    pub fn generate_string(&mut self, string: &Node) -> GenerationResult {
+        match string.kind {
+            StringExpression(_, ref s) => Ok(Instruction::LoadConstString(s.clone()).into()),
+            _ => Err(invalid_node(string, "Expected string.")),
+        }
+    }
+
+    pub fn generate_number(&mut self, literal: &Node) -> GenerationResult {
         let type_ = self.analysis.types.get_type_of_expression(&literal);
 
         if let Type::UnresolvedInteger(_, _) = type_ {
@@ -301,6 +310,8 @@ impl<'a> Generator<'a> {
 
         if class.span.start.uri.is_stdlib() {
             match name.as_str() {
+                "Loa/String" => instructions.push(Instruction::MarkClassString(class.id)),
+
                 "Loa/UInt8" => instructions.push(Instruction::MarkClassU8(class.id)),
                 "Loa/UInt16" => instructions.push(Instruction::MarkClassU16(class.id)),
                 "Loa/UInt32" => instructions.push(Instruction::MarkClassU32(class.id)),
