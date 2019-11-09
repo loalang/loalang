@@ -17,31 +17,64 @@ pub struct Parser {
     tokens: Vec<Token>,
     pub diagnostics: Vec<Diagnostic>,
     last_token_span: Span,
+    leading_insignificants: Vec<Token>,
 }
 
 impl Parser {
     pub fn new(source: Arc<Source>) -> Parser {
         let start = Location::at_offset(&source, 0);
-        Parser {
+        let mut parser = Parser {
             source: source.clone(),
-            tokens: tokenize(source)
-                .into_iter()
-                .filter(|token| !matches!(token.kind, Whitespace(_)))
-                .collect(),
+            tokens: tokenize(source),
             diagnostics: vec![],
             last_token_span: Span::new(start.clone(), start),
-        }
+            leading_insignificants: vec![],
+        };
+        parser.move_past_insignificants();
+        parser
     }
 
     fn next(&mut self) -> Token {
+        let before = std::mem::replace(&mut self.leading_insignificants, vec![]);
+        let mut token = self.next_insignificant();
+        token.before = before;
+        self.move_past_insignificants();
+        token.after = self.leading_insignificants.clone();
+        token
+    }
+
+    #[inline]
+    fn peek(&self) -> &Token {
+        &self.tokens[0]
+    }
+
+    #[inline]
+    fn peek_next_significant(&self) -> &Token {
+        for significant in self.tokens.iter().skip(1) {
+            match significant.kind {
+                Whitespace(_) | LineComment(_) => continue,
+                _ => return significant,
+            }
+        }
+        panic!("Somehow EOF was not in tokens list.");
+    }
+
+    fn next_insignificant(&mut self) -> Token {
         let token = self.tokens.remove(0);
         self.last_token_span = token.span.clone();
         token
     }
 
+    fn move_past_insignificants(&mut self) {
+        while sees!(self, Whitespace(_) | LineComment(_)) {
+            let insignificant = self.next_insignificant();
+            self.leading_insignificants.push(insignificant);
+        }
+    }
+
     fn syntax_error(&mut self, message: &str) {
         let message = String::from(message);
-        let span = self.tokens[0].span.clone();
+        let span = self.peek().span.clone();
 
         self.diagnostics
             .push(Diagnostic::SyntaxError(span, message));
@@ -63,7 +96,7 @@ impl Parser {
 
     pub fn parse(mut self) -> (Arc<Tree>, Vec<Diagnostic>) {
         let mut tree = Tree::new(self.source.clone());
-        let builder = NodeBuilder::new(&mut tree, self.tokens[0].span.start.clone());
+        let builder = NodeBuilder::new(&mut tree, self.peek().span.start.clone());
         match self.source.kind {
             SourceKind::Module => {
                 self.parse_module(builder);
@@ -77,7 +110,7 @@ impl Parser {
 
     #[inline]
     fn child<'a>(&self, builder: &'a mut NodeBuilder) -> NodeBuilder<'a> {
-        builder.child(self.tokens[0].span.start.clone())
+        builder.child(self.peek().span.start.clone())
     }
 
     fn parse_repl_line(&mut self, mut builder: NodeBuilder) -> Id {
@@ -552,7 +585,7 @@ impl Parser {
 
     fn parse_message_pattern(&mut self, builder: NodeBuilder) -> Id {
         if sees!(self, SimpleSymbol(_)) {
-            if matches!(self.tokens[1].kind, Colon) {
+            if matches!(self.peek_next_significant().kind, Colon) {
                 self.parse_keyword_message_pattern(builder)
             } else {
                 self.parse_unary_message_pattern(builder)
@@ -845,7 +878,7 @@ impl Parser {
         }
 
         if sees!(self, SimpleSymbol(_)) {
-            if let Colon = self.tokens[1].kind {
+            if let Colon = self.peek_next_significant().kind {
                 // What we're seeing is the next keyword in a keyword pattern
             } else {
                 symbol = self.parse_symbol(self.child(&mut builder));
@@ -897,7 +930,7 @@ impl Parser {
     }
 
     fn parse_character_expression(&mut self, builder: NodeBuilder) -> Id {
-        if let SimpleCharacter(ref lexeme) = &self.tokens[0].kind {
+        if let SimpleCharacter(ref lexeme) = &self.peek().kind {
             let mut contents = vec![];
             let chars = string_to_characters(lexeme.clone());
             let end = chars.len() - 1;
@@ -931,7 +964,7 @@ impl Parser {
     }
 
     fn parse_string_expression(&mut self, builder: NodeBuilder) -> Id {
-        if let SimpleString(ref lexeme) = &self.tokens[0].kind {
+        if let SimpleString(ref lexeme) = &self.peek().kind {
             let mut contents = vec![];
             let chars = string_to_characters(lexeme.clone());
             let end = chars.len() - 1;
@@ -962,7 +995,7 @@ impl Parser {
     }
 
     fn parse_integer_expression(&mut self, builder: NodeBuilder) -> Id {
-        if let SimpleInteger(ref lexeme) = &self.tokens[0].kind {
+        if let SimpleInteger(ref lexeme) = &self.peek().kind {
             let (base, rest) = Self::split_number_base(lexeme);
 
             let int = BigInt::parse_bytes(rest.as_bytes(), base).unwrap();
@@ -989,7 +1022,7 @@ impl Parser {
     }
 
     fn parse_float_expression(&mut self, builder: NodeBuilder) -> Id {
-        if let SimpleFloat(ref lexeme) = &self.tokens[0].kind {
+        if let SimpleFloat(ref lexeme) = &self.peek().kind {
             let (base, rest) = Self::split_number_base(lexeme);
 
             let split = rest.split(".").collect::<Vec<_>>();
@@ -1008,7 +1041,7 @@ impl Parser {
 
     fn parse_unary_message_send(&mut self, mut builder: NodeBuilder, receiver: Id) -> Id {
         if sees!(self, SimpleSymbol(_)) {
-            if self.tokens[1].kind != Colon {
+            if self.peek_next_significant().kind != Colon {
                 let message = {
                     let mut builder = self.child(&mut builder);
 
@@ -1131,7 +1164,7 @@ impl Parser {
 
         if self.tokens.len() >= 2
             && !matches!(
-                (&self.tokens[0].kind, &self.tokens[1].kind),
+                (&self.peek().kind, &self.peek_next_significant().kind),
                 (SimpleSymbol(_), EqualSign)
             )
         {

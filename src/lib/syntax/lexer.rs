@@ -76,6 +76,8 @@ pub fn tokenize(source: Arc<Source>) -> Vec<Token> {
     tokens.push(Token {
         kind: TokenKind::EOF,
         span: Span::at_range(&source, end_offset..end_offset),
+        before: vec![],
+        after: vec![],
     });
 
     tokens
@@ -304,6 +306,8 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
     Some(Token {
         kind,
         span: Span::at_range(source, offset..end_offset + 1),
+        before: vec![],
+        after: vec![],
     })
 }
 

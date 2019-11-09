@@ -52,6 +52,8 @@ pub enum TokenKind {
 pub struct Token {
     pub kind: TokenKind,
     pub span: Span,
+    pub before: Vec<Token>,
+    pub after: Vec<Token>,
 }
 
 impl Token {
