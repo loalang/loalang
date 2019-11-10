@@ -25,7 +25,17 @@ impl RequestHandler for HoverRequestHandler {
         }
 
         let usage = context.server.usage(location.clone())?;
-        let markdown = if usage.declaration.node.is_method() {
+
+        let markdown = if usage.handle.node.is_message() {
+            let behaviour = context.server.behaviour_at(location)?;
+            behaviour
+                .with_applied_message(
+                    &usage.handle.node,
+                    &context.server.analysis.navigator,
+                    &context.server.analysis.types,
+                )
+                .to_markdown(&context.server.analysis.navigator)
+        } else if usage.declaration.node.is_method() {
             let behaviour = context.server.behaviour_at(location)?;
             behaviour.to_markdown(&context.server.analysis.navigator)
         } else {

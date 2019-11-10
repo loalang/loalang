@@ -53,7 +53,8 @@ impl InvalidInherit {
                     let assignment = check_assignment(
                         super_behaviour_type.clone(),
                         sub_behaviour_type.clone(),
-                        analysis,
+                        &analysis.navigator,
+                        &analysis.types,
                         false,
                     );
                     if assignment.is_invalid() {

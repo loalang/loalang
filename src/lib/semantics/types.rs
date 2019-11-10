@@ -1,6 +1,7 @@
 use crate::semantics::*;
 use crate::syntax::*;
 use crate::*;
+use std::cmp::min;
 
 #[derive(Clone)]
 pub struct Types {
@@ -86,7 +87,10 @@ impl Types {
 
                     for behaviour in behaviours {
                         if behaviour.selector() == selector {
-                            return behaviour.return_type().with_self(&receiver_type);
+                            return behaviour
+                                .with_applied_message(&message, &self.navigator, &self)
+                                .return_type()
+                                .with_self(&receiver_type);
                         }
                     }
                     Type::Unknown
@@ -237,16 +241,24 @@ impl Types {
             })
     }
 
+    pub fn get_behaviours_from_stdlib_class(&self, qn: &str) -> Vec<Behaviour> {
+        self.navigator
+            .find_stdlib_class(qn)
+            .and_then(|class| self.get_behaviours_from_class(&class, &vec![]))
+            .unwrap_or(vec![])
+    }
+
     pub fn get_behaviours(&self, type_: &Type) -> Vec<Behaviour> {
         match type_ {
             Type::Unknown => vec![],
-            // TODO: Connect stdlib to literals
-            Type::UnresolvedInteger(_, _) => vec![],
-            Type::UnresolvedFloat(_, _) => vec![],
-            Type::Symbol(_) => vec![],
+            Type::UnresolvedInteger(_, _) => self.get_behaviours_from_stdlib_class("Loa/Integer"),
+            Type::UnresolvedFloat(_, _) => self.get_behaviours_from_stdlib_class("Loa/Float"),
+            Type::Symbol(_) => self.get_behaviours_from_stdlib_class("Loa/Symbol"),
             Type::Parameter(_, _, _) => vec![],
             Type::Class(_, class_id, args) => self
-                .get_behaviours_from_class(*class_id, args)
+                .navigator
+                .find_node(*class_id)
+                .and_then(|class| self.get_behaviours_from_class(&class, args))
                 .unwrap_or(vec![]),
             Type::Self_(of) => self.get_behaviours(of),
             Type::Behaviour(box b) => vec![b.clone()],
@@ -255,11 +267,10 @@ impl Types {
 
     pub fn get_behaviours_from_class(
         &self,
-        class_id: Id,
+        class: &Node,
         args: &Vec<Type>,
     ) -> Option<Vec<Behaviour>> {
-        let class = self.navigator.find_node(class_id)?;
-        let receiver_type = self.get_type_of_declaration(&class);
+        let receiver_type = self.get_type_of_declaration(class);
         if let Class {
             class_body,
             type_parameter_list,
@@ -303,7 +314,7 @@ impl Types {
                     .map(|b| (b.selector(), b.with_applied_type_arguments(&type_arg_map)))
                     .collect();
 
-                for super_type_expression in self.navigator.super_type_expressions(&class) {
+                for super_type_expression in self.navigator.super_type_expressions(class) {
                     for super_behaviour in self
                         .get_behaviours(&self.get_type_of_type_expression(&super_type_expression))
                     {
@@ -434,9 +445,89 @@ impl Types {
     pub fn get_type_of_behaviour(&self, behaviour: &Behaviour) -> Type {
         Type::Behaviour(Box::new(behaviour.clone()))
     }
+
+    fn insert_distanced_types(
+        &self,
+        distance: usize,
+        type_: Type,
+        types: &mut HashMap<Type, usize>,
+    ) {
+        match &type_ {
+            Type::Unknown
+            | Type::Parameter(_, _, _)
+            | Type::Self_(_)
+            | Type::Behaviour(_)
+            | Type::UnresolvedInteger(_, _)
+            | Type::UnresolvedFloat(_, _)
+            | Type::Symbol(_) => {}
+            Type::Class(_, id, _) => {
+                if let Some(class) = self.navigator.find_node(*id) {
+                    for super_type_expression in self.navigator.super_type_expressions(&class) {
+                        let super_type = self.get_type_of_type_expression(&super_type_expression);
+                        self.insert_distanced_types(distance + 1, super_type, types);
+                    }
+                }
+            }
+        }
+        if let Some(existing_distance) = types.get(&type_) {
+            let min_distance = min(distance, *existing_distance);
+            types.insert(type_, min_distance);
+        } else {
+            types.insert(type_, distance);
+        }
+    }
+
+    fn common_types_ordered_by_distance(&self, types: &Vec<Type>) -> Vec<Type> {
+        let mut summarized: HashMap<Type, (usize, usize)> = HashMap::new();
+
+        for (i, type_) in types.iter().enumerate() {
+            let mut distances = HashMap::new();
+            self.insert_distanced_types(0, type_.clone(), &mut distances);
+
+            for (type_, distance) in distances {
+                if i == 0 {
+                    summarized.insert(type_, (distance, 1));
+                } else if let Some((existing_distance, count)) = summarized.get(&type_).cloned() {
+                    summarized.insert(type_, (distance + existing_distance, count + 1));
+                }
+            }
+        }
+
+        let mut to_sort = summarized
+            .into_iter()
+            .filter_map(|(type_, (distance, count))| {
+                if count == types.len() {
+                    Some((type_, distance))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        to_sort.sort_by(|(_, a), (_, b)| a.cmp(b));
+        to_sort.into_iter().map(|(t, _)| t).collect()
+    }
+
+    pub fn get_nearest_common_ancestor(
+        &self,
+        navigator: &Navigator,
+        candidates: Vec<Type>,
+    ) -> Type {
+        'attempts: for common in self.common_types_ordered_by_distance(&candidates) {
+            for candidate in candidates.iter() {
+                if check_assignment(common.clone(), candidate.clone(), navigator, self, false)
+                    .is_invalid()
+                {
+                    continue 'attempts;
+                }
+            }
+            return common;
+        }
+
+        Type::Unknown
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum Type {
     Unknown,
     Class(String, Id, Vec<Type>),
@@ -594,7 +685,7 @@ impl Default for Type {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct Behaviour {
     pub receiver_type: Type,
     pub method_id: Id,
@@ -602,7 +693,7 @@ pub struct Behaviour {
     pub return_type: Type,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum BehaviourMessage {
     Unary(String),
     Binary(String, Type),
@@ -641,6 +732,75 @@ impl Behaviour {
 
     pub fn return_type(&self) -> Type {
         self.return_type.clone()
+    }
+
+    pub fn with_applied_message(
+        self,
+        message: &Node,
+        navigator: &Navigator,
+        types: &Types,
+    ) -> Behaviour {
+        let mut type_parameter_assignment_candidates: HashMap<Id, Vec<Type>> = HashMap::new();
+
+        match (&self.message, &message.kind) {
+            (BehaviourMessage::Unary(_), UnaryMessage { .. }) => {}
+            (BehaviourMessage::Binary(_, ref param_type), BinaryMessage { expression, .. }) => {
+                if let Type::Parameter(_, id, _) = param_type {
+                    if let Some(expression) = navigator.find_child(message, *expression) {
+                        let arg_type = types.get_type_of_expression(&expression);
+
+                        if !type_parameter_assignment_candidates.contains_key(id) {
+                            type_parameter_assignment_candidates.insert(*id, vec![]);
+                        }
+
+                        type_parameter_assignment_candidates
+                            .get_mut(id)
+                            .unwrap()
+                            .push(arg_type);
+                    }
+                }
+            }
+            (
+                BehaviourMessage::Keyword(ref params),
+                KeywordMessage {
+                    ref keyword_pairs, ..
+                },
+            ) => {
+                for ((_, param_type), pair) in params.iter().zip(keyword_pairs.iter()) {
+                    if let Type::Parameter(_, id, _) = param_type {
+                        if let Some(pair) = navigator.find_child(message, *pair) {
+                            if let KeywordPair { value, .. } = pair.kind {
+                                if let Some(expression) = navigator.find_child(&pair, value) {
+                                    let arg_type = types.get_type_of_expression(&expression);
+
+                                    if !type_parameter_assignment_candidates.contains_key(id) {
+                                        type_parameter_assignment_candidates.insert(*id, vec![]);
+                                    }
+
+                                    type_parameter_assignment_candidates
+                                        .get_mut(id)
+                                        .unwrap()
+                                        .push(arg_type);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        let map = type_parameter_assignment_candidates
+            .into_iter()
+            .map(|(param_id, candidates)| {
+                (
+                    param_id,
+                    types.get_nearest_common_ancestor(navigator, candidates),
+                )
+            })
+            .collect();
+
+        self.with_applied_type_arguments(&map)
     }
 
     pub fn with_applied_type_arguments(self, map: &HashMap<Id, Type>) -> Behaviour {

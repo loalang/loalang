@@ -13,7 +13,13 @@ impl TypeAssignment {
         analysis: &mut Analysis,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let assignability = check_assignment(assignee, assigned, analysis, false);
+        let assignability = check_assignment(
+            assignee,
+            assigned,
+            &analysis.navigator,
+            &analysis.types,
+            false,
+        );
 
         if assignability.is_invalid() {
             diagnostics.push(Diagnostic::UnassignableType {
@@ -87,6 +93,8 @@ impl TypeAssignment {
             let behaviours = analysis.types.get_behaviours(&receiver_type);
 
             for behaviour in behaviours {
+                let behaviour =
+                    behaviour.with_applied_message(&message, &analysis.navigator, &analysis.types);
                 if behaviour.selector() == selector {
                     match (behaviour.message, &message.kind) {
                         (BehaviourMessage::Unary(_), UnaryMessage { .. }) => {}

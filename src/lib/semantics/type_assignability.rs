@@ -167,11 +167,12 @@ impl fmt::Display for TypeAssignability {
 fn resolve_number(
     unresolved: &Type,
     proposed: &Type,
-    analysis: &mut Analysis,
+    navigator: &Navigator,
+    types: &Types,
 ) -> Option<TypeAssignability> {
     if let Type::Class(_, class, _) = proposed {
-        let class = analysis.navigator.find_node(*class)?;
-        let (name, _, _) = analysis.navigator.qualified_name_of(&class)?;
+        let class = navigator.find_node(*class)?;
+        let (name, _, _) = navigator.qualified_name_of(&class)?;
 
         match (unresolved, name.as_ref()) {
             (Type::UnresolvedFloat(_, id), "Loa/Number")
@@ -198,15 +199,21 @@ fn resolve_number(
             | (Type::UnresolvedInteger(_, id), "Loa/UInt32")
             | (Type::UnresolvedInteger(_, id), "Loa/UInt64")
             | (Type::UnresolvedInteger(_, id), "Loa/BigNatural") => {
-                if let Some(existing) = analysis.types.attempt_type_coercion(*id, proposed) {
+                if let Some(existing) = types.attempt_type_coercion(*id, proposed) {
                     Some(
-                        check_assignment(existing.clone(), proposed.clone(), analysis, false)
-                            .expect(|because| TypeAssignability::Uncoercable {
-                                from: unresolved.clone(),
-                                to: proposed.clone(),
-                                already_coerced_to: Some(existing),
-                                because,
-                            }),
+                        check_assignment(
+                            existing.clone(),
+                            proposed.clone(),
+                            navigator,
+                            types,
+                            false,
+                        )
+                        .expect(|because| TypeAssignability::Uncoercable {
+                            from: unresolved.clone(),
+                            to: proposed.clone(),
+                            already_coerced_to: Some(existing),
+                            because,
+                        }),
                     )
                 } else {
                     Some(TypeAssignability::Valid)
@@ -222,7 +229,8 @@ fn resolve_number(
 pub fn check_assignment(
     assignee: Type,
     assigned: Type,
-    analysis: &mut Analysis,
+    navigator: &Navigator,
+    types: &Types,
     invariant: bool,
 ) -> TypeAssignability {
     match (&assignee, &assigned) {
@@ -252,11 +260,11 @@ pub fn check_assignment(
 
         // All literal symbol types are assignable to Loa/Symbol.
         (Type::Class(_, _, _), Type::Symbol(_)) => {
-            if let Some(symbol_class) = analysis.navigator.find_stdlib_class("Loa/Symbol") {
+            if let Some(symbol_class) = navigator.find_stdlib_class("Loa/Symbol") {
                 if !invariant {
-                    let assigned = analysis.types.get_type_of_declaration(&symbol_class);
+                    let assigned = types.get_type_of_declaration(&symbol_class);
 
-                    check_assignment(assignee, assigned, analysis, false)
+                    check_assignment(assignee, assigned, navigator, types, false)
                 } else {
                     TypeAssignability::Invalid {
                         assignee,
@@ -278,7 +286,7 @@ pub fn check_assignment(
         (u @ Type::UnresolvedInteger(_, _), p)
         | (p, u @ Type::UnresolvedInteger(_, _))
         | (u @ Type::UnresolvedFloat(_, _), p)
-        | (p, u @ Type::UnresolvedFloat(_, _)) => resolve_number(u, p, analysis).unwrap_or(
+        | (p, u @ Type::UnresolvedFloat(_, _)) => resolve_number(u, p, navigator, types).unwrap_or(
             TypeAssignability::Invalid {
                 assignee: assignee.clone(),
                 assigned: assigned.clone(),
@@ -294,14 +302,13 @@ pub fn check_assignment(
         ),
 
         (Type::Class(_, _, _), Type::Self_(box of)) => {
-            return check_assignment(assignee.clone(), of.clone(), analysis, invariant).expect(
-                |because| TypeAssignability::Invalid {
+            return check_assignment(assignee.clone(), of.clone(), navigator, types, invariant)
+                .expect(|because| TypeAssignability::Invalid {
                     assignee,
                     assigned,
                     invariant,
                     because,
-                },
-            );
+                });
         }
 
         (Type::Self_(_), Type::Self_(_)) => {
@@ -321,16 +328,16 @@ pub fn check_assignment(
             Type::Class(_, assignee_class, assignee_args),
             Type::Class(_, assigned_class, assigned_args),
         ) => {
-            let assignee_class = analysis.navigator.find_node(*assignee_class)?;
-            let assigned_class = analysis.navigator.find_node(*assigned_class)?;
+            let assignee_class = navigator.find_node(*assignee_class)?;
+            let assigned_class = navigator.find_node(*assigned_class)?;
 
             if assignee_class.id != assigned_class.id {
                 if !invariant {
-                    for super_type in analysis.navigator.super_type_expressions(&assigned_class) {
-                        let super_type = analysis.types.get_type_of_type_expression(&super_type);
+                    for super_type in navigator.super_type_expressions(&assigned_class) {
+                        let super_type = types.get_type_of_type_expression(&super_type);
 
                         let assigned_super_type_assignability =
-                            check_assignment(assignee.clone(), super_type, analysis, false);
+                            check_assignment(assignee.clone(), super_type, navigator, types, false);
 
                         if assigned_super_type_assignability.is_valid() {
                             return assigned_super_type_assignability;
@@ -351,9 +358,8 @@ pub fn check_assignment(
                 ..
             } = assignee_class.kind
             {
-                let type_parameter_list = analysis
-                    .navigator
-                    .find_child(&assignee_class, type_parameter_list)?;
+                let type_parameter_list =
+                    navigator.find_child(&assignee_class, type_parameter_list)?;
                 if let TypeParameterList {
                     ref type_parameters,
                     ..
@@ -374,23 +380,33 @@ pub fn check_assignment(
                             Type::Unknown
                         };
 
-                        let parameter = analysis
-                            .navigator
-                            .find_child(&type_parameter_list, *parameter)?;
+                        let parameter = navigator.find_child(&type_parameter_list, *parameter)?;
                         if let TypeParameter {
                             variance_keyword, ..
                         } = parameter.kind
                         {
                             let arg_assignability = match variance_keyword.map(|t| t.kind) {
-                                None | Some(TokenKind::InoutKeyword) => {
-                                    check_assignment(assignee_arg, assigned_arg, analysis, true)
-                                }
-                                Some(TokenKind::OutKeyword) => {
-                                    check_assignment(assignee_arg, assigned_arg, analysis, false)
-                                }
-                                Some(TokenKind::InKeyword) => {
-                                    check_assignment(assigned_arg, assignee_arg, analysis, false)
-                                }
+                                None | Some(TokenKind::InoutKeyword) => check_assignment(
+                                    assignee_arg,
+                                    assigned_arg,
+                                    navigator,
+                                    types,
+                                    true,
+                                ),
+                                Some(TokenKind::OutKeyword) => check_assignment(
+                                    assignee_arg,
+                                    assigned_arg,
+                                    navigator,
+                                    types,
+                                    false,
+                                ),
+                                Some(TokenKind::InKeyword) => check_assignment(
+                                    assigned_arg,
+                                    assignee_arg,
+                                    navigator,
+                                    types,
+                                    false,
+                                ),
                                 _ => TypeAssignability::Valid,
                             };
 
@@ -438,7 +454,8 @@ pub fn check_assignment(
             let return_type_assignability = check_assignment(
                 assignee_behaviour.return_type.clone(),
                 assigned_behaviour.return_type.clone(),
-                analysis,
+                navigator,
+                types,
                 invariant,
             );
             if return_type_assignability.is_invalid() {
@@ -453,7 +470,8 @@ pub fn check_assignment(
                     check_message_argument(
                         assignee_arg.clone(),
                         assigned_arg.clone(),
-                        analysis,
+                        navigator,
+                        types,
                         &mut issues,
                     );
                 }
@@ -467,7 +485,8 @@ pub fn check_assignment(
                         check_message_argument(
                             assignee_arg.clone(),
                             assigned_arg.clone(),
-                            analysis,
+                            navigator,
+                            types,
                             &mut issues,
                         );
                     }
@@ -499,10 +518,17 @@ pub fn check_assignment(
 fn check_message_argument(
     assignee_arg: Type,
     assigned_arg: Type,
-    analysis: &mut Analysis,
+    navigator: &Navigator,
+    types: &Types,
     issues: &mut Vec<TypeAssignability>,
 ) {
-    let assignment = check_assignment(assigned_arg.clone(), assignee_arg.clone(), analysis, false);
+    let assignment = check_assignment(
+        assigned_arg.clone(),
+        assignee_arg.clone(),
+        navigator,
+        types,
+        false,
+    );
     if assignment.is_invalid() {
         issues.push(assignment);
     }
