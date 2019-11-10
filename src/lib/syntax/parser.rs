@@ -37,6 +37,7 @@ impl Parser {
     fn next(&mut self) -> Token {
         let before = std::mem::replace(&mut self.leading_insignificants, vec![]);
         let mut token = self.next_insignificant();
+        self.last_token_span = token.span.clone();
         token.before = before;
         self.move_past_insignificants();
         token.after = self.leading_insignificants.clone();
@@ -60,9 +61,7 @@ impl Parser {
     }
 
     fn next_insignificant(&mut self) -> Token {
-        let token = self.tokens.remove(0);
-        self.last_token_span = token.span.clone();
-        token
+        self.tokens.remove(0)
     }
 
     fn move_past_insignificants(&mut self) {

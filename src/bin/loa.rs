@@ -60,6 +60,12 @@ fn main() -> Result<(), clap::Error> {
                 .takes_value(true)
                 .value_name("BINARY_FILE"),
         ),
+        clap::SubCommand::with_name("format").arg(
+            clap::Arg::with_name("files")
+                .takes_value(true)
+                .multiple(true)
+                .value_name("FILES"),
+        ),
     ]);
     let cli = app.clone().get_matches();
 
@@ -78,6 +84,24 @@ fn main() -> Result<(), clap::Error> {
         ("server", _) => {
             log_to_file();
             server_handler::server()
+        }
+
+        ("format", Some(matches)) => {
+            log_to_file();
+            matches
+                .values_of("files")
+                .map(|f| f.collect())
+                .unwrap_or(vec!["**/*.loa"])
+                .into_iter()
+                .map(glob::glob)
+                .filter_map(Result::ok)
+                .flat_map(identity)
+                .filter_map(Result::ok)
+                .map(loa::Source::file)
+                .filter_map(Result::ok)
+                .map(loa::syntax::Parser::new)
+                .map(loa::syntax::Parser::parse)
+                .for_each(|(tree, _)| println!("{:#}", tree));
         }
 
         ("exec", Some(matches)) => match matches.value_of("loabin") {
@@ -127,6 +151,7 @@ fn main() -> Result<(), clap::Error> {
 
 use loa::generation::Instructions;
 use loa::vm::VM;
+use std::convert::identity;
 use std::io::{stdout, Write};
 use std::process::exit;
 

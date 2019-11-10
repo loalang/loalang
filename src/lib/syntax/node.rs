@@ -18,6 +18,29 @@ impl Node {
         self.kind.leaves()
     }
 
+    pub fn insignificant_tokens_after(&self, tree: &Tree) -> Vec<Token> {
+        self.last_leaf(tree)
+            .map(|leaf| leaf.after.clone())
+            .unwrap_or(vec![])
+    }
+
+    fn last_leaf<'a>(&'a self, tree: &'a Tree) -> Option<&'a Token> {
+        let mut candidates = vec![];
+
+        candidates.extend(self.leaves().last().into_iter());
+        candidates.extend(
+            self.children()
+                .last()
+                .and_then(|c| tree.borrow(*c))
+                .and_then(|n| n.last_leaf(tree))
+                .into_iter(),
+        );
+
+        candidates.sort_by(|a, b| a.span.end.cmp(&b.span.end));
+
+        candidates.last().map(|t| *t)
+    }
+
     pub fn is_symbol(&self) -> bool {
         match self.kind {
             Symbol(_) => true,

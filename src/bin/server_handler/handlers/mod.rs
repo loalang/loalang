@@ -33,3 +33,6 @@ pub use self::goto_type_definition::*;
 
 mod hover;
 pub use self::hover::*;
+
+mod formatting;
+pub use self::formatting::*;

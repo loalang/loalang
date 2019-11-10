@@ -21,6 +21,10 @@ impl Tree {
         self.nodes.get(&id).cloned()
     }
 
+    pub fn borrow(&self, id: Id) -> Option<&Node> {
+        self.nodes.get(&id)
+    }
+
     pub fn get_mut(&mut self, id: Id) -> Option<&mut Node> {
         self.nodes.get_mut(&id)
     }

@@ -26,7 +26,7 @@ impl ServerHandler {
             workspace_symbol_provider: None,
             code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
             code_lens_provider: None,
-            document_formatting_provider: None,
+            document_formatting_provider: Some(true),
             document_range_formatting_provider: None,
             document_on_type_formatting_provider: None,
             rename_provider: Some(RenameProviderCapability::Options(RenameOptions {
@@ -105,6 +105,7 @@ impl ServerHandler {
         handle_request!(CompletionRequestHandler);
         handle_request!(DocumentHighlightRequestHandler);
         handle_request!(HoverRequestHandler);
+        handle_request!(FormattingRequestHandler);
 
         warn!("UNKNOWN MESSAGE: {}", method);
 
