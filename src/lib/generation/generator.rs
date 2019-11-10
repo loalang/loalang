@@ -160,6 +160,8 @@ impl<'a> Generator<'a> {
 
             IntegerExpression(_, _) | FloatExpression(_, _) => self.generate_number(expression),
 
+            SymbolExpression(_, ref s) => Ok(Instruction::LoadConstSymbol(s.clone()).into()),
+
             SelfExpression(_) => Ok(Instruction::LoadLocal(self.local_count).into()),
 
             LetExpression {
@@ -360,6 +362,7 @@ impl<'a> Generator<'a> {
             match name.as_str() {
                 "Loa/String" => instructions.push(Instruction::MarkClassString(class.id)),
                 "Loa/Character" => instructions.push(Instruction::MarkClassCharacter(class.id)),
+                "Loa/Symbol" => instructions.push(Instruction::MarkClassSymbol(class.id)),
 
                 "Loa/UInt8" => instructions.push(Instruction::MarkClassU8(class.id)),
                 "Loa/UInt16" => instructions.push(Instruction::MarkClassU16(class.id)),

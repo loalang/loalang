@@ -116,6 +116,8 @@ pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
                     lexeme.green().to_string()
                 }
 
+                TokenKind::SymbolLiteral(_) => lexeme.cyan().to_string(),
+
                 TokenKind::AsKeyword
                 | TokenKind::InKeyword
                 | TokenKind::IsKeyword

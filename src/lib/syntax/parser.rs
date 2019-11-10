@@ -738,7 +738,9 @@ impl Parser {
     }
 
     fn parse_type_expression(&mut self, builder: NodeBuilder) -> Id {
-        if sees!(self, Underscore) {
+        if sees!(self, SymbolLiteral(_)) {
+            self.parse_symbol_type_expression(builder)
+        } else if sees!(self, Underscore) {
             self.parse_nothing(builder)
         } else if sees!(self, SelfKeyword) {
             self.parse_self_type_expression(builder)
@@ -918,6 +920,9 @@ impl Parser {
         if sees!(self, SimpleFloat(_)) {
             return self.parse_float_expression(builder);
         }
+        if sees!(self, SymbolLiteral(_)) {
+            return self.parse_symbol_expression(builder);
+        }
         if sees!(self, SelfKeyword) {
             return self.parse_self_expression(builder);
         }
@@ -1034,6 +1039,28 @@ impl Parser {
             self.finalize(builder, FloatExpression(token, fraction))
         } else {
             self.syntax_error("Expected float.");
+            Id::NULL
+        }
+    }
+
+    fn parse_symbol_expression(&mut self, builder: NodeBuilder) -> Id {
+        if let SymbolLiteral(ref lexeme) = &self.peek().kind {
+            let symbol = lexeme[1..].to_string();
+            let token = self.next();
+            self.finalize(builder, SymbolExpression(token, symbol))
+        } else {
+            self.syntax_error("Expected symbol.");
+            Id::NULL
+        }
+    }
+
+    fn parse_symbol_type_expression(&mut self, builder: NodeBuilder) -> Id {
+        if let SymbolLiteral(ref lexeme) = &self.peek().kind {
+            let symbol = lexeme[1..].to_string();
+            let token = self.next();
+            self.finalize(builder, SymbolTypeExpression(token, symbol))
+        } else {
+            self.syntax_error("Expected symbol.");
             Id::NULL
         }
     }

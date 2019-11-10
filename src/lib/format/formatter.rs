@@ -225,6 +225,7 @@ impl<'a> Formatter<'a> {
             } => {
                 self.write_child(f, symbol)?;
                 if let Some(variance_keyword) = variance_keyword {
+                    self.space(f)?;
                     self.write_token(f, variance_keyword)?;
                 }
                 Ok(())
@@ -353,6 +354,7 @@ impl<'a> Formatter<'a> {
             }
             SelfTypeExpression(self_keyword) => self.write_token(f, self_keyword),
             Nothing(underscore) => self.write_token(f, underscore),
+            SymbolTypeExpression(literal, _) => self.write_token(f, literal),
             TypeArgumentList {
                 open_angle,
                 type_expressions,
@@ -384,6 +386,7 @@ impl<'a> Formatter<'a> {
             CharacterExpression(literal, _) => self.write_token(f, literal),
             IntegerExpression(literal, _) => self.write_token(f, literal),
             FloatExpression(literal, _) => self.write_token(f, literal),
+            SymbolExpression(literal, _) => self.write_token(f, literal),
             MessageSendExpression {
                 expression,
                 message,

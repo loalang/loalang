@@ -15,6 +15,7 @@ pub struct VM {
 
     string_class: Id,
     character_class: Id,
+    symbol_class: Id,
 
     u8_class: Id,
     u16_class: Id,
@@ -44,6 +45,7 @@ impl VM {
 
             string_class: Id::NULL,
             character_class: Id::NULL,
+            symbol_class: Id::NULL,
 
             u8_class: Id::NULL,
             u16_class: Id::NULL,
@@ -86,6 +88,7 @@ impl VM {
                     | Instruction::LoadGlobal(_)
                     | Instruction::LoadConstString(_)
                     | Instruction::LoadConstCharacter(_)
+                    | Instruction::LoadConstSymbol(_)
                     | Instruction::LoadConstU8(_)
                     | Instruction::LoadConstU16(_)
                     | Instruction::LoadConstU32(_)
@@ -111,6 +114,7 @@ impl VM {
             match instruction {
                 Instruction::MarkClassString(id) => self.string_class = id,
                 Instruction::MarkClassCharacter(id) => self.character_class = id,
+                Instruction::MarkClassSymbol(id) => self.symbol_class = id,
 
                 Instruction::MarkClassU8(id) => self.u8_class = id,
                 Instruction::MarkClassU16(id) => self.u16_class = id,
@@ -156,6 +160,17 @@ impl VM {
                             .expect("stdlib not loaded")
                             .clone(),
                         const_value: ConstValue::Character(value),
+                    }));
+                }
+
+                Instruction::LoadConstSymbol(value) => {
+                    self.stack.push(Arc::new(Object {
+                        class: self
+                            .classes
+                            .get(&self.symbol_class)
+                            .expect("stdlib not loaded")
+                            .clone(),
+                        const_value: ConstValue::Symbol(value),
                     }));
                 }
 
@@ -406,6 +421,7 @@ pub enum ConstValue {
     Nothing,
     String(String),
     Character(u16),
+    Symbol(String),
     U8(u8),
     U16(u16),
     U32(u32),
@@ -429,6 +445,7 @@ impl fmt::Display for Object {
             ConstValue::Nothing => write!(f, "a {}", self.class.name),
             ConstValue::String(s) => write!(f, "{}", s),
             ConstValue::Character(c) => write!(f, "{}", characters_to_string([*c].iter().cloned())),
+            ConstValue::Symbol(s) => write!(f, "#{}", s),
             ConstValue::U8(n) => write!(f, "{}", n),
             ConstValue::U16(n) => write!(f, "{}", n),
             ConstValue::U32(n) => write!(f, "{}", n),

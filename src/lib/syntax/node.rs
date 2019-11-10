@@ -506,7 +506,8 @@ pub enum NodeKind {
     /// TypeExpression ::=
     ///   ReferenceTypeExpression |
     ///   SelfTypeExpression |
-    ///   Nothing
+    ///   Nothing |
+    ///   SymbolTypeExpression
     /// ```
 
     /// ```bnf
@@ -521,6 +522,12 @@ pub enum NodeKind {
     ///   SELF_KEYWORD
     /// ```
     SelfTypeExpression(Token),
+
+    /// ```bnf
+    /// SymbolTypeExpression ::=
+    ///   SYMBOL_LITERAL
+    /// ```
+    SymbolTypeExpression(Token, String),
 
     /// ```bnf
     /// Nothing ::=
@@ -559,7 +566,8 @@ pub enum NodeKind {
     ///   StringExpression |
     ///   CharacterExpression |
     ///   IntegerExpression |
-    ///   FloatExpression
+    ///   FloatExpression |
+    ///   SymbolExpression
     /// ```
 
     /// ```bnf
@@ -597,6 +605,12 @@ pub enum NodeKind {
     ///   SIMPLE_FLOAT
     /// ```
     FloatExpression(Token, BigFraction),
+
+    /// ```bnf
+    /// SymbolExpression ::=
+    ///   SYMBOL_LITERAL
+    /// ```
+    SymbolExpression(Token, String),
 
     /// ```bnf
     /// MessageSendExpression ::=
@@ -741,6 +755,8 @@ impl NodeKind {
 
             Nothing(ref underscore) => vec![Some(underscore)],
 
+            SymbolTypeExpression(ref literal, _) => vec![Some(literal)],
+
             SelfExpression(ref keyword) => vec![Some(keyword)],
 
             SelfTypeExpression(ref keyword) => vec![Some(keyword)],
@@ -758,6 +774,8 @@ impl NodeKind {
             IntegerExpression(ref token, _) => vec![Some(token)],
 
             FloatExpression(ref token, _) => vec![Some(token)],
+
+            SymbolExpression(ref token, _) => vec![Some(token)],
 
             LetExpression { .. } => vec![],
 
@@ -875,6 +893,7 @@ impl NodeKind {
             Operator(_) => {}
             SelfExpression(_) => {}
             SelfTypeExpression(_) => {}
+            SymbolTypeExpression(_, _) => {}
             KeywordMessagePattern { keyword_pairs } => {
                 children.extend(keyword_pairs);
             }
@@ -924,6 +943,7 @@ impl NodeKind {
             CharacterExpression(_, _) => {}
             IntegerExpression(_, _) => {}
             FloatExpression(_, _) => {}
+            SymbolExpression(_, _) => {}
             UnaryMessage { symbol } => {
                 children.push(symbol);
             }

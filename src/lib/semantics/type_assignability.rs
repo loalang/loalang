@@ -228,7 +228,53 @@ pub fn check_assignment(
     match (&assignee, &assigned) {
         (Type::Unknown, _) | (_, Type::Unknown) => TypeAssignability::Valid,
 
-        // TODO: Implement type coercion
+        (Type::Symbol(assignee_symbol), Type::Symbol(assigned_symbol)) => {
+            if assignee_symbol == assigned_symbol {
+                TypeAssignability::Valid
+            } else {
+                TypeAssignability::Invalid {
+                    assignee,
+                    assigned,
+                    invariant,
+                    because: vec![],
+                }
+            }
+        }
+
+        // Only exactly the same symbol is validly assigned, so all other assignments
+        // to a literal symbol type is invalid.
+        (Type::Symbol(_), _) => TypeAssignability::Invalid {
+            assignee,
+            assigned,
+            invariant,
+            because: vec![],
+        },
+
+        // All literal symbol types are assignable to Loa/Symbol.
+        (Type::Class(_, _, _), Type::Symbol(_)) => {
+            if let Some(symbol_class) = analysis.navigator.find_stdlib_class("Loa/Symbol") {
+                if !invariant {
+                    let assigned = analysis.types.get_type_of_declaration(&symbol_class);
+
+                    check_assignment(assignee, assigned, analysis, false)
+                } else {
+                    TypeAssignability::Invalid {
+                        assignee,
+                        assigned,
+                        invariant,
+                        because: vec![],
+                    }
+                }
+            } else {
+                TypeAssignability::Invalid {
+                    assignee,
+                    assigned,
+                    invariant,
+                    because: vec![],
+                }
+            }
+        }
+
         (u @ Type::UnresolvedInteger(_, _), p)
         | (p, u @ Type::UnresolvedInteger(_, _))
         | (u @ Type::UnresolvedFloat(_, _), p)

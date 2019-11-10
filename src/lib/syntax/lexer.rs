@@ -1,4 +1,4 @@
-use crate::syntax::TokenKind::{SimpleFloat, SimpleInteger};
+use crate::syntax::TokenKind::{SimpleFloat, SimpleInteger, SymbolLiteral};
 use crate::syntax::*;
 use crate::*;
 use core::iter::Enumerate;
@@ -210,6 +210,53 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
             }
 
             kind = TokenKind::SimpleString(characters_to_string(chars.into_iter()));
+        }
+
+        (HASH, f)
+            if (f as u8 as char).is_alphabetic()
+                || f == APOSTROPHE
+                || f == PLUS
+                || f == SLASH
+                || f == EQUAL_SIGN
+                || f == OPEN_ANGLE
+                || f == CLOSE_ANGLE =>
+        {
+            let mut chars = vec![ch];
+
+            if f == APOSTROPHE {
+                // Freeform symbol literal
+                unimplemented!("freeform symbol literals");
+            } else if (f as u8 as char).is_alphabetic() {
+                // Unary/keyword symbol
+                loop {
+                    match stream.peek() {
+                        Some((_, s)) if (*s as u8 as char).is_alphanumeric() || *s == COLON => {
+                            let (o, c) = stream.next().unwrap();
+                            end_offset = o;
+                            chars.push(c);
+                        }
+                        _ => break,
+                    }
+                }
+            } else {
+                // Binary symbol
+                loop {
+                    match stream.peek() {
+                        Some((_, PLUS))
+                        | Some((_, SLASH))
+                        | Some((_, EQUAL_SIGN))
+                        | Some((_, OPEN_ANGLE))
+                        | Some((_, CLOSE_ANGLE)) => {
+                            let (o, c) = stream.next().unwrap();
+                            end_offset = o;
+                            chars.push(c);
+                        }
+                        _ => break,
+                    }
+                }
+            }
+
+            kind = SymbolLiteral(characters_to_string(chars.into_iter()));
         }
 
         // SimpleSymbol

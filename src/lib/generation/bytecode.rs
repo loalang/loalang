@@ -17,6 +17,7 @@ pub enum Instruction {
 
     LoadConstString(String),
     LoadConstCharacter(u16),
+    LoadConstSymbol(String),
 
     LoadConstU8(u8),
     LoadConstU16(u16),
@@ -36,6 +37,7 @@ pub enum Instruction {
 
     MarkClassString(Id),
     MarkClassCharacter(Id),
+    MarkClassSymbol(Id),
 
     MarkClassU8(Id),
     MarkClassU16(Id),

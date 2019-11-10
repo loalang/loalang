@@ -65,6 +65,8 @@ impl Types {
                 IntegerExpression(ref t, _) => Type::UnresolvedInteger(t.lexeme(), expression.id),
                 FloatExpression(ref t, _) => Type::UnresolvedFloat(t.lexeme(), expression.id),
 
+                SymbolExpression(ref t, _) => Type::Symbol(t.lexeme()),
+
                 LetExpression { expression, .. } => {
                     let expression = self.navigator.find_node(expression)?;
                     self.get_type_of_expression(&expression)
@@ -199,6 +201,8 @@ impl Types {
                     ),
                 )),
 
+                SymbolTypeExpression(ref t, _) => Type::Symbol(t.lexeme()),
+
                 _ => Type::Unknown,
             })
     }
@@ -239,6 +243,7 @@ impl Types {
             // TODO: Connect stdlib to literals
             Type::UnresolvedInteger(_, _) => vec![],
             Type::UnresolvedFloat(_, _) => vec![],
+            Type::Symbol(_) => vec![],
             Type::Parameter(_, _, _) => vec![],
             Type::Class(_, class_id, args) => self
                 .get_behaviours_from_class(*class_id, args)
@@ -440,6 +445,7 @@ pub enum Type {
     Behaviour(Box<Behaviour>),
     UnresolvedInteger(String, Id),
     UnresolvedFloat(String, Id),
+    Symbol(String),
 }
 
 impl Type {
@@ -454,6 +460,7 @@ impl Type {
             Behaviour(b) => Behaviour(b),
             UnresolvedInteger(s, id) => UnresolvedInteger(s, id),
             UnresolvedFloat(s, id) => UnresolvedFloat(s, id),
+            Symbol(s) => Symbol(s),
         }
     }
 
@@ -467,6 +474,7 @@ impl Type {
             Unknown
             | UnresolvedInteger(_, _)
             | UnresolvedFloat(_, _)
+            | Symbol(_)
             | Class(_, _, _)
             | Parameter(_, _, _) => self,
 
@@ -496,7 +504,8 @@ impl Type {
 
     pub fn to_markdown(&self, navigator: &Navigator) -> String {
         match self {
-            Type::Self_(_) => format!("self"),
+            Type::Symbol(s) => format!("_{}_", s),
+            Type::Self_(_) => format!("**self**"),
             Type::Unknown => format!("?"),
             Type::UnresolvedFloat(s, _) => s.clone(),
             Type::UnresolvedInteger(s, _) => s.clone(),
@@ -557,6 +566,7 @@ impl fmt::Display for Type {
                 }
             }
             Type::Behaviour(b) => write!(f, "{} → {}", b.message, b.return_type),
+            Type::Symbol(s) => write!(f, "{}", s),
         }
     }
 }
