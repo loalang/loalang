@@ -24,6 +24,7 @@ pub enum Diagnostic {
     InvalidLiteralType(Span, semantics::Type),
     OutOfBounds(Span, semantics::Type, String),
     TooPreciseFloat(Span, semantics::Type, BigFraction),
+    WrongNumberOfTypeArguments(Span, String, usize, usize),
 }
 
 #[derive(Clone)]
@@ -49,6 +50,7 @@ impl Diagnostic {
             InvalidLiteralType(ref s, _) => s,
             OutOfBounds(ref s, _, _) => s,
             TooPreciseFloat(ref s, _, _) => s,
+            WrongNumberOfTypeArguments(ref s, _, _, _) => s,
         }
     }
 
@@ -68,6 +70,7 @@ impl Diagnostic {
             InvalidLiteralType(_, _) => DiagnosticLevel::Error,
             OutOfBounds(_, _, _) => DiagnosticLevel::Error,
             TooPreciseFloat(_, _, _) => DiagnosticLevel::Warning,
+            WrongNumberOfTypeArguments(_, _, _, _) => DiagnosticLevel::Error,
         }
     }
 
@@ -87,6 +90,7 @@ impl Diagnostic {
             InvalidLiteralType(_, _) => 10,
             OutOfBounds(_, _, _) => 11,
             TooPreciseFloat(_, _, _) => 12,
+            WrongNumberOfTypeArguments(_, _, _, _) => 13,
         }
     }
 
@@ -165,6 +169,21 @@ impl fmt::Debug for Diagnostic {
                 f,
                 "`{:.2$}` is too precise to be coerced to {} without losing precision.",
                 fraction, type_, INFINITY as usize
+            ),
+            WrongNumberOfTypeArguments(_, name, params, args) => write!(
+                f,
+                "`{}` takes {} type arguments, but was provided {}.",
+                name,
+                if *params == 0 {
+                    "no".into()
+                } else {
+                    params.to_string()
+                },
+                if *args == 0 {
+                    "none".into()
+                } else {
+                    args.to_string()
+                },
             ),
         }
     }

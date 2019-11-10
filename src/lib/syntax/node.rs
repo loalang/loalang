@@ -62,6 +62,13 @@ impl Node {
         }
     }
 
+    pub fn is_reference_type_expression(&self) -> bool {
+        match self.kind {
+            ReferenceTypeExpression { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn is_scope_root(&self) -> bool {
         match self.kind {
             REPLLine { .. } | Module { .. } | Class { .. } | Method { .. } | LetBinding { .. } => {

@@ -797,6 +797,10 @@ impl Navigator {
         self.all_matching(|n| n.is_scope_root())
     }
 
+    pub fn all_reference_type_expressions(&self) -> Vec<Node> {
+        self.all_matching(|n| n.is_reference_type_expression())
+    }
+
     pub fn all_number_literals(&self) -> Vec<Node> {
         self.all_matching(|n| n.is_number_literal())
     }
@@ -983,5 +987,60 @@ impl Navigator {
             }
         }
         None
+    }
+
+    pub fn type_arguments_of_type_argument_list(&self, type_argument_list: &Node) -> Vec<Node> {
+        if let TypeArgumentList {
+            ref type_expressions,
+            ..
+        } = type_argument_list.kind
+        {
+            type_expressions
+                .iter()
+                .filter_map(|i| self.find_child(type_argument_list, *i))
+                .collect()
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn type_arguments_of_reference_type_expression(&self, reference: &Node) -> Vec<Node> {
+        if let ReferenceTypeExpression {
+            type_argument_list, ..
+        } = reference.kind
+        {
+            if let Some(type_argument_list) = self.find_child(reference, type_argument_list) {
+                return self.type_arguments_of_type_argument_list(&type_argument_list);
+            }
+        }
+        vec![]
+    }
+
+    pub fn type_parameters_of_type_parameter_list(&self, type_parameter_list: &Node) -> Vec<Node> {
+        if let TypeParameterList {
+            ref type_parameters,
+            ..
+        } = type_parameter_list.kind
+        {
+            type_parameters
+                .iter()
+                .filter_map(|i| self.find_child(type_parameter_list, *i))
+                .collect()
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn type_parameters_of_type_declaration(&self, declaration: &Node) -> Vec<Node> {
+        if let Class {
+            type_parameter_list,
+            ..
+        } = declaration.kind
+        {
+            if let Some(type_parameter_list) = self.find_child(declaration, type_parameter_list) {
+                return self.type_parameters_of_type_parameter_list(&type_parameter_list);
+            }
+        }
+        vec![]
     }
 }
