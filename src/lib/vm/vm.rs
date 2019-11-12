@@ -340,7 +340,7 @@ impl VM {
                         instructions: vec![],
                     });
                 }
-                Instruction::EndMethod(ids) => {
+                Instruction::EndMethod(id) => {
                     let class = self
                         .classes
                         .get_mut(&self.last_class_id)
@@ -350,9 +350,7 @@ impl VM {
                     let method = replace(&mut self.declaring_method, None)
                         .expect("cannot end method when not started");
                     let method = Arc::new(method);
-                    for id in ids {
-                        class.methods.insert(id, method.clone());
-                    }
+                    class.methods.insert(id, method.clone());
                 }
 
                 Instruction::LoadArgument(arity) => {
@@ -410,7 +408,7 @@ impl VM {
 #[derive(Debug)]
 pub struct Class {
     pub name: String,
-    pub methods: HashMap<Id, Arc<Method>>,
+    pub methods: HashMap<u64, Arc<Method>>,
 }
 
 #[derive(Debug)]

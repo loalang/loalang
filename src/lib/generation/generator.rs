@@ -3,6 +3,8 @@ use crate::semantics::*;
 use crate::syntax::*;
 use crate::*;
 use num_traits::ToPrimitive;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 pub type GenerationResult = Result<Instructions, GenerationError>;
 
@@ -29,6 +31,13 @@ impl<'a> Generator<'a> {
             local_count: 0,
             local_ids: vec![],
         }
+    }
+
+    pub fn behaviour_id(&self, method: &Node) -> Option<u64> {
+        let mut hasher = DefaultHasher::new();
+        let selector = self.analysis.navigator.method_selector(&method)?;
+        selector.hash(&mut hasher);
+        Some(hasher.finish())
     }
 
     pub fn generate<D: REPLDirectives>(&mut self, uri: &URI) -> GenerationResult {
@@ -197,7 +206,7 @@ impl<'a> Generator<'a> {
 
                 instructions.extend(self.generate_message(&message)?);
                 instructions.extend(self.generate_expression(&receiver)?);
-                instructions.push(Instruction::SendMessage(method.id));
+                instructions.push(Instruction::SendMessage(self.behaviour_id(&method)?));
 
                 Ok(instructions)
             }
@@ -440,9 +449,7 @@ impl<'a> Generator<'a> {
                         self.analysis.navigator.method_arity(method)? as u8,
                     ));
                 }
-                let mut ids = self.analysis.navigator.find_methods_overridden_by(&method);
-                ids.insert(method.id);
-                instructions.push(Instruction::EndMethod(ids.into_iter().collect()));
+                instructions.push(Instruction::EndMethod(self.behaviour_id(method)?));
             }
             _ => return Err(invalid_node(method, "Expected method.")),
         }

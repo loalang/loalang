@@ -6,10 +6,10 @@ pub enum Instruction {
     ReferenceToClass(Id),
     LoadLocal(u16),
     DeclareClass(Id, String),
-    SendMessage(Id),
+    SendMessage(u64),
     LoadArgument(u8),
     BeginMethod(String),
-    EndMethod(Vec<Id>),
+    EndMethod(u64),
     Return(u8),
 
     StoreGlobal(Id),
