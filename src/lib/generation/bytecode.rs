@@ -9,7 +9,7 @@ pub enum Instruction {
     SendMessage(Id),
     LoadArgument(u8),
     BeginMethod(String),
-    EndMethod(Id),
+    EndMethod(Vec<Id>),
     Return(u8),
 
     StoreGlobal(Id),

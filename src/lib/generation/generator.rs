@@ -401,6 +401,10 @@ impl<'a> Generator<'a> {
                 method_body,
                 ..
             } => {
+                if method_body == Id::NULL {
+                    return Ok(vec![].into());
+                }
+
                 let signature = self.analysis.navigator.find_child(method, signature)?;
                 match signature.kind {
                     Signature {
@@ -436,7 +440,9 @@ impl<'a> Generator<'a> {
                         self.analysis.navigator.method_arity(method)? as u8,
                     ));
                 }
-                instructions.push(Instruction::EndMethod(method.id));
+                let mut ids = self.analysis.navigator.find_methods_overridden_by(&method);
+                ids.insert(method.id);
+                instructions.push(Instruction::EndMethod(ids.into_iter().collect()));
             }
             _ => return Err(invalid_node(method, "Expected method.")),
         }

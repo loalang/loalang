@@ -340,7 +340,7 @@ impl VM {
                         instructions: vec![],
                     });
                 }
-                Instruction::EndMethod(id) => {
+                Instruction::EndMethod(ids) => {
                     let class = self
                         .classes
                         .get_mut(&self.last_class_id)
@@ -349,7 +349,10 @@ impl VM {
                         .expect("cannot declare method on class that has objects");
                     let method = replace(&mut self.declaring_method, None)
                         .expect("cannot end method when not started");
-                    class.methods.insert(id, Arc::new(method));
+                    let method = Arc::new(method);
+                    for id in ids {
+                        class.methods.insert(id, method.clone());
+                    }
                 }
 
                 Instruction::LoadArgument(arity) => {

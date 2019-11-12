@@ -1043,4 +1043,50 @@ impl Navigator {
         }
         vec![]
     }
+
+    pub fn method_selector(&self, method: &Node) -> Option<String> {
+        if let Method { signature, .. } = method.kind {
+            let signature = self.find_child(method, signature)?;
+            if let Signature {
+                message_pattern, ..
+            } = signature.kind
+            {
+                let message_pattern = self.find_child(&signature, message_pattern)?;
+                return self.message_pattern_selector(&message_pattern);
+            }
+        }
+        None
+    }
+
+    pub fn find_methods_overridden_by(&self, method: &Node) -> HashSet<Id> {
+        self.method_selector(method)
+            .and_then(|selector| self.find_methods_overridden_by_impl(method, selector))
+            .unwrap_or(HashSet::new())
+    }
+
+    fn find_methods_overridden_by_impl(
+        &self,
+        method: &Node,
+        selector: String,
+    ) -> Option<HashSet<Id>> {
+        let mut methods = HashSet::new();
+        let class_body = self.parent(method)?;
+        let class = self.parent(&class_body)?;
+        let super_type_expression = self.super_type_expressions(&class);
+
+        for super_type in super_type_expression {
+            if let Some(super_class) = self.find_declaration(&super_type, DeclarationKind::Type) {
+                for method in self.methods_of_class(&super_class) {
+                    if let Some(super_selector) = self.method_selector(&method) {
+                        if super_selector == selector {
+                            methods.insert(method.id);
+                            methods.extend(self.find_methods_overridden_by(&method))
+                        }
+                    }
+                }
+            }
+        }
+
+        Some(methods)
+    }
 }
