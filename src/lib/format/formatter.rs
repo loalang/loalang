@@ -253,12 +253,17 @@ impl<'a> Formatter<'a> {
             }
             Method {
                 visibility,
+                native_keyword,
                 signature,
                 method_body,
                 period,
             } => {
                 self.write_token_or(f, visibility, "private")?;
                 self.space(f)?;
+                if native_keyword.is_some() {
+                    self.write_token_or(f, native_keyword, "native")?;
+                    self.space(f)?;
+                }
                 self.write_child(f, signature)?;
                 if !method_body.is_null() {
                     self.space(f)?;

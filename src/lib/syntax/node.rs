@@ -402,12 +402,14 @@ pub enum NodeKind {
     /// ```bnf
     /// Method ::=
     ///   (PUBLIC_KEYWORD | PRIVATE_KEYWORD)?
+    ///   NATIVE_KEYWORD?
     ///   Signature
     ///   MethodBody?
     ///   PERIOD
     /// ```
     Method {
         visibility: Option<Token>,
+        native_keyword: Option<Token>,
         signature: Id,
         method_body: Id,
         period: Option<Token>,
@@ -735,9 +737,14 @@ impl NodeKind {
 
             Method {
                 ref visibility,
+                ref native_keyword,
                 ref period,
                 ..
-            } => vec![visibility.as_ref(), period.as_ref()],
+            } => vec![
+                visibility.as_ref(),
+                native_keyword.as_ref(),
+                period.as_ref(),
+            ],
 
             IsDirective {
                 ref is_keyword,

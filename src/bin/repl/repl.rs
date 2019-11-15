@@ -131,7 +131,8 @@ pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
                 | TokenKind::ImportKeyword
                 | TokenKind::ExportKeyword
                 | TokenKind::PartialKeyword
-                | TokenKind::LetKeyword => lexeme.blue().to_string(),
+                | TokenKind::LetKeyword
+                | TokenKind::NativeKeyword => lexeme.blue().to_string(),
                 TokenKind::Plus => lexeme,
                 TokenKind::Colon => lexeme,
                 TokenKind::Slash => lexeme,
@@ -202,7 +203,7 @@ impl REPL {
             match server.generator().generate_all() {
                 Err(err) => eprintln!("{:?}", err),
                 Ok(i) => {
-                    vm.eval(i);
+                    vm.eval::<loa::vm::ServerNative>(i);
                 }
             };
         }
@@ -291,11 +292,11 @@ impl REPL {
                 }
                 Ok(instructions) => {
                     if is_expression {
-                        if let Some(o) = self.vm.eval_pop(instructions) {
+                        if let Some(o) = self.vm.eval_pop::<loa::vm::ServerNative>(instructions) {
                             println!("{}", o);
                         }
                     } else {
-                        self.vm.eval(instructions);
+                        self.vm.eval::<loa::vm::ServerNative>(instructions);
                     }
                 }
             }

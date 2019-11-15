@@ -10,7 +10,7 @@ fn main() -> Result<()> {
             read(arg).map(|bytes| Instructions::from_bytes(bytes.as_slice()).unwrap())?;
 
         let mut vm = VM::new();
-        if let Some(result) = vm.eval_pop(instructions) {
+        if let Some(result) = vm.eval_pop::<loa::vm::ServerNative>(instructions) {
             println!("{}", result);
         }
     }

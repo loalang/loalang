@@ -114,7 +114,7 @@ fn main() -> Result<(), clap::Error> {
                     .map(|bytes| Instructions::from_bytes(bytes.as_slice()).unwrap())?;
 
                 let mut vm = VM::new();
-                if let Some(result) = vm.eval_pop(instructions) {
+                if let Some(result) = vm.eval_pop::<loa::vm::ServerNative>(instructions) {
                     println!("{}", result);
                 }
             }
@@ -123,7 +123,8 @@ fn main() -> Result<(), clap::Error> {
         ("run", Some(matches)) => {
             let instructions = build(matches.value_of("main").unwrap());
 
-            if let Some(result) = loa::vm::VM::new().eval_pop(instructions) {
+            if let Some(result) = loa::vm::VM::new().eval_pop::<loa::vm::ServerNative>(instructions)
+            {
                 println!("{}", result);
             }
         }

@@ -1,9 +1,6 @@
 use crate::generation::{Instruction, Instructions};
-use crate::syntax::characters_to_string;
+use crate::vm::*;
 use crate::*;
-use crate::{Arc, HashMap, Id};
-use std::f64::INFINITY;
-use std::fmt;
 use std::mem::replace;
 
 pub struct VM {
@@ -11,26 +8,6 @@ pub struct VM {
     declaring_method: Option<(u64, Method)>,
     stack: Vec<Arc<Object>>,
     globals: HashMap<Id, Arc<Object>>,
-
-    string_class: Id,
-    character_class: Id,
-    symbol_class: Id,
-
-    u8_class: Id,
-    u16_class: Id,
-    u32_class: Id,
-    u64_class: Id,
-    u128_class: Id,
-    ubig_class: Id,
-    i8_class: Id,
-    i16_class: Id,
-    i32_class: Id,
-    i64_class: Id,
-    i128_class: Id,
-    ibig_class: Id,
-    f32_class: Id,
-    f64_class: Id,
-    fbig_class: Id,
 }
 
 impl VM {
@@ -40,26 +17,6 @@ impl VM {
             stack: Vec::new(),
             declaring_method: None,
             globals: HashMap::new(),
-
-            string_class: Id::NULL,
-            character_class: Id::NULL,
-            symbol_class: Id::NULL,
-
-            u8_class: Id::NULL,
-            u16_class: Id::NULL,
-            u32_class: Id::NULL,
-            u64_class: Id::NULL,
-            u128_class: Id::NULL,
-            ubig_class: Id::NULL,
-            i8_class: Id::NULL,
-            i16_class: Id::NULL,
-            i32_class: Id::NULL,
-            i64_class: Id::NULL,
-            i128_class: Id::NULL,
-            ibig_class: Id::NULL,
-            f32_class: Id::NULL,
-            f64_class: Id::NULL,
-            fbig_class: Id::NULL,
         }
     }
 
@@ -75,22 +32,16 @@ impl VM {
     }
 
     #[inline]
-    fn load_const(&mut self, value: ConstValue, class_id: Id) {
-        self.stack.push(Arc::new(Object {
-            class: self
-                .classes
-                .get(&class_id)
-                .expect("stdlib not loaded")
-                .clone(),
-            const_value: value,
-        }));
+    fn raw_class_ptr(&self, id: Id) -> *const Class {
+        self.classes.get(&id).expect("unknown class").as_ref() as *const _
     }
 
-    fn do_eval(&mut self, instructions: Vec<Instruction>) {
+    fn do_eval<M: NativeMethods>(&mut self, instructions: Vec<Instruction>) {
         for instruction in instructions {
             if let Some((_, ref mut m)) = self.declaring_method {
                 match instruction {
                     Instruction::LoadArgument(_)
+                    | Instruction::CallNative(_)
                     | Instruction::Return(_)
                     | Instruction::LoadLocal(_)
                     | Instruction::ReferenceToClass(_)
@@ -121,257 +72,212 @@ impl VM {
                 }
             }
 
-            match instruction {
-                Instruction::MarkClassString(id) => self.string_class = id,
-                Instruction::MarkClassCharacter(id) => self.character_class = id,
-                Instruction::MarkClassSymbol(id) => self.symbol_class = id,
-
-                Instruction::MarkClassU8(id) => self.u8_class = id,
-                Instruction::MarkClassU16(id) => self.u16_class = id,
-                Instruction::MarkClassU32(id) => self.u32_class = id,
-                Instruction::MarkClassU64(id) => self.u64_class = id,
-                Instruction::MarkClassU128(id) => self.u128_class = id,
-                Instruction::MarkClassUBig(id) => self.ubig_class = id,
-                Instruction::MarkClassI8(id) => self.i8_class = id,
-                Instruction::MarkClassI16(id) => self.i16_class = id,
-                Instruction::MarkClassI32(id) => self.i32_class = id,
-                Instruction::MarkClassI64(id) => self.i64_class = id,
-                Instruction::MarkClassI128(id) => self.i128_class = id,
-                Instruction::MarkClassIBig(id) => self.ibig_class = id,
-                Instruction::MarkClassF32(id) => self.f32_class = id,
-                Instruction::MarkClassF64(id) => self.f64_class = id,
-                Instruction::MarkClassFBig(id) => self.fbig_class = id,
-
-                Instruction::LoadGlobal(id) => self
-                    .stack
-                    .push(self.globals.get(&id).expect("global not found").clone()),
-
-                Instruction::StoreGlobal(id) => {
-                    self.globals
-                        .insert(id, self.stack.pop().expect("nothing on stack to store"));
-                }
-
-                Instruction::LoadConstString(value) => {
-                    self.load_const(ConstValue::String(value), self.string_class)
-                }
-                Instruction::LoadConstCharacter(value) => {
-                    self.load_const(ConstValue::Character(value), self.character_class)
-                }
-                Instruction::LoadConstSymbol(value) => {
-                    self.load_const(ConstValue::Symbol(value), self.symbol_class)
-                }
-                Instruction::LoadConstU8(value) => {
-                    self.load_const(ConstValue::U8(value), self.u8_class)
-                }
-                Instruction::LoadConstU16(value) => {
-                    self.load_const(ConstValue::U16(value), self.u16_class)
-                }
-                Instruction::LoadConstU32(value) => {
-                    self.load_const(ConstValue::U32(value), self.u32_class)
-                }
-                Instruction::LoadConstU64(value) => {
-                    self.load_const(ConstValue::U64(value), self.u64_class)
-                }
-                Instruction::LoadConstU128(value) => {
-                    self.load_const(ConstValue::U128(value), self.u128_class)
-                }
-                Instruction::LoadConstUBig(value) => {
-                    self.load_const(ConstValue::UBig(value), self.ubig_class)
-                }
-                Instruction::LoadConstI8(value) => {
-                    self.load_const(ConstValue::I8(value), self.i8_class)
-                }
-                Instruction::LoadConstI16(value) => {
-                    self.load_const(ConstValue::I16(value), self.i16_class)
-                }
-                Instruction::LoadConstI32(value) => {
-                    self.load_const(ConstValue::I32(value), self.i32_class)
-                }
-                Instruction::LoadConstI64(value) => {
-                    self.load_const(ConstValue::I64(value), self.i64_class)
-                }
-                Instruction::LoadConstI128(value) => {
-                    self.load_const(ConstValue::I128(value), self.i128_class)
-                }
-                Instruction::LoadConstIBig(value) => {
-                    self.load_const(ConstValue::IBig(value), self.ibig_class)
-                }
-                Instruction::LoadConstF32(value) => {
-                    self.load_const(ConstValue::F32(value), self.f32_class)
-                }
-                Instruction::LoadConstF64(value) => {
-                    self.load_const(ConstValue::F64(value), self.f64_class)
-                }
-                Instruction::LoadConstFBig(value) => {
-                    self.load_const(ConstValue::FBig(value), self.fbig_class)
-                }
-                Instruction::DeclareClass(id, name) => {
-                    self.classes.insert(
-                        id,
-                        Arc::new(Class {
-                            name: name.clone(),
-                            methods: HashMap::new(),
-                        }),
-                    );
-                }
-                Instruction::BeginMethod(id, name) => {
-                    self.declaring_method = Some((
-                        id,
-                        Method {
-                            name: name.clone(),
-                            instructions: vec![],
-                        },
-                    ));
-                }
-                Instruction::EndMethod(class_id) => {
-                    let class = self
-                        .classes
-                        .get_mut(&class_id)
-                        .expect("method declared on unknown class");
-                    let class = Arc::get_mut(class)
-                        .expect("cannot declare method on class that has objects");
-                    let (id, method) = replace(&mut self.declaring_method, None)
-                        .expect("cannot end method when not started");
-                    class.methods.insert(id, Arc::new(method));
-                }
-
-                Instruction::LoadArgument(arity) => {
-                    self.stack
-                        .push(self.stack[self.stack.len() - (arity as usize)].clone());
-                }
-                Instruction::Return(arity) => {
-                    let result = self.stack.pop().expect("method didn't return");
-                    for _ in 0..arity {
-                        self.stack
-                            .pop()
-                            .expect("arguments were not loaded properly");
+            unsafe {
+                match instruction {
+                    Instruction::MarkClassString(id) => {
+                        STRING_CLASS = self.raw_class_ptr(id);
                     }
-                    self.stack.push(result);
-                }
-                Instruction::LoadLocal(index) => {
-                    let local = self.stack[self.stack.len() - (index as usize) - 1].clone();
-                    self.stack.push(local);
-                }
-                Instruction::ReferenceToClass(id) => {
-                    let class = self.classes.get(&id).expect("deref unknown class");
-                    self.stack.push(Arc::new(Object {
-                        class: class.clone(),
-                        const_value: ConstValue::Nothing,
-                    }));
-                }
-                Instruction::SendMessage(id) => {
-                    let receiver = self.stack.last().expect("empty stack");
-                    let method = receiver
-                        .class
-                        .methods
-                        .get(&id)
-                        .expect("object doesn't understand message")
-                        .clone();
-                    self.do_eval(method.instructions.clone());
-                }
-                Instruction::InheritMethod(superclass_id, subclass_id, behaviour_id) => {
-                    let method = {
-                        let super_class = self
+                    Instruction::MarkClassCharacter(id) => {
+                        CHARACTER_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassSymbol(id) => {
+                        SYMBOL_CLASS = self.raw_class_ptr(id);
+                    }
+
+                    Instruction::MarkClassU8(id) => {
+                        U8_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassU16(id) => {
+                        U16_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassU32(id) => {
+                        U32_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassU64(id) => {
+                        U64_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassU128(id) => {
+                        U128_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassUBig(id) => {
+                        UBIG_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassI8(id) => {
+                        I8_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassI16(id) => {
+                        I16_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassI32(id) => {
+                        I32_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassI64(id) => {
+                        I64_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassI128(id) => {
+                        I128_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassIBig(id) => {
+                        IBIG_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassF32(id) => {
+                        F32_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassF64(id) => {
+                        F64_CLASS = self.raw_class_ptr(id);
+                    }
+                    Instruction::MarkClassFBig(id) => {
+                        FBIG_CLASS = self.raw_class_ptr(id);
+                    }
+
+                    Instruction::LoadGlobal(id) => self
+                        .stack
+                        .push(self.globals.get(&id).expect("global not found").clone()),
+
+                    Instruction::StoreGlobal(id) => {
+                        self.globals
+                            .insert(id, self.stack.pop().expect("nothing on stack to store"));
+                    }
+
+                    Instruction::LoadConstString(value) => {
+                        self.stack.push(Object::box_string(value))
+                    }
+                    Instruction::LoadConstCharacter(value) => {
+                        self.stack.push(Object::box_character(value))
+                    }
+                    Instruction::LoadConstSymbol(value) => {
+                        self.stack.push(Object::box_symbol(value))
+                    }
+                    Instruction::LoadConstU8(value) => self.stack.push(Object::box_u8(value)),
+                    Instruction::LoadConstU16(value) => self.stack.push(Object::box_u16(value)),
+                    Instruction::LoadConstU32(value) => self.stack.push(Object::box_u32(value)),
+                    Instruction::LoadConstU64(value) => self.stack.push(Object::box_u64(value)),
+                    Instruction::LoadConstU128(value) => self.stack.push(Object::box_u128(value)),
+                    Instruction::LoadConstUBig(value) => self.stack.push(Object::box_ubig(value)),
+                    Instruction::LoadConstI8(value) => self.stack.push(Object::box_i8(value)),
+                    Instruction::LoadConstI16(value) => self.stack.push(Object::box_i16(value)),
+                    Instruction::LoadConstI32(value) => self.stack.push(Object::box_i32(value)),
+                    Instruction::LoadConstI64(value) => self.stack.push(Object::box_i64(value)),
+                    Instruction::LoadConstI128(value) => self.stack.push(Object::box_i128(value)),
+                    Instruction::LoadConstIBig(value) => self.stack.push(Object::box_ibig(value)),
+                    Instruction::LoadConstF32(value) => self.stack.push(Object::box_f32(value)),
+                    Instruction::LoadConstF64(value) => self.stack.push(Object::box_f64(value)),
+                    Instruction::LoadConstFBig(value) => self.stack.push(Object::box_fbig(value)),
+                    Instruction::DeclareClass(id, name) => {
+                        self.classes.insert(
+                            id,
+                            Arc::new(Class {
+                                name: name.clone(),
+                                methods: HashMap::new(),
+                            }),
+                        );
+                    }
+                    Instruction::BeginMethod(id, name) => {
+                        self.declaring_method = Some((
+                            id,
+                            Method {
+                                name: name.clone(),
+                                instructions: vec![],
+                            },
+                        ));
+                    }
+                    Instruction::EndMethod(class_id) => {
+                        let class = self
                             .classes
-                            .get(&superclass_id)
-                            .expect("inheriting from unknown class");
+                            .get_mut(&class_id)
+                            .expect("method declared on unknown class");
+                        let class = Arc::get_mut(class)
+                            .expect("cannot declare method on class that has objects");
+                        let (id, method) = replace(&mut self.declaring_method, None)
+                            .expect("cannot end method when not started");
+                        class.methods.insert(id, Arc::new(method));
+                    }
 
-                        super_class
+                    Instruction::LoadArgument(arity) => {
+                        self.stack
+                            .push(self.stack[self.stack.len() - (arity as usize)].clone());
+                    }
+                    Instruction::Return(arity) => {
+                        let result = self.stack.pop().expect("method didn't return");
+                        for _ in 0..arity {
+                            self.stack
+                                .pop()
+                                .expect("arguments were not loaded properly");
+                        }
+                        self.stack.push(result);
+                    }
+                    Instruction::LoadLocal(index) => {
+                        let local = self.stack[self.stack.len() - (index as usize) - 1].clone();
+                        self.stack.push(local);
+                    }
+                    Instruction::ReferenceToClass(id) => {
+                        let class = self.classes.get(&id).expect("deref unknown class");
+                        self.stack.push(Arc::new(Object {
+                            class: class.clone(),
+                            const_value: ConstValue::Nothing,
+                        }));
+                    }
+                    Instruction::SendMessage(id) => {
+                        let receiver = self.stack.last().expect("empty stack");
+                        let method = receiver
+                            .class
                             .methods
-                            .get(&behaviour_id)
-                            .expect("inheriting unknown method")
-                            .clone()
-                    };
-                    let sub_class = self
-                        .classes
-                        .get_mut(&subclass_id)
-                        .expect("unknown class cannot inherit method");
-                    let sub_class = Arc::get_mut(sub_class)
-                        .expect("cannot inherit method onto class that has objects");
+                            .get(&id)
+                            .expect("object doesn't understand message")
+                            .clone();
+                        self.do_eval::<M>(method.instructions.clone());
+                    }
+                    Instruction::InheritMethod(superclass_id, subclass_id, behaviour_id) => {
+                        let method = {
+                            let super_class = self
+                                .classes
+                                .get(&superclass_id)
+                                .expect("inheriting from unknown class");
 
-                    sub_class.methods.insert(behaviour_id, method);
+                            super_class
+                                .methods
+                                .get(&behaviour_id)
+                                .expect("inheriting unknown method")
+                                .clone()
+                        };
+                        let sub_class = self
+                            .classes
+                            .get_mut(&subclass_id)
+                            .expect("unknown class cannot inherit method");
+                        let sub_class = Arc::get_mut(sub_class)
+                            .expect("cannot inherit method onto class that has objects");
+
+                        sub_class.methods.insert(behaviour_id, method);
+                    }
+                    Instruction::CallNative(method) => {
+                        M::call(self, method);
+                    }
                 }
             }
         }
     }
 
-    pub fn eval(&mut self, instructions: Instructions) {
-        self.do_eval(instructions.into());
+    pub fn eval<M: NativeMethods>(&mut self, instructions: Instructions) {
+        self.do_eval::<M>(instructions.into());
     }
 
-    pub fn eval_pop(&mut self, instructions: Instructions) -> Option<Arc<Object>> {
-        self.do_eval(instructions.into());
+    pub fn eval_pop<M: NativeMethods>(
+        &mut self,
+        instructions: Instructions,
+    ) -> Option<Arc<Object>> {
+        self.do_eval::<M>(instructions.into());
         let result = self.stack.pop();
         if self.stack.len() > 0 {
             self.log_stack()
         }
         result
     }
-}
 
-#[derive(Debug)]
-pub struct Class {
-    pub name: String,
-    pub methods: HashMap<u64, Arc<Method>>,
-}
-
-#[derive(Debug)]
-pub struct Object {
-    pub class: Arc<Class>,
-    pub const_value: ConstValue,
-}
-
-#[derive(Debug)]
-pub enum ConstValue {
-    Nothing,
-    String(String),
-    Character(u16),
-    Symbol(String),
-    U8(u8),
-    U16(u16),
-    U32(u32),
-    U64(u64),
-    U128(u128),
-    UBig(BigUint),
-    I8(i8),
-    I16(i16),
-    I32(i32),
-    I64(i64),
-    I128(i128),
-    IBig(BigInt),
-    F32(f32),
-    F64(f64),
-    FBig(BigFraction),
-}
-
-impl fmt::Display for Object {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.const_value {
-            ConstValue::Nothing => write!(f, "a {}", self.class.name),
-            ConstValue::String(s) => write!(f, "{}", s),
-            ConstValue::Character(c) => write!(f, "{}", characters_to_string([*c].iter().cloned())),
-            ConstValue::Symbol(s) => write!(f, "#{}", s),
-            ConstValue::U8(n) => write!(f, "{}", n),
-            ConstValue::U16(n) => write!(f, "{}", n),
-            ConstValue::U32(n) => write!(f, "{}", n),
-            ConstValue::U64(n) => write!(f, "{}", n),
-            ConstValue::U128(n) => write!(f, "{}", n),
-            ConstValue::UBig(n) => write!(f, "{}", n),
-            ConstValue::I8(n) => write!(f, "{}", n),
-            ConstValue::I16(n) => write!(f, "{}", n),
-            ConstValue::I32(n) => write!(f, "{}", n),
-            ConstValue::I64(n) => write!(f, "{}", n),
-            ConstValue::I128(n) => write!(f, "{}", n),
-            ConstValue::IBig(n) => write!(f, "{}", n),
-            ConstValue::F32(n) => write!(f, "{}", n),
-            ConstValue::F64(n) => write!(f, "{}", n),
-            ConstValue::FBig(n) => write!(f, "{:.1$}", n, INFINITY as usize),
-        }
+    pub fn pop(&mut self) -> Arc<Object> {
+        self.stack.pop().expect("tried to pop empty stack")
     }
-}
 
-#[derive(Debug)]
-pub struct Method {
-    pub name: String,
-    pub instructions: Vec<Instruction>,
+    pub fn push(&mut self, object: Arc<Object>) {
+        self.stack.push(object);
+    }
 }

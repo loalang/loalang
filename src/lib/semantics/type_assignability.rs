@@ -193,11 +193,13 @@ fn resolve_number(
             | (Type::UnresolvedInteger(_, id), "Loa/Int16")
             | (Type::UnresolvedInteger(_, id), "Loa/Int32")
             | (Type::UnresolvedInteger(_, id), "Loa/Int64")
+            | (Type::UnresolvedInteger(_, id), "Loa/Int128")
             | (Type::UnresolvedInteger(_, id), "Loa/BigInteger")
             | (Type::UnresolvedInteger(_, id), "Loa/UInt8")
             | (Type::UnresolvedInteger(_, id), "Loa/UInt16")
             | (Type::UnresolvedInteger(_, id), "Loa/UInt32")
             | (Type::UnresolvedInteger(_, id), "Loa/UInt64")
+            | (Type::UnresolvedInteger(_, id), "Loa/UInt128")
             | (Type::UnresolvedInteger(_, id), "Loa/BigNatural") => {
                 if let Some(existing) = types.attempt_type_coercion(*id, proposed) {
                     Some(

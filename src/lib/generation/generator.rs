@@ -1,6 +1,7 @@
 use crate::generation::*;
 use crate::semantics::*;
 use crate::syntax::*;
+use crate::vm::NativeMethod;
 use crate::*;
 use num_traits::ToPrimitive;
 use std::collections::hash_map::DefaultHasher;
@@ -441,6 +442,13 @@ impl<'a> Generator<'a> {
         Ok(instructions)
     }
 
+    fn get_native_method(&self, class: &Node, method: &Node) -> Option<NativeMethod> {
+        let (class, _, _) = self.analysis.navigator.qualified_name_of(class)?;
+        let selector = self.analysis.navigator.method_selector(method)?;
+
+        Some(format!("{}#{}", class, selector).as_str().into())
+    }
+
     fn generate_method(&mut self, class: &Node, method: &Node) -> GenerationResult {
         self.local_count = 0;
         self.local_ids.clear();
@@ -448,11 +456,12 @@ impl<'a> Generator<'a> {
         let mut instructions = Instructions::new();
         match method.kind {
             Method {
+                ref native_keyword,
                 signature,
                 method_body,
                 ..
             } => {
-                if method_body == Id::NULL {
+                if native_keyword.is_none() && method_body == Id::NULL {
                     return Ok(vec![].into());
                 }
 
@@ -478,7 +487,13 @@ impl<'a> Generator<'a> {
                     _ => return Err(invalid_node(&signature, "Expected signature.")),
                 }
 
-                if let Some(method_body) = self.analysis.navigator.find_child(method, method_body) {
+                if native_keyword.is_some() {
+                    instructions.push(Instruction::CallNative(
+                        self.get_native_method(class, method)?,
+                    ));
+                } else if let Some(method_body) =
+                    self.analysis.navigator.find_child(method, method_body)
+                {
                     match method_body.kind {
                         MethodBody { expression, .. } => {
                             let expression = self
@@ -489,7 +504,6 @@ impl<'a> Generator<'a> {
                         }
                         _ => return Err(invalid_node(&method_body, "Expected method body.")),
                     }
-
                     instructions.push(Instruction::Return(
                         self.analysis.navigator.method_arity(method)? as u8,
                     ));

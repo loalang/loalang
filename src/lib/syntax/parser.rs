@@ -526,12 +526,17 @@ impl Parser {
 
     fn parse_method(&mut self, mut builder: NodeBuilder) -> Id {
         let mut visibility = None;
+        let mut native_keyword = None;
         let signature;
         let mut method_body = Id::NULL;
         let mut period = None;
 
         if sees!(self, PrivateKeyword | PublicKeyword) {
             visibility = Some(self.next());
+        }
+
+        if sees!(self, NativeKeyword) {
+            native_keyword = Some(self.next());
         }
 
         signature = self.parse_signature(self.child(&mut builder));
@@ -550,6 +555,7 @@ impl Parser {
             builder,
             Method {
                 visibility,
+                native_keyword,
                 signature,
                 method_body,
                 period,

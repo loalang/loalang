@@ -1,3 +1,4 @@
+use crate::vm::NativeMethod;
 use crate::*;
 use serde::{Deserialize, Serialize};
 
@@ -94,6 +95,8 @@ pub enum Instruction {
     LoadConstF32(f32),
     LoadConstF64(f64),
     LoadConstFBig(BigFraction),
+
+    CallNative(NativeMethod),
 }
 
 #[derive(Serialize, Deserialize)]
