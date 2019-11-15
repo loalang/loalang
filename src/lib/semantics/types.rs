@@ -300,33 +300,39 @@ impl Types {
                 }
             }
 
-            if let ClassBody { class_members, .. } = self.navigator.find_node(class_body)?.kind {
-                let mut behaviours: HashMap<String, Behaviour> = class_members
-                    .into_iter()
-                    .filter_map(|member_id| {
-                        let maybe_method = self.navigator.find_node(member_id)?;
-                        if let Method { .. } = maybe_method.kind {
-                            self.get_behaviour_from_method(receiver_type.clone(), maybe_method)
-                        } else {
-                            None
-                        }
-                    })
-                    .map(|b| (b.selector(), b.with_applied_type_arguments(&type_arg_map)))
-                    .collect();
+            let mut behaviours = HashMap::new();
 
-                for super_type_expression in self.navigator.super_type_expressions(class) {
-                    for super_behaviour in self
-                        .get_behaviours(&self.get_type_of_type_expression(&super_type_expression))
-                    {
-                        let selector = super_behaviour.selector();
-                        if !behaviours.contains_key(&selector) {
-                            behaviours.insert(selector, super_behaviour);
-                        }
+            if let Some(class_body) = self.navigator.find_node(class_body) {
+                if let ClassBody { class_members, .. } = class_body.kind {
+                    behaviours.extend(
+                        class_members
+                            .into_iter()
+                            .filter_map(|member_id| {
+                                let maybe_method = self.navigator.find_node(member_id)?;
+                                if let Method { .. } = maybe_method.kind {
+                                    self.get_behaviour_from_method(
+                                        receiver_type.clone(),
+                                        maybe_method,
+                                    )
+                                } else {
+                                    None
+                                }
+                            })
+                            .map(|b| (b.selector(), b.with_applied_type_arguments(&type_arg_map))),
+                    );
+                }
+            }
+
+            for super_type in self.get_super_types(class) {
+                for super_behaviour in self.get_behaviours(&super_type) {
+                    let selector = super_behaviour.selector();
+                    if !behaviours.contains_key(&selector) {
+                        behaviours.insert(selector, super_behaviour);
                     }
                 }
-
-                return Some(behaviours.into_iter().map(|(_, b)| b).collect());
             }
+
+            return Some(behaviours.into_iter().map(|(_, b)| b).collect());
         }
         None
     }
@@ -462,8 +468,7 @@ impl Types {
             | Type::Symbol(_) => {}
             Type::Class(_, id, _) => {
                 if let Some(class) = self.navigator.find_node(*id) {
-                    for super_type_expression in self.navigator.super_type_expressions(&class) {
-                        let super_type = self.get_type_of_type_expression(&super_type_expression);
+                    for super_type in self.get_super_types(&class) {
                         self.insert_distanced_types(distance + 1, super_type, types);
                     }
                 }
@@ -524,6 +529,21 @@ impl Types {
         }
 
         Type::Unknown
+    }
+
+    pub fn get_super_types(&self, class: &Node) -> Vec<Type> {
+        let mut super_types = vec![];
+        for super_type in self.navigator.super_type_expressions(&class) {
+            super_types.push(self.get_type_of_type_expression(&super_type));
+        }
+        if super_types.len() == 0 {
+            if let Some(object_class) = self.navigator.find_stdlib_class("Loa/Object") {
+                if object_class.id != class.id {
+                    super_types.push(self.get_type_of_declaration(&object_class));
+                }
+            }
+        }
+        super_types
     }
 }
 

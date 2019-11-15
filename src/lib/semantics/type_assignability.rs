@@ -333,9 +333,7 @@ pub fn check_assignment(
 
             if assignee_class.id != assigned_class.id {
                 if !invariant {
-                    for super_type in navigator.super_type_expressions(&assigned_class) {
-                        let super_type = types.get_type_of_type_expression(&super_type);
-
+                    for super_type in types.get_super_types(&assigned_class) {
                         let assigned_super_type_assignability =
                             check_assignment(assignee.clone(), super_type, navigator, types, false);
 

@@ -186,15 +186,11 @@ fn build(main: &str) -> Instructions {
     <PrettyReporter as loa::Reporter>::report(diagnostics, &analysis.navigator);
 
     let mut generator = loa::generation::Generator::new(&mut analysis);
-    let mut instructions = Instructions::new();
-    for source in sources {
-        match generator.generate::<()>(&source.uri) {
-            Err(err) => {
-                eprintln!("{:?}", err);
-                exit(1);
-            }
-            Ok(i) => instructions.extend(i),
+    match generator.generate_all() {
+        Err(err) => {
+            eprintln!("{:?}", err);
+            exit(1);
         }
+        Ok(i) => i,
     }
-    instructions
 }

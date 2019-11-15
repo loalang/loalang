@@ -40,6 +40,19 @@ impl<'a> Generator<'a> {
         Some(hasher.finish())
     }
 
+    pub fn generate_all(&mut self) -> GenerationResult {
+        let mut instructions = Instructions::new();
+        instructions.extend(
+            self.generate_declarations(&self.analysis.navigator.all_top_level_declarations())?,
+        );
+        for source in self.analysis.navigator.sources() {
+            if let SourceKind::REPLLine = source.kind {
+                instructions.extend(self.generate::<()>(&source.uri)?);
+            }
+        }
+        Ok(instructions)
+    }
+
     pub fn generate<D: REPLDirectives>(&mut self, uri: &URI) -> GenerationResult {
         let root = self.analysis.navigator.root_of(uri)?;
 

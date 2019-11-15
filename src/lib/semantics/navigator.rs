@@ -39,6 +39,47 @@ impl Navigator {
         self.modules.get(uri).map(|t| t.source.clone())
     }
 
+    pub fn sources(&self) -> Vec<Arc<Source>> {
+        self.modules
+            .iter()
+            .map(|(_, t)| &t.source)
+            .cloned()
+            .collect()
+    }
+
+    pub fn all_top_level_declarations(&self) -> Vec<Node> {
+        self.modules
+            .iter()
+            .filter_map(|(_, tree)| tree.root())
+            .flat_map(|root| match root.kind {
+                Module { .. } => self
+                    .module_declarations_in(root)
+                    .into_iter()
+                    .map(|(_, n)| n)
+                    .collect(),
+                REPLLine { .. } => self.declarations_of_repl_line(root),
+                _ => vec![],
+            })
+            .collect()
+    }
+
+    pub fn declarations_of_repl_line(&self, repl_line: &Node) -> Vec<Node> {
+        match repl_line.kind {
+            REPLLine { ref statements, .. } => statements
+                .iter()
+                .filter_map(|i| self.find_child(repl_line, *i))
+                .filter_map(|child| {
+                    if child.is_declaration(DeclarationKind::Any) {
+                        Some(child)
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            _ => vec![],
+        }
+    }
+
     pub fn modules(&self) -> Vec<Node> {
         self.modules
             .values()

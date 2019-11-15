@@ -199,18 +199,12 @@ impl REPL {
         if failure {
             server = Server::new();
         } else {
-            let mut generator = server.generator();
-            let mut instructions = Instructions::new();
-            for source in sources {
-                match generator.generate::<()>(&source.uri) {
-                    Err(err) => eprintln!("{:?}", err),
-                    Ok(i) => {
-                        instructions.extend(i);
-                    }
+            match server.generator().generate_all() {
+                Err(err) => eprintln!("{:?}", err),
+                Ok(i) => {
+                    vm.eval(i);
                 }
-            }
-
-            vm.eval(instructions);
+            };
         }
 
         let server = Arc::new(Mutex::new(server));
