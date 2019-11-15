@@ -11,6 +11,7 @@ pub enum Instruction {
     BeginMethod(String),
     EndMethod(u64),
     Return(u8),
+    InheritMethod(Id, u64),
 
     StoreGlobal(Id),
     LoadGlobal(Id),

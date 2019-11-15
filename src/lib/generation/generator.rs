@@ -362,7 +362,6 @@ impl<'a> Generator<'a> {
 
     pub fn generate_class(&mut self, class: &Node) -> GenerationResult {
         let (name, _, _) = self.analysis.navigator.qualified_name_of(class)?;
-        let methods = self.analysis.navigator.methods_of_class(class);
         let mut instructions = Instructions::new();
 
         instructions.push(Instruction::DeclareClass(class.id, name.clone()));
@@ -392,8 +391,20 @@ impl<'a> Generator<'a> {
             }
         }
 
-        for method in methods {
-            instructions.extend(self.generate_method(&method)?);
+        let class_type = self.analysis.types.get_type_of_declaration(&class);
+        let behaviours = self.analysis.types.get_behaviours(&class_type);
+
+        for behaviour in behaviours {
+            let method = self.analysis.navigator.find_node(behaviour.method_id)?;
+
+            if behaviour.receiver_type == class_type {
+                instructions.extend(self.generate_method(&method)?);
+            } else if let Type::Class(_, class_id, _) = behaviour.receiver_type {
+                instructions.push(Instruction::InheritMethod(
+                    class_id,
+                    self.behaviour_id(&method)?,
+                ));
+            }
         }
 
         Ok(instructions)

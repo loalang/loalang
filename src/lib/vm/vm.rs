@@ -387,6 +387,28 @@ impl VM {
                         .clone();
                     self.do_eval(method.instructions.clone());
                 }
+                Instruction::InheritMethod(class_id, behaviour_id) => {
+                    let method = {
+                        let super_class = self
+                            .classes
+                            .get(&class_id)
+                            .expect("inheriting from unknown class");
+
+                        super_class
+                            .methods
+                            .get(&behaviour_id)
+                            .expect("inheriting unknown method")
+                            .clone()
+                    };
+                    let sub_class = self
+                        .classes
+                        .get_mut(&self.last_class_id)
+                        .expect("unknown class cannot inherit method");
+                    let sub_class = Arc::get_mut(sub_class)
+                        .expect("cannot inherit method onto class that has objects");
+
+                    sub_class.methods.insert(behaviour_id, method);
+                }
             }
         }
     }
