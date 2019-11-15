@@ -8,8 +8,7 @@ use std::mem::replace;
 
 pub struct VM {
     classes: HashMap<Id, Arc<Class>>,
-    last_class_id: Id,
-    declaring_method: Option<Method>,
+    declaring_method: Option<(u64, Method)>,
     stack: Vec<Arc<Object>>,
     globals: HashMap<Id, Arc<Object>>,
 
@@ -40,7 +39,6 @@ impl VM {
             classes: HashMap::new(),
             stack: Vec::new(),
             declaring_method: None,
-            last_class_id: Id::NULL,
             globals: HashMap::new(),
 
             string_class: Id::NULL,
@@ -76,9 +74,21 @@ impl VM {
         }
     }
 
+    #[inline]
+    fn load_const(&mut self, value: ConstValue, class_id: Id) {
+        self.stack.push(Arc::new(Object {
+            class: self
+                .classes
+                .get(&class_id)
+                .expect("stdlib not loaded")
+                .clone(),
+            const_value: value,
+        }));
+    }
+
     fn do_eval(&mut self, instructions: Vec<Instruction>) {
         for instruction in instructions {
-            if let Some(ref mut m) = self.declaring_method {
+            if let Some((_, ref mut m)) = self.declaring_method {
                 match instruction {
                     Instruction::LoadArgument(_)
                     | Instruction::Return(_)
@@ -142,187 +152,58 @@ impl VM {
                 }
 
                 Instruction::LoadConstString(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.string_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::String(value),
-                    }));
+                    self.load_const(ConstValue::String(value), self.string_class)
                 }
-
                 Instruction::LoadConstCharacter(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.character_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::Character(value),
-                    }));
+                    self.load_const(ConstValue::Character(value), self.character_class)
                 }
-
                 Instruction::LoadConstSymbol(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.symbol_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::Symbol(value),
-                    }));
+                    self.load_const(ConstValue::Symbol(value), self.symbol_class)
                 }
-
                 Instruction::LoadConstU8(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.u8_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::U8(value),
-                    }));
+                    self.load_const(ConstValue::U8(value), self.u8_class)
                 }
                 Instruction::LoadConstU16(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.u16_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::U16(value),
-                    }));
+                    self.load_const(ConstValue::U16(value), self.u16_class)
                 }
                 Instruction::LoadConstU32(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.u32_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::U32(value),
-                    }));
+                    self.load_const(ConstValue::U32(value), self.u32_class)
                 }
                 Instruction::LoadConstU64(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.u64_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::U64(value),
-                    }));
+                    self.load_const(ConstValue::U64(value), self.u64_class)
                 }
                 Instruction::LoadConstU128(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.u128_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::U128(value),
-                    }));
+                    self.load_const(ConstValue::U128(value), self.u128_class)
                 }
                 Instruction::LoadConstUBig(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.ubig_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::UBig(value),
-                    }));
+                    self.load_const(ConstValue::UBig(value), self.ubig_class)
                 }
                 Instruction::LoadConstI8(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.i8_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::I8(value),
-                    }));
+                    self.load_const(ConstValue::I8(value), self.i8_class)
                 }
                 Instruction::LoadConstI16(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.i16_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::I16(value),
-                    }));
+                    self.load_const(ConstValue::I16(value), self.i16_class)
                 }
                 Instruction::LoadConstI32(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.i32_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::I32(value),
-                    }));
+                    self.load_const(ConstValue::I32(value), self.i32_class)
                 }
                 Instruction::LoadConstI64(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.i64_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::I64(value),
-                    }));
+                    self.load_const(ConstValue::I64(value), self.i64_class)
                 }
                 Instruction::LoadConstI128(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.i128_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::I128(value),
-                    }));
+                    self.load_const(ConstValue::I128(value), self.i128_class)
                 }
                 Instruction::LoadConstIBig(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.ibig_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::IBig(value),
-                    }));
+                    self.load_const(ConstValue::IBig(value), self.ibig_class)
                 }
                 Instruction::LoadConstF32(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.f32_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::F32(value),
-                    }));
+                    self.load_const(ConstValue::F32(value), self.f32_class)
                 }
                 Instruction::LoadConstF64(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.f64_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::F64(value),
-                    }));
+                    self.load_const(ConstValue::F64(value), self.f64_class)
                 }
                 Instruction::LoadConstFBig(value) => {
-                    self.stack.push(Arc::new(Object {
-                        class: self
-                            .classes
-                            .get(&self.fbig_class)
-                            .expect("stdlib not loaded")
-                            .clone(),
-                        const_value: ConstValue::FBig(value),
-                    }));
+                    self.load_const(ConstValue::FBig(value), self.fbig_class)
                 }
                 Instruction::DeclareClass(id, name) => {
                     self.classes.insert(
@@ -332,25 +213,26 @@ impl VM {
                             methods: HashMap::new(),
                         }),
                     );
-                    self.last_class_id = id;
                 }
-                Instruction::BeginMethod(name) => {
-                    self.declaring_method = Some(Method {
-                        name: name.clone(),
-                        instructions: vec![],
-                    });
+                Instruction::BeginMethod(id, name) => {
+                    self.declaring_method = Some((
+                        id,
+                        Method {
+                            name: name.clone(),
+                            instructions: vec![],
+                        },
+                    ));
                 }
-                Instruction::EndMethod(id) => {
+                Instruction::EndMethod(class_id) => {
                     let class = self
                         .classes
-                        .get_mut(&self.last_class_id)
+                        .get_mut(&class_id)
                         .expect("method declared on unknown class");
                     let class = Arc::get_mut(class)
                         .expect("cannot declare method on class that has objects");
-                    let method = replace(&mut self.declaring_method, None)
+                    let (id, method) = replace(&mut self.declaring_method, None)
                         .expect("cannot end method when not started");
-                    let method = Arc::new(method);
-                    class.methods.insert(id, method.clone());
+                    class.methods.insert(id, Arc::new(method));
                 }
 
                 Instruction::LoadArgument(arity) => {
@@ -387,11 +269,11 @@ impl VM {
                         .clone();
                     self.do_eval(method.instructions.clone());
                 }
-                Instruction::InheritMethod(class_id, behaviour_id) => {
+                Instruction::InheritMethod(superclass_id, subclass_id, behaviour_id) => {
                     let method = {
                         let super_class = self
                             .classes
-                            .get(&class_id)
+                            .get(&superclass_id)
                             .expect("inheriting from unknown class");
 
                         super_class
@@ -402,7 +284,7 @@ impl VM {
                     };
                     let sub_class = self
                         .classes
-                        .get_mut(&self.last_class_id)
+                        .get_mut(&subclass_id)
                         .expect("unknown class cannot inherit method");
                     let sub_class = Arc::get_mut(sub_class)
                         .expect("cannot inherit method onto class that has objects");

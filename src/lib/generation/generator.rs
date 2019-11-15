@@ -33,7 +33,7 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn behaviour_id(&self, method: &Node) -> Option<u64> {
+    fn behaviour_id(&self, method: &Node) -> Option<u64> {
         let mut hasher = DefaultHasher::new();
         let selector = self.analysis.navigator.method_selector(&method)?;
         selector.hash(&mut hasher);
@@ -50,37 +50,48 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn generate_module(&mut self, module: &Node) -> GenerationResult {
-        match module.kind {
-            Module {
-                ref module_declarations,
-                ..
-            } => {
-                let mut instructions = Instructions::new();
-                for dec in module_declarations {
-                    let dec = self.analysis.navigator.find_child(module, *dec)?;
-                    instructions.extend(self.generate_module_declaration(&dec)?);
+    fn generate_module(&mut self, module: &Node) -> GenerationResult {
+        self.generate_declarations(
+            &self
+                .analysis
+                .navigator
+                .module_declarations_in(module)
+                .into_iter()
+                .map(|(_, n)| n)
+                .collect(),
+        )
+    }
+
+    fn generate_declarations(&mut self, declarations: &Vec<Node>) -> GenerationResult {
+        let mut instructions = Instructions::new();
+        for declaration in declarations.iter() {
+            if let Class { .. } = declaration.kind {
+                instructions.extend(self.declare_class(declaration)?);
+            }
+        }
+        for declaration in declarations.iter() {
+            match declaration.kind {
+                Class { .. } => {
+                    instructions.extend(self.generate_class(declaration)?);
                 }
-                Ok(instructions)
+                LetBinding { .. } => {
+                    instructions.extend(self.generate_let_binding(declaration)?);
+                    instructions.push(Instruction::StoreGlobal(declaration.id));
+                    self.local_ids.remove(0);
+                    self.local_count -= 1;
+                }
+                _ => return Err(invalid_node(declaration, "Expected declaration.")),
             }
-            _ => Err(invalid_node(module, "Expected module.")),
         }
+        for declaration in declarations.iter() {
+            if let Class { .. } = declaration.kind {
+                instructions.extend(self.resolve_inherits(declaration)?);
+            }
+        }
+        Ok(instructions)
     }
 
-    pub fn generate_module_declaration(&mut self, module_declaration: &Node) -> GenerationResult {
-        match module_declaration.kind {
-            Exported(_, declaration) => {
-                let declaration = self
-                    .analysis
-                    .navigator
-                    .find_child(&module_declaration, declaration)?;
-                self.generate_declaration(&declaration)
-            }
-            _ => self.generate_declaration(&module_declaration),
-        }
-    }
-
-    pub fn generate_repl_line<D: REPLDirectives>(&mut self, repl_line: &Node) -> GenerationResult {
+    fn generate_repl_line<D: REPLDirectives>(&mut self, repl_line: &Node) -> GenerationResult {
         match repl_line.kind {
             REPLLine { ref statements } => {
                 let mut instructions = Instructions::new();
@@ -94,7 +105,7 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn generate_repl_statement<D: REPLDirectives>(
+    fn generate_repl_statement<D: REPLDirectives>(
         &mut self,
         repl_statement: &Node,
     ) -> GenerationResult {
@@ -130,11 +141,11 @@ impl<'a> Generator<'a> {
                 Ok(vec![].into())
             }
             ImportDirective { .. } => Ok(vec![].into()),
-            _ => self.generate_declaration(&repl_statement),
+            _ => self.generate_declarations(&vec![repl_statement.clone()]),
         }
     }
 
-    pub fn generate_expression(&mut self, expression: &Node) -> GenerationResult {
+    fn generate_expression(&mut self, expression: &Node) -> GenerationResult {
         let result = match expression.kind {
             ReferenceExpression { .. } => {
                 let declaration = self
@@ -221,14 +232,14 @@ impl<'a> Generator<'a> {
         result
     }
 
-    pub fn generate_string(&mut self, string: &Node) -> GenerationResult {
+    fn generate_string(&mut self, string: &Node) -> GenerationResult {
         match string.kind {
             StringExpression(_, ref s) => Ok(Instruction::LoadConstString(s.clone()).into()),
             _ => Err(invalid_node(string, "Expected string.")),
         }
     }
 
-    pub fn generate_character(&mut self, character: &Node) -> GenerationResult {
+    fn generate_character(&mut self, character: &Node) -> GenerationResult {
         match character.kind {
             CharacterExpression(_, Some(ref s)) => {
                 Ok(Instruction::LoadConstCharacter(s.clone()).into())
@@ -237,7 +248,7 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn generate_number(&mut self, literal: &Node) -> GenerationResult {
+    fn generate_number(&mut self, literal: &Node) -> GenerationResult {
         let type_ = self.analysis.types.get_type_of_expression(&literal);
 
         if let Type::UnresolvedInteger(_, _) = type_ {
@@ -277,7 +288,7 @@ impl<'a> Generator<'a> {
         ))
     }
 
-    pub fn generate_int(&self, literal: &Node, size: BitSize, signed: bool) -> GenerationResult {
+    fn generate_int(&self, literal: &Node, size: BitSize, signed: bool) -> GenerationResult {
         match (&literal.kind, signed) {
             (IntegerExpression(_, ref int), true) => match size {
                 BitSize::Size8 => Ok(Instruction::LoadConstI8(int.to_i8().unwrap()).into()),
@@ -301,7 +312,7 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn generate_float(&self, literal: &Node, size: BitSize) -> GenerationResult {
+    fn generate_float(&self, literal: &Node, size: BitSize) -> GenerationResult {
         match literal.kind {
             FloatExpression(_, ref fraction) => match size {
                 BitSize::Size32 => Ok(Instruction::LoadConstF32(fraction.to_f32().unwrap()).into()),
@@ -313,7 +324,7 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn generate_message(&mut self, message: &Node) -> GenerationResult {
+    fn generate_message(&mut self, message: &Node) -> GenerationResult {
         match message.kind {
             UnaryMessage { .. } => Ok(Instructions::new()),
             BinaryMessage { expression, .. } => {
@@ -345,22 +356,29 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn generate_declaration(&mut self, declaration: &Node) -> GenerationResult {
-        match declaration.kind {
-            Class { .. } => self.generate_class(declaration),
-            LetBinding { .. } => {
-                let mut instructions = Instructions::new();
-                instructions.extend(self.generate_let_binding(declaration)?);
-                instructions.push(Instruction::StoreGlobal(declaration.id));
-                self.local_ids.remove(0);
-                self.local_count -= 1;
-                Ok(instructions)
+    fn resolve_inherits(&mut self, class: &Node) -> GenerationResult {
+        let mut instructions = Instructions::new();
+        let class_type = self.analysis.types.get_type_of_declaration(&class);
+        let behaviours = self.analysis.types.get_behaviours(&class_type);
+
+        for behaviour in behaviours {
+            let method = self.analysis.navigator.find_node(behaviour.method_id)?;
+
+            if behaviour.receiver_type == class_type {
+                // Noop
+            } else if let Type::Class(_, class_id, _) = behaviour.receiver_type {
+                instructions.push(Instruction::InheritMethod(
+                    class_id,
+                    class.id,
+                    self.behaviour_id(&method)?,
+                ));
             }
-            _ => Err(invalid_node(declaration, "Expected declaration.")),
         }
+
+        Ok(instructions)
     }
 
-    pub fn generate_class(&mut self, class: &Node) -> GenerationResult {
+    fn declare_class(&mut self, class: &Node) -> GenerationResult {
         let (name, _, _) = self.analysis.navigator.qualified_name_of(class)?;
         let mut instructions = Instructions::new();
 
@@ -391,6 +409,11 @@ impl<'a> Generator<'a> {
             }
         }
 
+        Ok(instructions)
+    }
+
+    fn generate_class(&mut self, class: &Node) -> GenerationResult {
+        let mut instructions = Instructions::new();
         let class_type = self.analysis.types.get_type_of_declaration(&class);
         let behaviours = self.analysis.types.get_behaviours(&class_type);
 
@@ -398,19 +421,14 @@ impl<'a> Generator<'a> {
             let method = self.analysis.navigator.find_node(behaviour.method_id)?;
 
             if behaviour.receiver_type == class_type {
-                instructions.extend(self.generate_method(&method)?);
-            } else if let Type::Class(_, class_id, _) = behaviour.receiver_type {
-                instructions.push(Instruction::InheritMethod(
-                    class_id,
-                    self.behaviour_id(&method)?,
-                ));
+                instructions.extend(self.generate_method(class, &method)?);
             }
         }
 
         Ok(instructions)
     }
 
-    pub fn generate_method(&mut self, method: &Node) -> GenerationResult {
+    fn generate_method(&mut self, class: &Node, method: &Node) -> GenerationResult {
         self.local_count = 0;
         self.local_ids.clear();
 
@@ -438,7 +456,10 @@ impl<'a> Generator<'a> {
                             .analysis
                             .navigator
                             .message_pattern_selector(&message_pattern)?;
-                        instructions.push(Instruction::BeginMethod(selector));
+                        instructions.push(Instruction::BeginMethod(
+                            self.behaviour_id(method)?,
+                            selector,
+                        ));
                         instructions.extend(self.generate_message_pattern(&message_pattern)?);
                     }
                     _ => return Err(invalid_node(&signature, "Expected signature.")),
@@ -460,7 +481,7 @@ impl<'a> Generator<'a> {
                         self.analysis.navigator.method_arity(method)? as u8,
                     ));
                 }
-                instructions.push(Instruction::EndMethod(self.behaviour_id(method)?));
+                instructions.push(Instruction::EndMethod(class.id));
             }
             _ => return Err(invalid_node(method, "Expected method.")),
         }
@@ -468,7 +489,7 @@ impl<'a> Generator<'a> {
         Ok(instructions)
     }
 
-    pub fn generate_message_pattern(&mut self, message_pattern: &Node) -> GenerationResult {
+    fn generate_message_pattern(&mut self, message_pattern: &Node) -> GenerationResult {
         let mut instructions = Instructions::new();
         match message_pattern.kind {
             UnaryMessagePattern { .. } => {}
@@ -509,7 +530,7 @@ impl<'a> Generator<'a> {
         Ok(instructions)
     }
 
-    pub fn generate_parameter_pattern(
+    fn generate_parameter_pattern(
         &mut self,
         _parameter_pattern: &Node,
         _arity: usize,
@@ -518,7 +539,7 @@ impl<'a> Generator<'a> {
         // Ok(Instruction::LoadArgument(arity).into())
     }
 
-    pub fn generate_let_binding(&mut self, binding: &Node) -> GenerationResult {
+    fn generate_let_binding(&mut self, binding: &Node) -> GenerationResult {
         match binding.kind {
             LetBinding { expression, .. } => {
                 let expression = self.analysis.navigator.find_child(binding, expression)?;
