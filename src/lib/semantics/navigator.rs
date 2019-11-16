@@ -969,6 +969,17 @@ impl Navigator {
         methods
     }
 
+    pub fn message_arity(&self, message: &Node) -> Option<usize> {
+        match message.kind {
+            UnaryMessage { .. } => Some(1),
+            BinaryMessage { .. } => Some(2),
+            KeywordMessage {
+                ref keyword_pairs, ..
+            } => Some(keyword_pairs.len() + 1),
+            _ => None,
+        }
+    }
+
     pub fn method_arity(&self, method: &Node) -> Option<usize> {
         if let Method { signature, .. } = method.kind {
             let signature = self.find_child(method, signature)?;

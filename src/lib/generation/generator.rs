@@ -236,6 +236,8 @@ impl<'a> Generator<'a> {
                     self.behaviour_id(&method)?,
                 ));
 
+                self.local_count -= self.analysis.navigator.message_arity(&message)? as u16;
+
                 Ok(instructions)
             }
 
@@ -363,7 +365,7 @@ impl<'a> Generator<'a> {
             KeywordMessage { ref keyword_pairs } => {
                 let mut instructions = Instructions::new();
 
-                for pair in keyword_pairs.iter() {
+                for pair in keyword_pairs.iter().rev() {
                     let pair = self.analysis.navigator.find_child(message, *pair)?;
 
                     match pair.kind {
@@ -375,8 +377,6 @@ impl<'a> Generator<'a> {
                         _ => return Err(invalid_node(&pair, "Expected keyword pair.")),
                     }
                 }
-
-                instructions.reverse();
 
                 Ok(instructions)
             }
@@ -519,7 +519,7 @@ impl<'a> Generator<'a> {
                         _ => return Err(invalid_node(&method_body, "Expected method body.")),
                     }
                     instructions.push(Instruction::Return(
-                        self.analysis.navigator.method_arity(method)? as u8,
+                        self.analysis.navigator.method_arity(method)? as u16 + self.local_count - 2,
                     ));
                 }
                 instructions.push(Instruction::EndMethod(class.id));

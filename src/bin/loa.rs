@@ -28,6 +28,13 @@ fn log_to_file() {
     simple_logging::log_to(log_file, log::LevelFilter::Info);
 }
 
+fn log_to_stderr() {
+    #[cfg(debug_assertions)]
+    simple_logging::log_to_stderr(LevelFilter::Debug);
+    #[cfg(not(debug_assertions))]
+    simple_logging::log_to_stderr(LevelFilter::Error);
+}
+
 fn main() -> Result<(), clap::Error> {
     let project_name = std::env::current_dir()
         .ok()
@@ -112,6 +119,7 @@ fn main() -> Result<(), clap::Error> {
                 println!();
             }
             Some(file) => {
+                log_to_stderr();
                 let instructions = std::fs::read(file)
                     .map(|bytes| Instructions::from_bytes(bytes.as_slice()).unwrap())?;
 
@@ -123,6 +131,7 @@ fn main() -> Result<(), clap::Error> {
         },
 
         ("run", Some(matches)) => {
+            log_to_stderr();
             let instructions = build(matches.value_of("main").unwrap());
 
             if let Some(result) = loa::vm::VM::new().eval_pop::<ServerRuntime>(instructions) {
@@ -131,6 +140,7 @@ fn main() -> Result<(), clap::Error> {
         }
 
         ("build", Some(matches)) => {
+            log_to_stderr();
             let instructions = build(matches.value_of("main").unwrap());
 
             match matches.value_of("out") {
@@ -153,6 +163,7 @@ fn main() -> Result<(), clap::Error> {
 
 use loa::generation::Instructions;
 use loa::vm::VM;
+use log::LevelFilter;
 use std::convert::identity;
 use std::io::{stdout, Write};
 use std::process::exit;

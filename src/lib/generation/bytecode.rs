@@ -62,7 +62,7 @@ pub enum Instruction {
 
     // The return instruction removes the stack frame,
     // leaving only the method result on the TOS.
-    Return(u8),
+    Return(u16),
 
     // This instruction pops the TOS and stores it as
     // a global in the VM.
