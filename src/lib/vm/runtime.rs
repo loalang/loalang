@@ -1,23 +1,25 @@
-use crate::vm::{ConstValue, Object, VM};
+use crate::vm::{CallStack, ConstValue, Object, VMResult, VM};
 use fraction::{BigFraction, BigUint};
 use num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-pub trait NativeMethods
+pub trait Runtime
 where
     Self: Sized,
 {
+    fn print_panic(message: String, call_stack: CallStack);
+
     #[inline]
-    fn call(vm: &mut VM, method: NativeMethod) {
+    fn call(vm: &mut VM, method: NativeMethod) -> VMResult<()> {
         match method {
             NativeMethod::Number_plus => Self::number_plus(vm),
         }
     }
 
-    fn number_plus(vm: &mut VM) {
-        let receiver = vm.pop();
-        let operand = vm.pop();
+    fn number_plus(vm: &mut VM) -> VMResult<()> {
+        let receiver = unwrap!(vm, vm.pop());
+        let operand = unwrap!(vm, vm.pop());
 
         match (&receiver.const_value, &operand.const_value) {
             (ConstValue::Nothing, _)
@@ -27,7 +29,7 @@ where
             | (ConstValue::Character(_), _)
             | (_, ConstValue::Character(_))
             | (ConstValue::Symbol(_), _)
-            | (_, ConstValue::Symbol(_)) => panic!("not a number"),
+            | (_, ConstValue::Symbol(_)) => return vm.panic("not a number".into()),
 
             (ConstValue::U8(a), ConstValue::U8(b)) => vm.push(add_u8(*a, *b)),
             (ConstValue::U8(a), ConstValue::U16(b)) => vm.push(add_u16(*a as u16, *b)),
@@ -360,6 +362,7 @@ where
             (ConstValue::FBig(b), ConstValue::F64(a)) => vm.push(add_fbig(&(*a).into(), b)),
             (ConstValue::FBig(a), ConstValue::FBig(b)) => vm.push(add_fbig(a, b)),
         }
+        VMResult::Ok(())
     }
 }
 

@@ -58,7 +58,7 @@ pub enum Instruction {
     // Afterwards, this instruction will have replaced
     // the arguments and receiver with the result of
     // the method.
-    SendMessage(u64),
+    SendMessage(String, u64),
 
     // The return instruction removes the stack frame,
     // leaving only the method result on the TOS.

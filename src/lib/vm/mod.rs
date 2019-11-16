@@ -1,3 +1,7 @@
+#[macro_use]
+mod vm_result;
+pub use self::vm_result::*;
+
 mod vm;
 pub use self::vm::*;
 
@@ -10,8 +14,5 @@ pub use self::object::*;
 mod class;
 pub use self::class::*;
 
-mod native;
-pub use self::native::*;
-
-mod server_native;
-pub use self::server_native::*;
+mod runtime;
+pub use self::runtime::*;

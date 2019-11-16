@@ -39,3 +39,4 @@ num-bigint = "0.2"
 num-traits = "0.2"
 fraction = { version = "0.6", features = ["with-serde-support"] }
 peekmore = "0.4.0"
+atty = "0.2"

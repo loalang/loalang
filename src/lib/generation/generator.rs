@@ -231,7 +231,10 @@ impl<'a> Generator<'a> {
 
                 instructions.extend(self.generate_message(&message)?);
                 instructions.extend(self.generate_expression(&receiver)?);
-                instructions.push(Instruction::SendMessage(self.behaviour_id(&method)?));
+                instructions.push(Instruction::SendMessage(
+                    format!("{}", expression.span.start),
+                    self.behaviour_id(&method)?,
+                ));
 
                 Ok(instructions)
             }

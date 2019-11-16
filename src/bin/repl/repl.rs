@@ -203,7 +203,7 @@ impl REPL {
             match server.generator().generate_all() {
                 Err(err) => eprintln!("{:?}", err),
                 Ok(i) => {
-                    vm.eval::<loa::vm::ServerNative>(i);
+                    vm.eval::<ServerRuntime>(i);
                 }
             };
         }
@@ -292,11 +292,11 @@ impl REPL {
                 }
                 Ok(instructions) => {
                     if is_expression {
-                        if let Some(o) = self.vm.eval_pop::<loa::vm::ServerNative>(instructions) {
+                        if let Some(o) = self.vm.eval_pop::<ServerRuntime>(instructions) {
                             println!("{}", o);
                         }
                     } else {
-                        self.vm.eval::<loa::vm::ServerNative>(instructions);
+                        self.vm.eval::<ServerRuntime>(instructions);
                     }
                 }
             }

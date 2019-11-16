@@ -367,6 +367,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "loa"
 version = "0.1.0"
 dependencies = [
+ "atty 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "colored 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
