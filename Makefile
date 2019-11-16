@@ -12,6 +12,8 @@ test:
 	cargo test --lib
 
 install:
+	git submodule init
+	git submodule update
 	cp target/release/loa /usr/local/bin/loa
 	cp target/release/loavm /usr/local/bin/loavm
 	mkdir -p /usr/local/lib/loa/std
