@@ -458,7 +458,10 @@ impl Navigator {
             SelfExpression(_) | SelfTypeExpression(_) => self.closest_class_upwards(reference),
             _ => {
                 let (name, _) = self.symbol_of(reference)?;
-                self.find_declaration_above(reference, name, kind)
+                match self.find_declaration_above(reference, name.clone(), kind) {
+                    Some(t) => Some(t),
+                    None => self.find_stdlib_class(format!("Loa/{}", name).as_str()),
+                }
             }
         }
     }
@@ -469,78 +472,71 @@ impl Navigator {
         name: String,
         kind: DeclarationKind,
     ) -> Option<Node> {
-        match self.closest_scope_root_upwards(node) {
-            None => None,
-            Some(scope_root) => {
-                let mut result = None;
-                let mut traverse = |node: &Node| {
-                    if node.is_import_directive() {
-                        if let syntax::ImportDirective {
-                            qualified_symbol,
-                            symbol,
-                            ..
-                        } = node.kind
-                        {
-                            if let Some(qualified_symbol) = self.find_child(node, qualified_symbol)
-                            {
-                                if let syntax::QualifiedSymbol { ref symbols, .. } =
-                                    qualified_symbol.kind
+        let scope_root = self.closest_scope_root_upwards(node)?;
+        let mut result = None;
+        let mut traverse = |node: &Node| {
+            if node.is_import_directive() {
+                if let syntax::ImportDirective {
+                    qualified_symbol,
+                    symbol,
+                    ..
+                } = node.kind
+                {
+                    if let Some(qualified_symbol) = self.find_child(node, qualified_symbol) {
+                        if let syntax::QualifiedSymbol { ref symbols, .. } = qualified_symbol.kind {
+                            if let Some(mut imported_symbol) = symbols.last().cloned() {
+                                if symbol != Id::NULL {
+                                    imported_symbol = symbol;
+                                }
+                                if let Some(imported_symbol) =
+                                    self.find_child(&qualified_symbol, imported_symbol)
                                 {
-                                    if let Some(mut imported_symbol) = symbols.last().cloned() {
-                                        if symbol != Id::NULL {
-                                            imported_symbol = symbol;
-                                        }
-                                        if let Some(imported_symbol) =
-                                            self.find_child(&qualified_symbol, imported_symbol)
-                                        {
-                                            if let syntax::Symbol(t) = imported_symbol.kind {
-                                                if t.lexeme() == name {
-                                                    match self.find_declaration_from_import(node) {
-                                                        Some(n) => {
-                                                            result = Some(n);
-                                                        }
-                                                        None => {
-                                                            result = Some(node.clone());
-                                                        }
-                                                    }
-                                                    return false;
+                                    if let syntax::Symbol(t) = imported_symbol.kind {
+                                        if t.lexeme() == name {
+                                            match self.find_declaration_from_import(node) {
+                                                Some(n) => {
+                                                    result = Some(n);
+                                                }
+                                                None => {
+                                                    result = Some(node.clone());
                                                 }
                                             }
+                                            return false;
                                         }
                                     }
                                 }
                             }
                         }
                     }
-
-                    if node.is_declaration(kind) {
-                        if let Some((n, _)) = self.symbol_of(node) {
-                            if n == name {
-                                result = Some(node.clone());
-                                return false;
-                            }
-                        }
-                    }
-
-                    // We do not traverse down scope roots, since
-                    // declarations declared there is not reachable
-                    // to the original reference.
-                    node.id == scope_root.id || !node.is_scope_root() || node.is_repl_line()
-                };
-
-                if scope_root.is_repl_line() {
-                    self.traverse_all_repl_lines(&mut traverse);
-                } else {
-                    self.traverse(&scope_root, &mut traverse);
                 }
-
-                if result.is_some() {
-                    return result;
-                }
-                let parent = self.parent(&scope_root)?;
-                self.find_declaration_above(&parent, name, kind)
             }
+
+            if node.is_declaration(kind) {
+                if let Some((n, _)) = self.symbol_of(node) {
+                    if n == name {
+                        result = Some(node.clone());
+                        return false;
+                    }
+                }
+            }
+
+            // We do not traverse down scope roots, since
+            // declarations declared there is not reachable
+            // to the original reference.
+            node.id == scope_root.id || !node.is_scope_root() || node.is_repl_line()
+        };
+
+        if scope_root.is_repl_line() {
+            self.traverse_all_repl_lines(&mut traverse);
+        } else {
+            self.traverse(&scope_root, &mut traverse);
         }
+
+        if result.is_some() {
+            return result;
+        }
+        let parent = self.parent(&scope_root)?;
+        self.find_declaration_above(&parent, name, kind)
     }
 
     pub fn find_references_through_imports(
