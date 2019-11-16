@@ -278,6 +278,17 @@ impl<'a> Generator<'a> {
             let (qn, _, _) = self.analysis.navigator.qualified_name_of(&class)?;
 
             match qn.as_str() {
+                "Loa/Number" => {
+                    if let IntegerExpression(_, _) = literal.kind {
+                        return self.generate_int(literal, BitSize::SizeBig, true);
+                    } else {
+                        return self.generate_float(literal, BitSize::SizeBig);
+                    }
+                }
+                "Loa/Integer" => return self.generate_int(literal, BitSize::SizeBig, true),
+                "Loa/Natural" => return self.generate_int(literal, BitSize::SizeBig, false),
+                "Loa/Float" => return self.generate_float(literal, BitSize::SizeBig),
+
                 "Loa/Int8" => return self.generate_int(literal, BitSize::Size8, true),
                 "Loa/Int16" => return self.generate_int(literal, BitSize::Size16, true),
                 "Loa/Int32" => return self.generate_int(literal, BitSize::Size32, true),
