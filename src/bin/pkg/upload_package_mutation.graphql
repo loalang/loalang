@@ -1,0 +1,8 @@
+mutation UploadPackageMutation($name: String!, $version: String!, $package: Upload!) {
+  publishPackage(name: $name, version: $version, package: $package) {
+    name
+    latestVersion {
+      version
+    }
+  }
+}

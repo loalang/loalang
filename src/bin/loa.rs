@@ -2,11 +2,14 @@
 
 extern crate clap;
 extern crate colored;
+extern crate graphql_client;
+extern crate http;
 extern crate jsonrpc_stdio_server;
 extern crate log;
 extern crate log_panics;
 extern crate lsp_server;
 extern crate lsp_types;
+extern crate reqwest;
 extern crate rustyline;
 extern crate serde_json;
 extern crate simple_logging;
@@ -17,6 +20,8 @@ mod server_handler;
 pub use self::reporting::*;
 mod runtime;
 use self::runtime::ServerRuntime;
+
+mod pkg;
 
 fn log_to_file() {
     log_panics::init();
@@ -75,6 +80,25 @@ fn main() -> Result<(), clap::Error> {
                 .multiple(true)
                 .value_name("FILES"),
         ),
+        clap::SubCommand::with_name("pkg")
+            .arg(
+                clap::Arg::with_name("server")
+                    .short("s")
+                    .takes_value(true)
+                    .value_name("SERVER_HOST")
+                    .default_value("https://api.loalang.xyz"),
+            )
+            .subcommands(vec![clap::SubCommand::with_name("add").arg(
+                clap::Arg::with_name("package")
+                    .takes_value(true)
+                    .multiple(true)
+                    .value_name("PACKAGE_NAME"),
+            )])
+            .subcommands(vec![clap::SubCommand::with_name("publish").arg(
+                clap::Arg::with_name("version")
+                    .takes_value(true)
+                    .value_name("VERSION"),
+            )]),
     ]);
     let cli = app.clone().get_matches();
 
@@ -152,6 +176,30 @@ fn main() -> Result<(), clap::Error> {
                 Some(outfile) => {
                     std::fs::write(outfile, instructions.to_bytes().unwrap()).unwrap();
                 }
+            }
+        }
+
+        ("pkg", Some(matches)) => {
+            let server = matches.value_of("server").unwrap();
+
+            match matches.subcommand() {
+                ("add", Some(matches)) => match matches.values_of("package") {
+                    Some(packages) => match pkg::add_packages(server, packages.collect()) {
+                        Ok(()) => (),
+                        Err(e) => eprintln!("{}", e),
+                    },
+                    None => eprintln!("{}", matches.usage()),
+                },
+                ("publish", Some(matches)) => match matches.value_of("version") {
+                    Some(version) => {
+                        match pkg::publish_package(server, project_name.as_ref(), version) {
+                            Ok(()) => (),
+                            Err(e) => eprintln!("{}", e),
+                        }
+                    }
+                    None => eprintln!("{}", matches.usage()),
+                },
+                _ => eprintln!("{}", matches.usage()),
             }
         }
 
