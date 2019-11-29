@@ -1,0 +1,24 @@
+mutation LoginMutation($email: String!, $password: String!) {
+  login(email: $email, password: $password) {
+    email
+  }
+}
+
+mutation UploadPackageMutation($name: String!, $version: String!, $package: Upload!) {
+  publishPackage(name: $name, version: $version, package: $package) {
+    name
+    latestVersion {
+      version
+    }
+  }
+}
+
+query GetPackageQuery($name: String!) {
+  package(name: $name) {
+    name
+    latestVersion {
+      version
+      url
+    }
+  }
+}

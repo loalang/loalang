@@ -19,7 +19,7 @@ path = "src/bin/loavm.rs"
 required-features = ["build-binary"]
 
 [features]
-build-binary = ["jsonrpc-stdio-server", "lsp-server", "lsp-types", "serde_json", "log-panics", "simple-logging", "rustyline", "colored", "clap", "reqwest", "http", "graphql_client"]
+build-binary = ["jsonrpc-stdio-server", "lsp-server", "lsp-types", "serde_json", "log-panics", "simple-logging", "rustyline", "colored", "clap", "reqwest", "http", "graphql_client", "rpassword", "dirs", "tar"]
 
 [dependencies]
 jsonrpc-stdio-server = { version = "14.0", optional = true }
@@ -34,6 +34,9 @@ clap = { version = "2.33.0", optional = true }
 reqwest = { version = "0.9", optional = true }
 http = { version = "0.1.20", optional = true }
 graphql_client = { version = "0.8.0", optional = true }
+rpassword = { version = "4.0", optional = true }
+tar = { version = "0.4", optional = true }
+dirs = { version = "2", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4.8"
 bincode = "1.2.0"

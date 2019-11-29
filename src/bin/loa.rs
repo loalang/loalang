@@ -2,6 +2,7 @@
 
 extern crate clap;
 extern crate colored;
+extern crate dirs;
 extern crate graphql_client;
 extern crate http;
 extern crate jsonrpc_stdio_server;
@@ -10,9 +11,11 @@ extern crate log_panics;
 extern crate lsp_server;
 extern crate lsp_types;
 extern crate reqwest;
+extern crate rpassword;
 extern crate rustyline;
 extern crate serde_json;
 extern crate simple_logging;
+extern crate tar;
 
 mod repl;
 mod reporting;
@@ -28,7 +31,13 @@ fn log_to_file() {
     let log_file = std::fs::OpenOptions::new()
         .append(true)
         .create(true)
-        .open("/usr/local/var/log/loa.log")
+        .open({
+            let mut log_file = dirs::config_dir().unwrap();
+            log_file.push("loa");
+            std::fs::create_dir_all(&log_file).expect("need write permission to config directory");
+            log_file.push("loa.log");
+            log_file
+        })
         .unwrap();
     simple_logging::log_to(log_file, log::LevelFilter::Info);
 }
@@ -56,6 +65,11 @@ fn main() -> Result<(), clap::Error> {
         .takes_value(true)
         .default_value(default_main.as_ref())
         .value_name("MAIN_CLASS");
+
+    let mut config_file = dirs::config_dir().unwrap();
+    config_file.push("loa");
+    std::fs::create_dir_all(&config_file).expect("need write permission to config directory");
+    config_file.push("loapkg.json");
 
     let mut app = clap::App::new("loa").subcommands(vec![
         clap::SubCommand::with_name("server"),
@@ -88,17 +102,29 @@ fn main() -> Result<(), clap::Error> {
                     .value_name("SERVER_HOST")
                     .default_value("https://api.loalang.xyz"),
             )
-            .subcommands(vec![clap::SubCommand::with_name("add").arg(
-                clap::Arg::with_name("package")
+            .arg(
+                clap::Arg::with_name("config")
+                    .short("c")
                     .takes_value(true)
-                    .multiple(true)
-                    .value_name("PACKAGE_NAME"),
-            )])
-            .subcommands(vec![clap::SubCommand::with_name("publish").arg(
-                clap::Arg::with_name("version")
-                    .takes_value(true)
-                    .value_name("VERSION"),
-            )]),
+                    .value_name("CONFIG_FILE")
+                    .default_value(config_file.to_str().unwrap()),
+            )
+            .subcommands(vec![
+                clap::SubCommand::with_name("login"),
+                clap::SubCommand::with_name("logout"),
+                clap::SubCommand::with_name("whoami"),
+                clap::SubCommand::with_name("add").arg(
+                    clap::Arg::with_name("package")
+                        .takes_value(true)
+                        .multiple(true)
+                        .value_name("PACKAGE_NAME"),
+                ),
+                clap::SubCommand::with_name("publish").arg(
+                    clap::Arg::with_name("version")
+                        .takes_value(true)
+                        .value_name("VERSION"),
+                ),
+            ]),
     ]);
     let cli = app.clone().get_matches();
 
@@ -180,21 +206,52 @@ fn main() -> Result<(), clap::Error> {
         }
 
         ("pkg", Some(matches)) => {
-            let server = matches.value_of("server").unwrap();
+            let api = pkg::APIClient::new(
+                matches.value_of("server").unwrap(),
+                matches.value_of("config").unwrap(),
+            );
 
             match matches.subcommand() {
+                ("login", _) => {
+                    let mut editor = rustyline::Editor::<()>::new();
+                    if let Ok(email) = editor.readline("Email: ") {
+                        if let Ok(password) = rpassword::read_password_from_tty(Some("Password: "))
+                        {
+                            if let Err(e) = api.login(email.as_ref(), password.as_ref()) {
+                                eprintln!("{}", e);
+                            } else {
+                                println!("Successfully logged in as {}.", email);
+                            }
+                        }
+                    }
+                }
+                ("logout", _) => {
+                    if let Err(e) = api.logout() {
+                        eprintln!("{}", e)
+                    }
+                }
+                ("whoami", _) => match api.auth_email() {
+                    Err(e) => eprintln!("{}", e),
+                    Ok(Some(email)) => println!("{}", email),
+                    Ok(None) => println!("Not logged in"),
+                },
                 ("add", Some(matches)) => match matches.values_of("package") {
-                    Some(packages) => match pkg::add_packages(server, packages.collect()) {
-                        Ok(()) => (),
-                        Err(e) => eprintln!("{}", e),
-                    },
+                    Some(packages) => {
+                        if let Err(e) = api.add_packages(packages.collect()) {
+                            eprintln!("{}", e);
+                        }
+                    }
                     None => eprintln!("{}", matches.usage()),
                 },
                 ("publish", Some(matches)) => match matches.value_of("version") {
                     Some(version) => {
-                        match pkg::publish_package(server, project_name.as_ref(), version) {
-                            Ok(()) => (),
-                            Err(e) => eprintln!("{}", e),
+                        if let Err(e) = api.publish_package(project_name.as_ref(), version) {
+                            eprintln!("{}", e);
+                        } else {
+                            println!(
+                                "Successfully published {} version {}!",
+                                project_name, version
+                            );
                         }
                     }
                     None => eprintln!("{}", matches.usage()),
