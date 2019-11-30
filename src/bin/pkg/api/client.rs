@@ -1,7 +1,8 @@
 use crate::pkg::api::*;
+use crypto::digest::Digest;
 use graphql_client::Response;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize)]
 struct LoapkgConfig {
@@ -162,8 +163,6 @@ impl APIClient {
         Err(APIError::PackageNotFound)
     }
 
-    fn add_dir_to_archive(&self, path: &Path, dir: &Path) {}
-
     fn pack(&self) -> APIResult<Vec<u8>> {
         let mut buf = vec![];
         let mut builder = tar::Builder::new(&mut buf);
@@ -174,10 +173,16 @@ impl APIClient {
     }
 
     pub fn publish_package(&self, name: &str, version: &str) -> APIResult<()> {
+        let package = self.pack()?;
+
+        let mut checksum = crypto::sha1::Sha1::new();
+        checksum.input(package.as_slice());
+
         let query_body = UploadPackageMutation::build_query(upload_package_mutation::Variables {
             name: name.into(),
             version: version.into(),
             package: Upload,
+            checksum: checksum.result_str(),
         });
 
         let form = reqwest::multipart::Form::new()
@@ -185,7 +190,7 @@ impl APIClient {
             .text("map", r##"{ "0": ["variables.package"] }"##)
             .part(
                 "0",
-                reqwest::multipart::Part::bytes(self.pack()?)
+                reqwest::multipart::Part::bytes(package)
                     .file_name("package.tar.gz")
                     .mime_str("application/tar+gzip")
                     .unwrap(),

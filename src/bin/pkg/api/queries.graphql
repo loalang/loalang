@@ -4,8 +4,8 @@ mutation LoginMutation($email: String!, $password: String!) {
   }
 }
 
-mutation UploadPackageMutation($name: String!, $version: String!, $package: Upload!) {
-  publishPackage(name: $name, version: $version, package: $package) {
+mutation UploadPackageMutation($name: String!, $version: String!, $package: Upload!, $checksum: String!) {
+  publishPackage(name: $name, version: $version, package: $package, checksum: $checksum) {
     name
     latestVersion {
       version

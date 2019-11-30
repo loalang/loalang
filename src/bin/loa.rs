@@ -2,6 +2,7 @@
 
 extern crate clap;
 extern crate colored;
+extern crate crypto;
 extern crate dirs;
 extern crate graphql_client;
 extern crate http;
