@@ -6,6 +6,7 @@ extern crate crypto;
 extern crate dirs;
 extern crate graphql_client;
 extern crate http;
+extern crate ignore;
 extern crate jsonrpc_stdio_server;
 extern crate log;
 extern crate log_panics;
@@ -15,6 +16,7 @@ extern crate reqwest;
 extern crate rpassword;
 extern crate rustyline;
 extern crate serde_json;
+extern crate serde_yaml;
 extern crate simple_logging;
 extern crate tar;
 

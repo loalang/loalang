@@ -1,6 +1,8 @@
 use crate::pkg::api::*;
+use colored::Colorize;
 use crypto::digest::Digest;
 use graphql_client::Response;
+use loa::HashMap;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -14,6 +16,34 @@ impl LoapkgConfig {
     const DEFAULT: LoapkgConfig = LoapkgConfig {
         auth_token: None,
         auth_email: None,
+    };
+}
+
+#[derive(Serialize, Deserialize)]
+struct LoapkgLockfile(pub HashMap<String, LoapkgLockfilePackageRegistration>);
+
+#[derive(Serialize, Deserialize)]
+struct LoapkgLockfilePackageRegistration {
+    version: String,
+    checksum: String,
+    url: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct LoapkgPkgfile {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dependencies: Option<HashMap<String, String>>,
+}
+
+impl LoapkgPkgfile {
+    const DEFAULT: LoapkgPkgfile = LoapkgPkgfile {
+        name: None,
+        version: None,
+        dependencies: None,
     };
 }
 
@@ -63,6 +93,7 @@ impl APIClient {
                 self.update_config(|config| {
                     config.auth_token = Some(token.into());
                     config.auth_email = Some(response_body.data.unwrap().login.unwrap().email);
+                    Ok(())
                 })?;
 
                 return Ok(());
@@ -70,6 +101,61 @@ impl APIClient {
         }
 
         Err(APIError::InvalidCredentials)
+    }
+
+    fn get_pkgfile(&self) -> APIResult<std::fs::File> {
+        Ok(std::fs::OpenOptions::new()
+            .write(true)
+            .read(true)
+            .create(true)
+            .open("pkg.yml")?)
+    }
+
+    fn read_pkgfile(&self) -> APIResult<LoapkgPkgfile> {
+        Ok(match serde_yaml::from_reader(self.get_pkgfile()?) {
+            Err(_) => LoapkgPkgfile::DEFAULT,
+            Ok(config) => config,
+        })
+    }
+
+    fn write_pkgfile(&self, config: LoapkgPkgfile) -> APIResult<()> {
+        serde_yaml::to_writer(self.get_pkgfile()?, &config)?;
+        Ok(())
+    }
+
+    fn update_pkgfile<F: FnOnce(&mut LoapkgPkgfile) -> APIResult<()>>(
+        &self,
+        f: F,
+    ) -> APIResult<()> {
+        let mut config = self.read_pkgfile()?;
+        f(&mut config)?;
+        self.write_pkgfile(config)
+    }
+
+    fn get_lockfile(&self) -> APIResult<std::fs::File> {
+        Ok(std::fs::OpenOptions::new()
+            .write(true)
+            .read(true)
+            .create(true)
+            .open(".pkg.lock")?)
+    }
+
+    fn read_lockfile(&self) -> APIResult<LoapkgLockfile> {
+        Ok(serde_yaml::from_reader(self.get_lockfile()?).unwrap_or(LoapkgLockfile(HashMap::new())))
+    }
+
+    fn write_lockfile(&self, lock: LoapkgLockfile) -> APIResult<()> {
+        serde_yaml::to_writer(self.get_lockfile()?, &lock)?;
+        Ok(())
+    }
+
+    fn update_lockfile<F: FnOnce(&mut LoapkgLockfile) -> APIResult<()>>(
+        &self,
+        f: F,
+    ) -> APIResult<()> {
+        let mut lock = self.read_lockfile()?;
+        f(&mut lock)?;
+        self.write_lockfile(lock)
     }
 
     fn get_config_file(&self) -> APIResult<std::fs::File> {
@@ -92,9 +178,9 @@ impl APIClient {
         Ok(())
     }
 
-    fn update_config<F: FnOnce(&mut LoapkgConfig)>(&self, f: F) -> APIResult<()> {
+    fn update_config<F: FnOnce(&mut LoapkgConfig) -> APIResult<()>>(&self, f: F) -> APIResult<()> {
         let mut config = self.read_config()?;
-        f(&mut config);
+        f(&mut config)?;
         self.write_config(config)
     }
 
@@ -102,6 +188,7 @@ impl APIClient {
         self.update_config(|config| {
             config.auth_token = None;
             config.auth_email = None;
+            Ok(())
         })
     }
 
@@ -114,13 +201,22 @@ impl APIClient {
     }
 
     pub fn add_packages(&self, packages: Vec<&str>) -> APIResult<()> {
-        for package in packages {
-            self.add_package(package)?;
-        }
-        Ok(())
+        self.update_lockfile(|lock| {
+            self.update_pkgfile(|pkgfile| {
+                for package in packages {
+                    self.add_package(package, pkgfile, lock)?;
+                }
+                Ok(())
+            })
+        })
     }
 
-    fn add_package(&self, package: &str) -> APIResult<()> {
+    fn add_package(
+        &self,
+        package: &str,
+        pkgfile: &mut LoapkgPkgfile,
+        lock: &mut LoapkgLockfile,
+    ) -> APIResult<()> {
         let mut package_dir = PathBuf::from(".pkg");
         package_dir.extend(package.split("/"));
         std::fs::create_dir_all(&package_dir)?;
@@ -146,8 +242,7 @@ impl APIClient {
                 let name = package.name;
                 let version = package.latest_version.version;
                 let url = package.latest_version.url;
-
-                println!("Downloading {} version {}", name, version);
+                let checksum = package.latest_version.checksum;
 
                 let response = reqwest::get(url.as_str())?;
                 let mut archive = tar::Archive::new(response);
@@ -156,6 +251,30 @@ impl APIClient {
                     entry?.unpack_in(&package_dir)?;
                 }
 
+                println!(
+                    "{} {} {}",
+                    "Installed".bright_black(),
+                    name.green(),
+                    format!(" {} ", version).bold().black().on_bright_yellow()
+                );
+
+                if let None = pkgfile.dependencies {
+                    pkgfile.dependencies = Some(HashMap::new());
+                }
+                pkgfile
+                    .dependencies
+                    .as_mut()
+                    .unwrap()
+                    .insert(name.clone(), version.clone());
+                lock.0.insert(
+                    name,
+                    LoapkgLockfilePackageRegistration {
+                        checksum,
+                        version,
+                        url,
+                    },
+                );
+
                 return Ok(());
             }
         }
@@ -163,10 +282,28 @@ impl APIClient {
         Err(APIError::PackageNotFound)
     }
 
+    fn walk() -> ignore::Walk {
+        let mut builder = ignore::WalkBuilder::new("./");
+
+        builder.add_ignore(".pkgignore");
+        builder.add_custom_ignore_filename(".pkg/");
+        builder.build()
+    }
+
     fn pack(&self) -> APIResult<Vec<u8>> {
         let mut buf = vec![];
         let mut builder = tar::Builder::new(&mut buf);
-        builder.append_dir_all(".", &std::env::current_dir().unwrap())?;
+        for entry in Self::walk() {
+            let entry = entry?.into_path();
+            if entry.is_file() {
+                println!(
+                    "{} {}",
+                    "Packing".bright_black(),
+                    entry.to_str().unwrap_or("<<unknown>>").green()
+                );
+                builder.append_path(entry)?;
+            }
+        }
         builder.finish()?;
         drop(builder);
         Ok(buf)
