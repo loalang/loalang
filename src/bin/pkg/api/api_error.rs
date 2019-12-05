@@ -13,6 +13,7 @@ pub enum APIError {
     Ignore(ignore::Error),
     InvalidCredentials,
     PackageNotFound,
+    ChecksumMismatch,
 }
 
 impl fmt::Display for APIError {

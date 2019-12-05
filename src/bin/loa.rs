@@ -19,6 +19,7 @@ extern crate serde_json;
 extern crate serde_yaml;
 extern crate simple_logging;
 extern crate tar;
+extern crate tee;
 
 mod repl;
 mod reporting;
@@ -125,6 +126,12 @@ fn main() -> Result<(), clap::Error> {
                         .short("n"),
                 ),
                 clap::SubCommand::with_name("add").arg(
+                    clap::Arg::with_name("package")
+                        .takes_value(true)
+                        .multiple(true)
+                        .value_name("PACKAGE_NAME"),
+                ),
+                clap::SubCommand::with_name("remove").arg(
                     clap::Arg::with_name("package")
                         .takes_value(true)
                         .multiple(true)
@@ -259,7 +266,15 @@ fn main() -> Result<(), clap::Error> {
                 },
                 ("add", Some(matches)) => match matches.values_of("package") {
                     Some(packages) => {
-                        if let Err(e) = api.add_packages(packages.collect()) {
+                        if let Err(e) = api.add_packages(packages.map(|p| (p, None)).collect()) {
+                            eprintln!("{}", e);
+                        }
+                    }
+                    None => eprintln!("{}", matches.usage()),
+                },
+                ("remove", Some(matches)) => match matches.values_of("package") {
+                    Some(packages) => {
+                        if let Err(e) = api.remove_packages(packages.collect()) {
                             eprintln!("{}", e);
                         }
                     }

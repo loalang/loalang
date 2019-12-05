@@ -3,6 +3,7 @@ use colored::Colorize;
 use crypto::digest::Digest;
 use graphql_client::Response;
 use loa::HashMap;
+use std::io::Error;
 use std::path::PathBuf;
 
 pub struct APIClient {
@@ -83,45 +84,105 @@ impl APIClient {
         Ok(self.config.load()?.auth_token)
     }
 
-    pub fn add_packages(&self, packages: Vec<&str>) -> APIResult<()> {
+    pub fn add_packages(&self, packages: HashMap<&str, Option<&str>>) -> APIResult<()> {
         self.lockfile.update(|lock| {
             self.pkgfile.update(|pkgfile| {
                 self.add_packages_impl(packages, pkgfile, lock)?;
                 Ok(())
-            })
+            })?;
+
+            self.install_from_lockfile(lock)
         })
+    }
+
+    pub fn remove_packages(&self, packages: Vec<&str>) -> APIResult<()> {
+        self.pkgfile.update(|pkgfile| {
+            if let Some(ref mut d) = pkgfile.dependencies {
+                for p in packages {
+                    d.remove(p);
+                }
+            }
+            Ok(())
+        })?;
+        self.get_from_pkgfile()
+    }
+
+    fn install_from_lockfile(&self, lock: &mut config::Lockfile) -> APIResult<()> {
+        let pkg_dir = PathBuf::from(".pkg");
+        if pkg_dir.exists() {
+            std::fs::remove_dir_all(&pkg_dir)?;
+        }
+
+        for (
+            name,
+            config::LockfilePackageRegistration {
+                version,
+                checksum,
+                url,
+            },
+        ) in lock.0.iter()
+        {
+            let mut response = reqwest::get(url.as_str())?;
+            let mut buf = vec![];
+            response.copy_to(&mut buf)?;
+
+            let mut checksum_verify = crypto::sha1::Sha1::new();
+            checksum_verify.input(buf.as_slice());
+
+            if checksum_verify.result_str() != *checksum {
+                return Err(APIError::ChecksumMismatch);
+            }
+
+            let mut archive = tar::Archive::new(buf.as_slice());
+
+            let mut package_dir = pkg_dir.clone();
+            package_dir.extend(name.split("/"));
+            std::fs::create_dir_all(&package_dir)?;
+            for entry in archive.entries()? {
+                let mut entry = entry?;
+                if !entry.unpack_in(&package_dir)? {
+                    println!(
+                        "{} {}{}{}",
+                        "Failed to unpack".bright_black(),
+                        package_dir.to_str().unwrap().green(),
+                        "/".green(),
+                        entry.path()?.to_str().unwrap().green()
+                    );
+                }
+            }
+
+            println!(
+                "{} {} {}",
+                "Installed".bright_black(),
+                name.green(),
+                format!(" {} ", version).bold().black().on_bright_yellow()
+            );
+        }
+        Ok(())
     }
 
     fn add_packages_impl(
         &self,
-        packages: Vec<&str>,
+        packages: HashMap<&str, Option<&str>>,
         pkgfile: &mut config::Pkgfile,
         lock: &mut config::Lockfile,
     ) -> APIResult<()> {
-        for package in packages.iter() {
-            let mut package_dir = PathBuf::from(".pkg");
-            package_dir.extend(package.split("/"));
-            std::fs::create_dir_all(&package_dir)?;
-        }
-
-        let requested_packages = self
-            .pkgfile
-            .load()?
+        let no_deps = HashMap::new();
+        let requested_packages = pkgfile
             .dependencies
-            .unwrap_or(HashMap::new())
-            .into_iter()
+            .as_ref()
+            .unwrap_or(&no_deps)
+            .iter()
             .map(|(name, version)| resolve_packages_query::RequestedPackage {
-                name,
-                version: Some(version),
+                name: name.clone(),
+                version: Some(version.clone()),
             })
-            .chain(
-                packages
-                    .into_iter()
-                    .map(|name| resolve_packages_query::RequestedPackage {
-                        name: name.into(),
-                        version: None,
-                    }),
-            )
+            .chain(packages.iter().map(|(name, version)| {
+                resolve_packages_query::RequestedPackage {
+                    name: (*name).into(),
+                    version: version.map(String::from),
+                }
+            }))
             .collect::<Vec<_>>();
 
         let query_body = ResolvePackagesQuery::build_query(resolve_packages_query::Variables {
@@ -141,36 +202,35 @@ impl APIClient {
         }
 
         if let Some(data) = response_body.data {
+            lock.0.clear();
+
+            if let None = pkgfile.dependencies {
+                pkgfile.dependencies = Some(HashMap::new());
+            }
+            for package in packages.keys() {
+                match data
+                    .resolve_packages
+                    .iter()
+                    .filter(|r| r.package.name == *package)
+                    .next()
+                {
+                    None => return Err(APIError::PackageNotFound),
+                    Some(r) => {
+                        pkgfile
+                            .dependencies
+                            .as_mut()
+                            .unwrap()
+                            .insert(r.package.name.clone(), r.version.clone());
+                    }
+                }
+            }
+
             for release in data.resolve_packages {
                 let name = release.package.name;
                 let version = release.version;
                 let url = release.url;
                 let checksum = release.checksum;
 
-                let response = reqwest::get(url.as_str())?;
-                let mut archive = tar::Archive::new(response);
-
-                let mut package_dir = PathBuf::from(".pkg");
-                package_dir.extend(name.split("/"));
-                for entry in archive.entries()? {
-                    entry?.unpack_in(&package_dir)?;
-                }
-
-                println!(
-                    "{} {} {}",
-                    "Installed".bright_black(),
-                    name.green(),
-                    format!(" {} ", version).bold().black().on_bright_yellow()
-                );
-
-                if let None = pkgfile.dependencies {
-                    pkgfile.dependencies = Some(HashMap::new());
-                }
-                pkgfile
-                    .dependencies
-                    .as_mut()
-                    .unwrap()
-                    .insert(name.clone(), version.clone());
                 lock.0.insert(
                     name,
                     config::LockfilePackageRegistration {
@@ -194,9 +254,9 @@ impl APIClient {
         builder.build()
     }
 
-    fn pack(&self) -> APIResult<Vec<u8>> {
+    fn pack(&self, checksum: &mut ChecksumWriter) -> APIResult<Vec<u8>> {
         let mut buf = vec![];
-        let mut builder = tar::Builder::new(&mut buf);
+        let mut builder = tar::Builder::<DualWriter<_, _>>::new((&mut buf, checksum).into());
         for entry in Self::walk() {
             let entry = entry?.into_path();
             if entry.is_file() {
@@ -214,16 +274,14 @@ impl APIClient {
     }
 
     pub fn publish_package(&self, name: &str, version: &str) -> APIResult<()> {
-        let package = self.pack()?;
-
-        let mut checksum = crypto::sha1::Sha1::new();
-        checksum.input(package.as_slice());
+        let mut checksum = ChecksumWriter::new();
+        let package = self.pack(&mut checksum)?;
 
         let query_body = UploadPackageMutation::build_query(upload_package_mutation::Variables {
             name: name.into(),
             version: version.into(),
             package: Upload,
-            checksum: checksum.result_str(),
+            checksum: checksum.result(),
             dependencies: self
                 .pkgfile
                 .load()
@@ -270,19 +328,61 @@ impl APIClient {
         }
     }
 
-    pub fn get_from_lockfile(&self) -> APIResult<()> {
-        let file = self.pkgfile.load()?;
-        if let Some(deps) = file.dependencies {
-            self.add_packages(deps.keys().map(|s| s.as_ref()).collect())?;
-        }
-        Ok(())
+    pub fn get_from_pkgfile(&self) -> APIResult<()> {
+        self.add_packages(HashMap::new())
     }
 
-    pub fn get_from_pkgfile(&self) -> APIResult<()> {
-        let file = self.pkgfile.load()?;
-        if let Some(deps) = file.dependencies {
-            self.add_packages(deps.keys().map(|s| s.as_ref()).collect())?;
+    pub fn get_from_lockfile(&self) -> APIResult<()> {
+        self.lockfile
+            .update(|lock| self.install_from_lockfile(lock))
+    }
+}
+
+struct ChecksumWriter {
+    inner: crypto::sha1::Sha1,
+}
+
+impl ChecksumWriter {
+    pub fn new() -> ChecksumWriter {
+        ChecksumWriter {
+            inner: crypto::sha1::Sha1::new(),
         }
+    }
+
+    pub fn result(&mut self) -> String {
+        self.inner.result_str()
+    }
+}
+
+impl std::io::Write for ChecksumWriter {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
+        let len = buf.len();
+        self.inner.input(buf);
+        Ok(len)
+    }
+
+    fn flush(&mut self) -> Result<(), Error> {
         Ok(())
+    }
+}
+
+struct DualWriter<A, B> {
+    a: A,
+    b: B,
+}
+
+impl<A, B> From<(A, B)> for DualWriter<A, B> {
+    fn from((a, b): (A, B)) -> Self {
+        DualWriter { a, b }
+    }
+}
+
+impl<A: std::io::Write, B: std::io::Write> std::io::Write for DualWriter<A, B> {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
+        self.a.write(buf).and(self.b.write(buf))
+    }
+
+    fn flush(&mut self) -> Result<(), Error> {
+        self.a.flush().and(self.b.flush())
     }
 }
