@@ -3,62 +3,26 @@ use colored::Colorize;
 use crypto::digest::Digest;
 use graphql_client::Response;
 use loa::HashMap;
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-
-#[derive(Serialize, Deserialize)]
-struct LoapkgConfig {
-    auth_token: Option<String>,
-    auth_email: Option<String>,
-}
-
-impl LoapkgConfig {
-    const DEFAULT: LoapkgConfig = LoapkgConfig {
-        auth_token: None,
-        auth_email: None,
-    };
-}
-
-#[derive(Serialize, Deserialize)]
-struct LoapkgLockfile(pub HashMap<String, LoapkgLockfilePackageRegistration>);
-
-#[derive(Serialize, Deserialize)]
-struct LoapkgLockfilePackageRegistration {
-    version: String,
-    checksum: String,
-    url: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct LoapkgPkgfile {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    version: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    dependencies: Option<HashMap<String, String>>,
-}
-
-impl LoapkgPkgfile {
-    const DEFAULT: LoapkgPkgfile = LoapkgPkgfile {
-        name: None,
-        version: None,
-        dependencies: None,
-    };
-}
 
 pub struct APIClient {
     host: String,
-    config_file: PathBuf,
     client: reqwest::Client,
+
+    config: ManifestFile<config::Config>,
+    lockfile: ManifestFile<config::Lockfile>,
+    pkgfile: ManifestFile<config::Pkgfile>,
 }
 
 impl APIClient {
     pub fn new(host: &str, config_file: &str) -> APIClient {
         APIClient {
             host: host.into(),
-            config_file: PathBuf::from(config_file),
             client: reqwest::Client::new(),
+
+            config: ManifestFile::new(config_file),
+            lockfile: ManifestFile::new(".pkg.lock"),
+            pkgfile: ManifestFile::new("pkg.yml"),
         }
     }
 
@@ -90,7 +54,7 @@ impl APIClient {
             if cookie.name() == "LOA_AUTH" {
                 let token = cookie.value();
 
-                self.update_config(|config| {
+                self.config.update(|config| {
                     config.auth_token = Some(token.into());
                     config.auth_email = Some(response_body.data.unwrap().login.unwrap().email);
                     Ok(())
@@ -103,89 +67,8 @@ impl APIClient {
         Err(APIError::InvalidCredentials)
     }
 
-    fn get_pkgfile(&self) -> APIResult<std::fs::File> {
-        Ok(std::fs::OpenOptions::new()
-            .write(true)
-            .read(true)
-            .create(true)
-            .open("pkg.yml")?)
-    }
-
-    fn read_pkgfile(&self) -> APIResult<LoapkgPkgfile> {
-        Ok(match serde_yaml::from_reader(self.get_pkgfile()?) {
-            Err(_) => LoapkgPkgfile::DEFAULT,
-            Ok(config) => config,
-        })
-    }
-
-    fn write_pkgfile(&self, config: LoapkgPkgfile) -> APIResult<()> {
-        serde_yaml::to_writer(self.get_pkgfile()?, &config)?;
-        Ok(())
-    }
-
-    fn update_pkgfile<F: FnOnce(&mut LoapkgPkgfile) -> APIResult<()>>(
-        &self,
-        f: F,
-    ) -> APIResult<()> {
-        let mut config = self.read_pkgfile()?;
-        f(&mut config)?;
-        self.write_pkgfile(config)
-    }
-
-    fn get_lockfile(&self) -> APIResult<std::fs::File> {
-        Ok(std::fs::OpenOptions::new()
-            .write(true)
-            .read(true)
-            .create(true)
-            .open(".pkg.lock")?)
-    }
-
-    fn read_lockfile(&self) -> APIResult<LoapkgLockfile> {
-        Ok(serde_yaml::from_reader(self.get_lockfile()?).unwrap_or(LoapkgLockfile(HashMap::new())))
-    }
-
-    fn write_lockfile(&self, lock: LoapkgLockfile) -> APIResult<()> {
-        serde_yaml::to_writer(self.get_lockfile()?, &lock)?;
-        Ok(())
-    }
-
-    fn update_lockfile<F: FnOnce(&mut LoapkgLockfile) -> APIResult<()>>(
-        &self,
-        f: F,
-    ) -> APIResult<()> {
-        let mut lock = self.read_lockfile()?;
-        f(&mut lock)?;
-        self.write_lockfile(lock)
-    }
-
-    fn get_config_file(&self) -> APIResult<std::fs::File> {
-        Ok(std::fs::OpenOptions::new()
-            .write(true)
-            .read(true)
-            .create(true)
-            .open(&self.config_file)?)
-    }
-
-    fn read_config(&self) -> APIResult<LoapkgConfig> {
-        Ok(match serde_json::from_reader(self.get_config_file()?) {
-            Err(_) => LoapkgConfig::DEFAULT,
-            Ok(config) => config,
-        })
-    }
-
-    fn write_config(&self, config: LoapkgConfig) -> APIResult<()> {
-        serde_json::to_writer(self.get_config_file()?, &config)?;
-        Ok(())
-    }
-
-    fn update_config<F: FnOnce(&mut LoapkgConfig) -> APIResult<()>>(&self, f: F) -> APIResult<()> {
-        let mut config = self.read_config()?;
-        f(&mut config)?;
-        self.write_config(config)
-    }
-
     pub fn logout(&self) -> APIResult<()> {
-        self.update_config(|config| {
+        self.config.update(|config| {
             config.auth_token = None;
             config.auth_email = None;
             Ok(())
@@ -193,36 +76,56 @@ impl APIClient {
     }
 
     pub fn auth_email(&self) -> APIResult<Option<String>> {
-        Ok(self.read_config()?.auth_email)
+        Ok(self.config.load()?.auth_email)
     }
 
     fn auth_token(&self) -> APIResult<Option<String>> {
-        Ok(self.read_config()?.auth_token)
+        Ok(self.config.load()?.auth_token)
     }
 
     pub fn add_packages(&self, packages: Vec<&str>) -> APIResult<()> {
-        self.update_lockfile(|lock| {
-            self.update_pkgfile(|pkgfile| {
-                for package in packages {
-                    self.add_package(package, pkgfile, lock)?;
-                }
+        self.lockfile.update(|lock| {
+            self.pkgfile.update(|pkgfile| {
+                self.add_packages_impl(packages, pkgfile, lock)?;
                 Ok(())
             })
         })
     }
 
-    fn add_package(
+    fn add_packages_impl(
         &self,
-        package: &str,
-        pkgfile: &mut LoapkgPkgfile,
-        lock: &mut LoapkgLockfile,
+        packages: Vec<&str>,
+        pkgfile: &mut config::Pkgfile,
+        lock: &mut config::Lockfile,
     ) -> APIResult<()> {
-        let mut package_dir = PathBuf::from(".pkg");
-        package_dir.extend(package.split("/"));
-        std::fs::create_dir_all(&package_dir)?;
+        for package in packages.iter() {
+            let mut package_dir = PathBuf::from(".pkg");
+            package_dir.extend(package.split("/"));
+            std::fs::create_dir_all(&package_dir)?;
+        }
 
-        let query_body = GetPackageQuery::build_query(get_package_query::Variables {
-            name: package.into(),
+        let requested_packages = self
+            .pkgfile
+            .load()?
+            .dependencies
+            .unwrap_or(HashMap::new())
+            .into_iter()
+            .map(|(name, version)| resolve_packages_query::RequestedPackage {
+                name,
+                version: Some(version),
+            })
+            .chain(
+                packages
+                    .into_iter()
+                    .map(|name| resolve_packages_query::RequestedPackage {
+                        name: name.into(),
+                        version: None,
+                    }),
+            )
+            .collect::<Vec<_>>();
+
+        let query_body = ResolvePackagesQuery::build_query(resolve_packages_query::Variables {
+            packages: requested_packages,
         });
 
         let mut response = self
@@ -231,22 +134,24 @@ impl APIClient {
             .json(&query_body)
             .send()?;
 
-        let response_body: Response<get_package_query::ResponseData> = response.json()?;
+        let response_body: Response<resolve_packages_query::ResponseData> = response.json()?;
 
         if response_body.errors.is_some() {
             return Err(APIError::GraphQL(response_body.errors));
         }
 
         if let Some(data) = response_body.data {
-            if let Some(package) = data.package {
-                let name = package.name;
-                let version = package.latest_version.version;
-                let url = package.latest_version.url;
-                let checksum = package.latest_version.checksum;
+            for release in data.resolve_packages {
+                let name = release.package.name;
+                let version = release.version;
+                let url = release.url;
+                let checksum = release.checksum;
 
                 let response = reqwest::get(url.as_str())?;
                 let mut archive = tar::Archive::new(response);
 
+                let mut package_dir = PathBuf::from(".pkg");
+                package_dir.extend(name.split("/"));
                 for entry in archive.entries()? {
                     entry?.unpack_in(&package_dir)?;
                 }
@@ -268,15 +173,14 @@ impl APIClient {
                     .insert(name.clone(), version.clone());
                 lock.0.insert(
                     name,
-                    LoapkgLockfilePackageRegistration {
+                    config::LockfilePackageRegistration {
                         checksum,
                         version,
                         url,
                     },
                 );
-
-                return Ok(());
             }
+            return Ok(());
         }
 
         Err(APIError::PackageNotFound)
@@ -320,6 +224,23 @@ impl APIClient {
             version: version.into(),
             package: Upload,
             checksum: checksum.result_str(),
+            dependencies: self
+                .pkgfile
+                .load()
+                .ok()
+                .and_then(|p| p.dependencies)
+                .map(|deps| {
+                    deps.into_iter()
+                        .map(
+                            |(package, version)| upload_package_mutation::PublicationDependency {
+                                package,
+                                version,
+                                development: None,
+                            },
+                        )
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or(vec![]),
         });
 
         let form = reqwest::multipart::Form::new()
@@ -347,5 +268,21 @@ impl APIClient {
             None => Err(APIError::GraphQL(response_body.errors)),
             Some(_) => Ok(()),
         }
+    }
+
+    pub fn get_from_lockfile(&self) -> APIResult<()> {
+        let file = self.pkgfile.load()?;
+        if let Some(deps) = file.dependencies {
+            self.add_packages(deps.keys().map(|s| s.as_ref()).collect())?;
+        }
+        Ok(())
+    }
+
+    pub fn get_from_pkgfile(&self) -> APIResult<()> {
+        let file = self.pkgfile.load()?;
+        if let Some(deps) = file.dependencies {
+            self.add_packages(deps.keys().map(|s| s.as_ref()).collect())?;
+        }
+        Ok(())
     }
 }

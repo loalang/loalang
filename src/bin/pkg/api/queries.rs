@@ -35,4 +35,4 @@ pub struct LoginMutation;
     query_path = "src/bin/pkg/api/queries.graphql",
     response_derives = "Debug"
 )]
-pub struct GetPackageQuery;
+pub struct ResolvePackagesQuery;

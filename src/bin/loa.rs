@@ -80,6 +80,7 @@ fn main() -> Result<(), clap::Error> {
         clap::SubCommand::with_name("build")
             .arg(
                 clap::Arg::with_name("out")
+                    .long("out")
                     .short("o")
                     .takes_value(true)
                     .default_value(default_out.as_ref()),
@@ -100,6 +101,7 @@ fn main() -> Result<(), clap::Error> {
         clap::SubCommand::with_name("pkg")
             .arg(
                 clap::Arg::with_name("server")
+                    .long("server")
                     .short("s")
                     .takes_value(true)
                     .value_name("SERVER_HOST")
@@ -107,6 +109,7 @@ fn main() -> Result<(), clap::Error> {
             )
             .arg(
                 clap::Arg::with_name("config")
+                    .long("config")
                     .short("c")
                     .takes_value(true)
                     .value_name("CONFIG_FILE")
@@ -116,6 +119,11 @@ fn main() -> Result<(), clap::Error> {
                 clap::SubCommand::with_name("login"),
                 clap::SubCommand::with_name("logout"),
                 clap::SubCommand::with_name("whoami"),
+                clap::SubCommand::with_name("get").arg(
+                    clap::Arg::with_name("no-update")
+                        .long("no-update")
+                        .short("n"),
+                ),
                 clap::SubCommand::with_name("add").arg(
                     clap::Arg::with_name("package")
                         .takes_value(true)
@@ -230,6 +238,17 @@ fn main() -> Result<(), clap::Error> {
                 }
                 ("logout", _) => {
                     if let Err(e) = api.logout() {
+                        eprintln!("{}", e)
+                    }
+                }
+                ("get", Some(matches)) => {
+                    if let Err(e) = {
+                        if matches.is_present("no-update") {
+                            api.get_from_lockfile()
+                        } else {
+                            api.get_from_pkgfile()
+                        }
+                    } {
                         eprintln!("{}", e)
                     }
                 }

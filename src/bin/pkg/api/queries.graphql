@@ -4,8 +4,8 @@ mutation LoginMutation($email: String!, $password: String!) {
   }
 }
 
-mutation UploadPackageMutation($name: String!, $version: String!, $package: Upload!, $checksum: String!) {
-  publishPackage(name: $name, version: $version, package: $package, checksum: $checksum) {
+mutation UploadPackageMutation($name: String!, $version: String!, $package: Upload!, $checksum: String!, $dependencies: [PublicationDependency!]!) {
+  publishPackage(name: $name, version: $version, package: $package, checksum: $checksum, dependencies: $dependencies) {
     name
     latestVersion {
       version
@@ -13,13 +13,13 @@ mutation UploadPackageMutation($name: String!, $version: String!, $package: Uplo
   }
 }
 
-query GetPackageQuery($name: String!) {
-  package(name: $name) {
-    name
-    latestVersion {
-      version
-      checksum
-      url
+query ResolvePackagesQuery($packages: [RequestedPackage!]!) {
+  resolvePackages(packages: $packages) {
+    package {
+      name
     }
+    version
+    url
+    checksum
   }
 }

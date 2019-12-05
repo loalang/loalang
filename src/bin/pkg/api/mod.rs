@@ -8,3 +8,8 @@ pub use self::client::*;
 
 mod queries;
 pub use self::queries::*;
+
+mod manifest_file;
+pub use self::manifest_file::*;
+
+pub mod config;
