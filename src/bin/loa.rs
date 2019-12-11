@@ -21,6 +21,7 @@ extern crate simple_logging;
 extern crate tar;
 extern crate tee;
 
+mod docs;
 mod repl;
 mod reporting;
 mod server_handler;
@@ -99,6 +100,15 @@ fn main() -> Result<(), clap::Error> {
                 .multiple(true)
                 .value_name("FILES"),
         ),
+        clap::SubCommand::with_name("docs").subcommands(vec![clap::SubCommand::with_name("serve")
+            .arg(
+                clap::Arg::with_name("port")
+                    .long("port")
+                    .short("p")
+                    .takes_value(true)
+                    .value_name("PORT")
+                    .default_value("7065"),
+            )]),
         clap::SubCommand::with_name("pkg")
             .arg(
                 clap::Arg::with_name("server")
@@ -223,6 +233,20 @@ fn main() -> Result<(), clap::Error> {
             }
         }
 
+        ("docs", Some(matches)) => match matches.subcommand() {
+            ("serve", Some(matches)) => {
+                let port_str = matches.value_of("port").unwrap();
+                match u16::from_str(port_str) {
+                    Ok(port) => {
+                        let (_, analysis) = parse(None);
+                        docs::serve(port, analysis.into())
+                    }
+                    Err(_) => eprintln!("Invalid port: {}", port_str),
+                }
+            }
+            _ => eprintln!("{}", matches.usage()),
+        },
+
         ("pkg", Some(matches)) => {
             let api = pkg::APIClient::new(
                 matches.value_of("server").unwrap(),
@@ -309,16 +333,19 @@ use log::LevelFilter;
 use std::convert::identity;
 use std::io::{stdout, Write};
 use std::process::exit;
+use std::str::FromStr;
 
-fn build(main: &str) -> Instructions {
+fn parse(main: Option<&str>) -> (Vec<loa::Diagnostic>, loa::semantics::Analysis) {
     let mut sources = loa::Source::stdlib().expect("failed to load stdlib");
     sources.extend(loa::Source::files("**/*.loa").expect("failed to read in sources"));
 
-    sources.push(loa::Source::new(
-        loa::SourceKind::REPLLine,
-        loa::URI::Main,
-        format!("import {} as Main.\n\nMain run.", main),
-    ));
+    if let Some(main) = main {
+        sources.push(loa::Source::new(
+            loa::SourceKind::REPLLine,
+            loa::URI::Main,
+            format!("import {} as Main.\n\nMain run.", main),
+        ));
+    }
 
     let mut diagnostics = vec![];
     let modules = sources
@@ -333,6 +360,12 @@ fn build(main: &str) -> Instructions {
         .collect();
     let mut analysis = loa::semantics::Analysis::new(loa::Arc::new(modules));
     diagnostics.extend(analysis.check());
+
+    (diagnostics, analysis)
+}
+
+fn build(main: &str) -> Instructions {
+    let (diagnostics, mut analysis) = parse(Some(main));
 
     if loa::Diagnostic::failed(&diagnostics) {
         <PrettyReporter as loa::Reporter>::report(diagnostics, &analysis.navigator);

@@ -19,6 +19,8 @@ install:
 	mkdir -p /usr/local/lib/loa/std
 	rm -rf /usr/local/lib/loa/std
 	cp -r std /usr/local/lib/loa/std
+	rm -rf /usr/local/lib/loa/docs-html
+	cp -r src/bin/docs/public /usr/local/lib/loa/docs-html
 	mkdir -p /usr/local/var/log
 	touch /usr/local/var/log/loa.log
 	chmod 777 /usr/local/var/log/loa.log

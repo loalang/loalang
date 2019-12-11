@@ -313,6 +313,10 @@ impl Navigator {
         self.all_matching(|n| n.is_message())
     }
 
+    pub fn all_classes(&self) -> Vec<Node> {
+        self.all_matching(|n| n.is_class())
+    }
+
     pub fn all_is_directives(&self) -> Vec<Node> {
         self.all_matching(|n| n.is_is_directive())
     }
@@ -854,6 +858,14 @@ impl Navigator {
         self.all_downwards(from, &|n| n.is_class())
     }
 
+    pub fn closest_is_directive_upwards(&self, from: &Node) -> Option<Node> {
+        self.closest_upwards(from, |n| n.is_is_directive())
+    }
+
+    pub fn all_is_directives_downwards(&self, from: &Node) -> Vec<Node> {
+        self.all_downwards(from, &|n| n.is_is_directive())
+    }
+
     pub fn closest_references_upwards(&self, from: &Node, kind: DeclarationKind) -> Option<Node> {
         self.closest_upwards(from, |n| n.is_reference(kind))
     }
@@ -1104,5 +1116,59 @@ impl Navigator {
             }
         }
         None
+    }
+
+    pub fn all_super_classes_of(&self, class: &Node) -> Vec<Node> {
+        let mut super_classes = vec![];
+        self.collect_super_classes_of(class, &mut super_classes);
+        super_classes
+    }
+
+    fn collect_super_classes_of(&self, class: &Node, super_classes: &mut Vec<Node>) {
+        for is_directive in self.all_is_directives_downwards(class) {
+            if let IsDirective {
+                type_expression, ..
+            } = is_directive.kind
+            {
+                if let Some(type_expression) = self.find_child(&is_directive, type_expression) {
+                    if let Some(super_class) =
+                        self.find_declaration(&type_expression, DeclarationKind::Type)
+                    {
+                        if super_class.is_class() {
+                            self.collect_super_classes_of(&super_class, super_classes);
+                            super_classes.push(super_class);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn all_sub_classes_of(&self, class: &Node) -> Vec<Node> {
+        let mut sub_classes = vec![];
+        self.collect_sub_classes_of(class, &mut sub_classes);
+        sub_classes
+    }
+
+    fn collect_sub_classes_of(&self, class: &Node, sub_classes: &mut Vec<Node>) {
+        for is_directive in self.all_is_directives() {
+            if let IsDirective {
+                type_expression, ..
+            } = is_directive.kind
+            {
+                if let Some(type_expression) = self.find_child(&is_directive, type_expression) {
+                    if let Some(declaration) =
+                        self.find_declaration(&type_expression, DeclarationKind::Type)
+                    {
+                        if declaration.id == class.id {
+                            if let Some(sub_class) = self.closest_class_upwards(&is_directive) {
+                                self.collect_sub_classes_of(&sub_class, sub_classes);
+                                sub_classes.push(sub_class);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
