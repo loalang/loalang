@@ -1,6 +1,6 @@
 FROM loalang/base AS base
 
-RUN cargo build --bin=loa --release --target=x86_64-unknown-linux-musl
+RUN cargo build --bin=loa --release --target=x86_64-unknown-linux-musl --features build-binary
 RUN mkdir /Project
 
 FROM alpine
