@@ -28,6 +28,9 @@ extern crate bincode;
 
 extern crate peekmore;
 
+#[macro_use]
+extern crate matches;
+
 mod source;
 
 pub use self::source::*;

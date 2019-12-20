@@ -76,84 +76,103 @@ fn main() -> Result<(), clap::Error> {
     std::fs::create_dir_all(&config_file).expect("need write permission to config directory");
     config_file.push("loapkg.json");
 
-    let mut app = clap::App::new("loa").subcommands(vec![
-        clap::SubCommand::with_name("server"),
-        clap::SubCommand::with_name("repl"),
-        clap::SubCommand::with_name("build")
-            .arg(
-                clap::Arg::with_name("out")
-                    .long("out")
-                    .short("o")
-                    .takes_value(true)
-                    .default_value(default_out.as_ref()),
-            )
-            .arg(arg.clone()),
-        clap::SubCommand::with_name("run").arg(arg),
-        clap::SubCommand::with_name("exec").arg(
-            clap::Arg::with_name("loabin")
-                .takes_value(true)
-                .value_name("BINARY_FILE"),
-        ),
-        clap::SubCommand::with_name("format").arg(
-            clap::Arg::with_name("files")
-                .takes_value(true)
-                .multiple(true)
-                .value_name("FILES"),
-        ),
-        clap::SubCommand::with_name("docs").subcommands(vec![clap::SubCommand::with_name("serve")
-            .arg(
-                clap::Arg::with_name("port")
-                    .long("port")
-                    .short("p")
-                    .takes_value(true)
-                    .value_name("PORT")
-                    .default_value("7065"),
-            )]),
-        clap::SubCommand::with_name("pkg")
-            .arg(
-                clap::Arg::with_name("server")
-                    .long("server")
-                    .short("s")
-                    .takes_value(true)
-                    .value_name("SERVER_HOST")
-                    .default_value("https://api.loalang.xyz"),
-            )
-            .arg(
-                clap::Arg::with_name("config")
-                    .long("config")
-                    .short("c")
-                    .takes_value(true)
-                    .value_name("CONFIG_FILE")
-                    .default_value(config_file.to_str().unwrap()),
-            )
-            .subcommands(vec![
-                clap::SubCommand::with_name("login"),
-                clap::SubCommand::with_name("logout"),
-                clap::SubCommand::with_name("whoami"),
-                clap::SubCommand::with_name("get").arg(
-                    clap::Arg::with_name("no-update")
-                        .long("no-update")
-                        .short("n"),
-                ),
-                clap::SubCommand::with_name("add").arg(
-                    clap::Arg::with_name("package")
+    let mut app = clap::App::new("loa")
+        .version(env!("CARGO_PKG_VERSION"))
+        .subcommands(vec![
+            clap::SubCommand::with_name("server"),
+            clap::SubCommand::with_name("repl"),
+            clap::SubCommand::with_name("build")
+                .arg(
+                    clap::Arg::with_name("out")
+                        .long("out")
+                        .short("o")
                         .takes_value(true)
-                        .multiple(true)
-                        .value_name("PACKAGE_NAME"),
-                ),
-                clap::SubCommand::with_name("remove").arg(
-                    clap::Arg::with_name("package")
+                        .default_value(default_out.as_ref()),
+                )
+                .arg(arg.clone()),
+            clap::SubCommand::with_name("run").arg(arg),
+            clap::SubCommand::with_name("exec").arg(
+                clap::Arg::with_name("loabin")
+                    .takes_value(true)
+                    .value_name("BINARY_FILE"),
+            ),
+            clap::SubCommand::with_name("format").arg(
+                clap::Arg::with_name("files")
+                    .takes_value(true)
+                    .multiple(true)
+                    .value_name("FILES"),
+            ),
+            clap::SubCommand::with_name("docs").subcommands(vec![
+                clap::SubCommand::with_name("inspect")
+                    .arg(
+                        clap::Arg::with_name("all")
+                            .help("Include stdlib and dependencies")
+                            .long("all")
+                            .short("a"),
+                    )
+                    .arg(
+                        clap::Arg::with_name("format")
+                            .help("Output format (json|yaml)")
+                            .long("format")
+                            .short("f")
+                            .takes_value(true)
+                            .value_name("FORMAT")
+                            .default_value("json"),
+                    ),
+                clap::SubCommand::with_name("serve").arg(
+                    clap::Arg::with_name("port")
+                        .long("port")
+                        .short("p")
                         .takes_value(true)
-                        .multiple(true)
-                        .value_name("PACKAGE_NAME"),
-                ),
-                clap::SubCommand::with_name("publish").arg(
-                    clap::Arg::with_name("version")
-                        .takes_value(true)
-                        .value_name("VERSION"),
+                        .value_name("PORT")
+                        .default_value("7065"),
                 ),
             ]),
-    ]);
+            clap::SubCommand::with_name("pkg")
+                .arg(
+                    clap::Arg::with_name("server")
+                        .long("server")
+                        .short("s")
+                        .takes_value(true)
+                        .value_name("SERVER_HOST")
+                        .default_value("https://api.loalang.xyz"),
+                )
+                .arg(
+                    clap::Arg::with_name("config")
+                        .long("config")
+                        .short("c")
+                        .takes_value(true)
+                        .value_name("CONFIG_FILE")
+                        .default_value(config_file.to_str().unwrap()),
+                )
+                .subcommands(vec![
+                    clap::SubCommand::with_name("login"),
+                    clap::SubCommand::with_name("logout"),
+                    clap::SubCommand::with_name("whoami"),
+                    clap::SubCommand::with_name("get").arg(
+                        clap::Arg::with_name("no-update")
+                            .long("no-update")
+                            .short("n"),
+                    ),
+                    clap::SubCommand::with_name("add").arg(
+                        clap::Arg::with_name("package")
+                            .takes_value(true)
+                            .multiple(true)
+                            .value_name("PACKAGE_NAME"),
+                    ),
+                    clap::SubCommand::with_name("remove").arg(
+                        clap::Arg::with_name("package")
+                            .takes_value(true)
+                            .multiple(true)
+                            .value_name("PACKAGE_NAME"),
+                    ),
+                    clap::SubCommand::with_name("publish").arg(
+                        clap::Arg::with_name("version")
+                            .takes_value(true)
+                            .value_name("VERSION"),
+                    ),
+                ]),
+        ]);
     let cli = app.clone().get_matches();
 
     if let None = cli.subcommand_name() {
@@ -244,13 +263,41 @@ fn main() -> Result<(), clap::Error> {
                     Err(_) => eprintln!("Invalid port: {}", port_str),
                 }
             }
+            ("inspect", Some(matches)) => {
+                let (_, analysis) = parse(None);
+                let lockfile = ManifestFile::new(".pkg.lock");
+                let pkgfile = ManifestFile::new("pkg.yml");
+                let mut docs: Docs = analysis.into();
+                if let (Ok(pkgfile), Ok(lockfile)) = (pkgfile.load(), lockfile.load()) {
+                    if !matches.is_present("all") {
+                        docs.retain_package(project_name.as_ref());
+                    }
+                    docs.apply_versions(&Versions { pkgfile, lockfile });
+                }
+                match matches.value_of("format").unwrap() {
+                    "json" => {
+                        println!("{}", serde_json::to_string_pretty(&docs).unwrap());
+                    }
+                    "yaml" => {
+                        println!("{}", serde_yaml::to_string(&docs).unwrap());
+                    }
+                    f => eprintln!(
+                        "Invalid format {}. Please choose between json and yaml.\n{}",
+                        f,
+                        matches.usage()
+                    ),
+                }
+            }
             _ => eprintln!("{}", matches.usage()),
         },
 
         ("pkg", Some(matches)) => {
+            let (_, analysis) = parse(None);
+
             let api = pkg::APIClient::new(
                 matches.value_of("server").unwrap(),
                 matches.value_of("config").unwrap(),
+                analysis,
             );
 
             match matches.subcommand() {
@@ -327,6 +374,8 @@ fn main() -> Result<(), clap::Error> {
     Ok(())
 }
 
+use crate::docs::{Docs, Versions};
+use crate::pkg::ManifestFile;
 use loa::generation::Instructions;
 use loa::vm::VM;
 use log::LevelFilter;

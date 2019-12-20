@@ -1,8 +1,8 @@
 .SILENT:
 
-.PHONY: build install test debug docker/base docker/loa docker/vm docker/all docker/push dist dist/macos dist/linux _dist _dist/build
+.PHONY: build install test debug docker/base docker/loa docker/vm docker/all docker/push dist dist/macos dist/linux _dist _dist/build version
 
-VERSION=0.1.3
+VERSION=$(shell toml get Cargo.toml 'package.version' | jq -r)
 
 build:
 	cargo build --release --features build-binary
@@ -10,8 +10,12 @@ build:
 debug:
 	cargo build --features build-binary
 
+version:
+	echo $(VERSION)
+
 test:
 	cargo test --lib
+	cargo test --features=build-binary --bin loa
 
 install:
 	git submodule init

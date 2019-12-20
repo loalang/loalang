@@ -1,11 +1,29 @@
+use crate::pkg::config::{Lockfile, Pkgfile};
 use loa::semantics::Analysis;
 use loa::syntax::Node;
-use loa::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+pub struct Versions {
+    pub pkgfile: Pkgfile,
+    pub lockfile: Lockfile,
+}
+
+impl Versions {
+    pub fn for_each<F: FnMut(&str, &str)>(&self, mut f: F) {
+        f("Loa", env!("CARGO_PKG_VERSION").as_ref());
+        if let (Some(ref name), Some(ref version)) = (&self.pkgfile.name, &self.pkgfile.version) {
+            f(name.as_ref(), version.as_ref());
+        }
+        for (name, reg) in self.lockfile.0.iter() {
+            f(name.as_ref(), reg.version.as_ref());
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Docs {
-    pub classes: HashMap<String, ClassDoc>,
+    pub classes: BTreeMap<String, ClassDoc>,
 }
 
 impl Docs {
@@ -18,6 +36,23 @@ impl Docs {
                 .filter_map(|class| ClassDoc::extract(analysis, &class))
                 .map(|d| (format!("{}/{}", d.name.namespace, d.name.name), d))
                 .collect(),
+        }
+    }
+
+    pub fn retain_package(&mut self, name: &str) {
+        for key in self.classes.keys().cloned().collect::<Vec<_>>() {
+            if !key.starts_with(name) {
+                self.classes.remove(&key);
+            }
+        }
+    }
+
+    pub fn apply_versions(&mut self, versions: &Versions) {
+        let classes = std::mem::replace(&mut self.classes, BTreeMap::new());
+        for (mut s, mut class) in classes {
+            apply_versions(&mut s, versions);
+            class.apply_versions(versions);
+            self.classes.insert(s, class);
         }
     }
 }
@@ -33,7 +68,7 @@ pub struct ClassDoc {
     pub name: QualifiedNameDoc,
     pub super_classes: Vec<String>,
     pub sub_classes: Vec<String>,
-    pub behaviours: HashMap<String, BehaviourDoc>,
+    pub behaviours: BTreeMap<String, BehaviourDoc>,
 }
 
 impl ClassDoc {
@@ -61,6 +96,27 @@ impl ClassDoc {
                 .collect(),
         })
     }
+
+    pub fn apply_versions(&mut self, versions: &Versions) {
+        self.name.apply_versions(versions);
+        self.super_classes
+            .iter_mut()
+            .for_each(|s| apply_versions(s, versions));
+        self.sub_classes
+            .iter_mut()
+            .for_each(|s| apply_versions(s, versions));
+        self.behaviours
+            .values_mut()
+            .for_each(|b| b.apply_versions(versions));
+    }
+}
+
+fn apply_versions(s: &mut String, versions: &Versions) {
+    versions.for_each(|name, version| {
+        if s.starts_with(name) {
+            s.replace_range(name.len()..name.len(), format!("@{}", version).as_ref())
+        }
+    })
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -78,6 +134,10 @@ impl QualifiedNameDoc {
 
         Some(QualifiedNameDoc { name, namespace })
     }
+
+    pub fn apply_versions(&mut self, versions: &Versions) {
+        apply_versions(&mut self.namespace, versions);
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -91,4 +151,23 @@ impl BehaviourDoc {
             selector: analysis.navigator.method_selector(method)?,
         })
     }
+
+    pub fn apply_versions(&mut self, _versions: &Versions) {}
+}
+
+#[test]
+fn applying_version_to_string() {
+    let versions = Versions {
+        pkgfile: Pkgfile {
+            name: Some("Some/Package".into()),
+            version: Some("1.0.0".into()),
+            dependencies: None,
+        },
+        lockfile: Lockfile(HashMap::new()),
+    };
+
+    let mut s = String::from("Some/Package/Class");
+    apply_versions(&mut s, &versions);
+
+    assert_eq!(s, "Some/Package@1.0.0/Class");
 }

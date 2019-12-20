@@ -2,13 +2,20 @@ extern crate hyper;
 extern crate hyper_staticfile;
 
 mod docs;
+pub use self::docs::*;
 
+use crate::pkg::ManifestFile;
 use colored::Colorize;
 use hyper::rt::Future;
 use hyper::service::service_fn;
 use hyper::{Request, Response, Server};
 
-pub fn serve(port: u16, docs: docs::Docs) {
+pub fn serve(port: u16, mut docs: docs::Docs) {
+    docs.apply_versions(&Versions {
+        pkgfile: ManifestFile::new("pkg.yml").load().unwrap(),
+        lockfile: ManifestFile::new(".pkg.lock").load().unwrap(),
+    });
+
     let addr = ([127, 0, 0, 1], port).into();
 
     let new_svc = move || {

@@ -783,6 +783,7 @@ dependencies = [
  "log-panics 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lsp-server 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lsp-types 0.60.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "matches 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-bigint 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "peekmore 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",

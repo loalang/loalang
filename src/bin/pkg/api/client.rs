@@ -1,7 +1,9 @@
+use crate::docs::{Docs, Versions};
 use crate::pkg::api::*;
 use colored::Colorize;
 use crypto::digest::Digest;
 use graphql_client::Response;
+use loa::semantics::Analysis;
 use loa::HashMap;
 use std::io::Error;
 use std::path::PathBuf;
@@ -9,6 +11,7 @@ use std::path::PathBuf;
 pub struct APIClient {
     host: String,
     client: reqwest::Client,
+    analysis: Analysis,
 
     config: ManifestFile<config::Config>,
     lockfile: ManifestFile<config::Lockfile>,
@@ -16,10 +19,11 @@ pub struct APIClient {
 }
 
 impl APIClient {
-    pub fn new(host: &str, config_file: &str) -> APIClient {
+    pub fn new(host: &str, config_file: &str, analysis: Analysis) -> APIClient {
         APIClient {
             host: host.into(),
             client: reqwest::Client::new(),
+            analysis,
 
             config: ManifestFile::new(config_file),
             lockfile: ManifestFile::new(".pkg.lock"),
@@ -267,6 +271,22 @@ impl APIClient {
                 );
                 builder.append_path(entry)?;
             }
+        }
+        {
+            let mut docs: Docs = self.analysis.clone().into();
+            let pkgfile = self.pkgfile.load()?;
+            if let Some(ref name) = pkgfile.name {
+                docs.retain_package(name.as_ref());
+            }
+            docs.apply_versions(&Versions {
+                pkgfile,
+                lockfile: self.lockfile.load()?,
+            });
+            let docs_bytes = serde_json::to_string(&docs)?.into_bytes();
+            let mut header = tar::Header::new_gnu();
+            header.set_size(docs_bytes.len() as u64);
+            header.set_cksum();
+            builder.append_data(&mut header, ".docs.json", docs_bytes.as_slice())?;
         }
         builder.finish()?;
         drop(builder);
