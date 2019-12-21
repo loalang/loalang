@@ -8,6 +8,7 @@ pub enum TokenKind {
     Unknown(u16),
     Whitespace(String),
     LineComment(String),
+    DocComment(String),
 
     AsKeyword,
     InKeyword,
@@ -100,6 +101,7 @@ impl Token {
             Underscore => "_".into(),
 
             LineComment(s) => format!("//{}", s),
+            DocComment(s) => format!("///{}", s),
 
             Whitespace(s) | SimpleString(s) | SimpleCharacter(s) | SimpleFloat(s)
             | SimpleInteger(s) | SimpleSymbol(s) | SymbolLiteral(s) => s.clone(),

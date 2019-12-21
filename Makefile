@@ -14,8 +14,8 @@ version:
 	echo $(VERSION)
 
 test:
-	cargo test --lib
-	cargo test --features=build-binary --bin loa
+	RUST_BACKTRACE=1 cargo test --lib
+	RUST_BACKTRACE=1 cargo test --features=build-binary --bin loa
 
 install:
 	git submodule init

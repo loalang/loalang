@@ -130,7 +130,7 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
             kind = TokenKind::Whitespace(characters_to_string(chars.into_iter()));
         }
 
-        // LineComment
+        // LineComment & DocComment
         (SLASH, SLASH) => {
             let (o, _) = stream.next().unwrap();
             end_offset = o;
@@ -145,7 +145,12 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
                     }
                 }
             }
-            kind = TokenKind::LineComment(characters_to_string(chars.into_iter()));
+            if chars.len() > 0 && chars[0] == SLASH {
+                chars.remove(0);
+                kind = TokenKind::DocComment(characters_to_string(chars.into_iter()));
+            } else {
+                kind = TokenKind::LineComment(characters_to_string(chars.into_iter()));
+            }
         }
 
         // SimpleInteger & SimpleFloat

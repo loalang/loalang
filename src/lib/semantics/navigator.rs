@@ -1171,4 +1171,8 @@ impl Navigator {
             }
         }
     }
+
+    pub fn tree_of(&self, node: &Node) -> Option<&Arc<Tree>> {
+        self.modules.get(&node.span.start.uri)
+    }
 }

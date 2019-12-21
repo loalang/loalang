@@ -65,7 +65,7 @@ impl Parser {
     }
 
     fn move_past_insignificants(&mut self) {
-        while sees!(self, Whitespace(_) | LineComment(_)) {
+        while sees!(self, Whitespace(_) | LineComment(_) | DocComment(_)) {
             let insignificant = self.next_insignificant();
             self.leading_insignificants.push(insignificant);
         }

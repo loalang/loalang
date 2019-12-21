@@ -41,6 +41,29 @@ impl Node {
         candidates.last().map(|t| *t)
     }
 
+    pub fn insignificant_tokens_before(&self, tree: &Tree) -> Vec<Token> {
+        self.first_leaf(tree)
+            .map(|leaf| leaf.before.clone())
+            .unwrap_or(vec![])
+    }
+
+    fn first_leaf<'a>(&'a self, tree: &'a Tree) -> Option<&'a Token> {
+        let mut candidates = vec![];
+
+        candidates.extend(self.leaves().first().into_iter());
+        candidates.extend(
+            self.children()
+                .first()
+                .and_then(|c| tree.borrow(*c))
+                .and_then(|n| n.first_leaf(tree))
+                .into_iter(),
+        );
+
+        candidates.sort_by(|a, b| a.span.end.cmp(&b.span.end));
+
+        candidates.first().map(|t| *t)
+    }
+
     pub fn is_symbol(&self) -> bool {
         match self.kind {
             Symbol(_) => true,

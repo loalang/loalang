@@ -1,4 +1,4 @@
-#![feature(try_trait)]
+#![feature(try_trait, matches_macro)]
 
 extern crate clap;
 extern crate colored;
@@ -254,6 +254,7 @@ fn main() -> Result<(), clap::Error> {
 
         ("docs", Some(matches)) => match matches.subcommand() {
             ("serve", Some(matches)) => {
+                log_to_stderr();
                 let port_str = matches.value_of("port").unwrap();
                 match u16::from_str(port_str) {
                     Ok(port) => {
@@ -264,6 +265,7 @@ fn main() -> Result<(), clap::Error> {
                 }
             }
             ("inspect", Some(matches)) => {
+                log_to_file();
                 let (_, analysis) = parse(None);
                 let lockfile = ManifestFile::new(".pkg.lock");
                 let pkgfile = ManifestFile::new("pkg.yml");

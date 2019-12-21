@@ -1,6 +1,7 @@
 use crate::pkg::config::{Lockfile, Pkgfile};
 use loa::semantics::Analysis;
 use loa::syntax::Node;
+use loa::syntax::TokenKind;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -66,6 +67,7 @@ impl From<Analysis> for Docs {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ClassDoc {
     pub name: QualifiedNameDoc,
+    pub description: Markup,
     pub super_classes: Vec<String>,
     pub sub_classes: Vec<String>,
     pub behaviours: BTreeMap<String, BehaviourDoc>,
@@ -75,6 +77,7 @@ impl ClassDoc {
     pub fn extract(analysis: &Analysis, class: &Node) -> Option<ClassDoc> {
         Some(ClassDoc {
             name: QualifiedNameDoc::extract(analysis, class)?,
+            description: Markup::extract(analysis, class)?,
             super_classes: analysis
                 .navigator
                 .all_super_classes_of(class)
@@ -143,16 +146,72 @@ impl QualifiedNameDoc {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BehaviourDoc {
     pub selector: String,
+    pub description: Markup,
 }
 
 impl BehaviourDoc {
     pub fn extract(analysis: &Analysis, method: &Node) -> Option<BehaviourDoc> {
         Some(BehaviourDoc {
             selector: analysis.navigator.method_selector(method)?,
+            description: Markup::extract(analysis, method)?,
         })
     }
 
     pub fn apply_versions(&mut self, _versions: &Versions) {}
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Markup {
+    pub blocks: Vec<MarkupBlock>,
+}
+
+impl Markup {
+    pub fn extract(analysis: &Analysis, node: &Node) -> Option<Markup> {
+        let comments = node.insignificant_tokens_before(analysis.navigator.tree_of(node)?);
+
+        let mut markup = String::new();
+        for comment in comments {
+            if let TokenKind::DocComment(content) = comment.kind {
+                markup.push_str(content.trim_start());
+                markup.push('\n');
+            }
+        }
+
+        let parser = super::markup::Parser::new(Some((
+            analysis.clone(),
+            analysis.navigator.closest_scope_root_upwards(node)?,
+        )));
+        Some(parser.parse_markup(markup))
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "__type", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MarkupBlock {
+    Paragraph { elements: Vec<MarkupElement> },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "__type", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MarkupElement {
+    Text {
+        value: String,
+    },
+    Bold {
+        value: String,
+    },
+    Italic {
+        value: String,
+    },
+    Link {
+        value: String,
+        to: String,
+    },
+    Reference {
+        name: QualifiedNameDoc,
+        uri: String,
+        location: (usize, usize),
+    },
 }
 
 #[test]
@@ -163,7 +222,7 @@ fn applying_version_to_string() {
             version: Some("1.0.0".into()),
             dependencies: None,
         },
-        lockfile: Lockfile(HashMap::new()),
+        lockfile: Lockfile(loa::HashMap::new()),
     };
 
     let mut s = String::from("Some/Package/Class");
