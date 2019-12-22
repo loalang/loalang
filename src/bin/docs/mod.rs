@@ -4,8 +4,6 @@ extern crate hyper_staticfile;
 mod docs;
 pub use self::docs::*;
 
-pub mod markup;
-
 use crate::pkg::ManifestFile;
 use colored::Colorize;
 use hyper::rt::Future;

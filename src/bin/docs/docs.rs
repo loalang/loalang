@@ -1,7 +1,6 @@
 use crate::pkg::config::{Lockfile, Pkgfile};
 use loa::semantics::Analysis;
-use loa::syntax::Node;
-use loa::syntax::TokenKind;
+use loa::syntax::{Node, NodeKind, Token};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -122,7 +121,7 @@ fn apply_versions(s: &mut String, versions: &Versions) {
     })
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct QualifiedNameDoc {
     pub name: String,
     pub namespace: String,
@@ -167,21 +166,13 @@ pub struct Markup {
 
 impl Markup {
     pub fn extract(analysis: &Analysis, node: &Node) -> Option<Markup> {
-        let comments = node.insignificant_tokens_before(analysis.navigator.tree_of(node)?);
-
-        let mut markup = String::new();
-        for comment in comments {
-            if let TokenKind::DocComment(content) = comment.kind {
-                markup.push_str(content.trim_start());
-                markup.push('\n');
+        let mut blocks = vec![];
+        if let Some(doc) = analysis.navigator.doc_of(node) {
+            for block in analysis.navigator.blocks_of_doc(&doc) {
+                blocks.push(MarkupBlock::extract(analysis, &block)?);
             }
         }
-
-        let parser = super::markup::Parser::new(Some((
-            analysis.clone(),
-            analysis.navigator.closest_scope_root_upwards(node)?,
-        )));
-        Some(parser.parse_markup(markup))
+        Some(Markup { blocks })
     }
 }
 
@@ -189,6 +180,21 @@ impl Markup {
 #[serde(tag = "__type", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum MarkupBlock {
     Paragraph { elements: Vec<MarkupElement> },
+}
+
+impl MarkupBlock {
+    pub fn extract(analysis: &Analysis, block: &Node) -> Option<MarkupBlock> {
+        match block.kind {
+            NodeKind::DocParagraphBlock { ref elements } => Some(MarkupBlock::Paragraph {
+                elements: elements
+                    .into_iter()
+                    .filter_map(|i| analysis.navigator.find_child(block, *i))
+                    .filter_map(|n| MarkupElement::extract(analysis, &n))
+                    .collect(),
+            }),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -212,6 +218,23 @@ pub enum MarkupElement {
         uri: String,
         location: (usize, usize),
     },
+}
+
+impl MarkupElement {
+    pub fn extract(_analysis: &Analysis, element: &Node) -> Option<MarkupElement> {
+        match element.kind {
+            NodeKind::DocTextElement(ref tokens) => Some(MarkupElement::Text {
+                value: tokens.iter().map(Token::lexeme).collect(),
+            }),
+            NodeKind::DocItalicElement(_, ref tokens, _) => Some(MarkupElement::Italic {
+                value: tokens.iter().map(Token::lexeme).collect(),
+            }),
+            NodeKind::DocBoldElement(_, ref tokens, _) => Some(MarkupElement::Bold {
+                value: tokens.iter().map(Token::lexeme).collect(),
+            }),
+            _ => None,
+        }
+    }
 }
 
 #[test]

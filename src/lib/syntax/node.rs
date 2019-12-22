@@ -309,9 +309,10 @@ pub enum NodeKind {
 
     /// ```bnf
     /// ModuleDeclaration ::=
-    ///   Declaration | EXPORT_KEYWORD Declaration
+    ///   Doc?
+    ///   (Declaration | EXPORT_KEYWORD Declaration)
     /// ```
-    Exported(Token, Id),
+    Exported(Id, Token, Id),
 
     /// ```bnf
     /// NamespaceDirective ::=
@@ -373,6 +374,7 @@ pub enum NodeKind {
     ///   (ClassBody | PERIOD)
     /// ```
     Class {
+        doc: Id,
         partial_keyword: Option<Token>,
         class_keyword: Option<Token>,
         symbol: Id,
@@ -484,7 +486,7 @@ pub enum NodeKind {
 
     /// ```bnf
     /// Operator ::=
-    ///   (PLUS | SLASH | EQUAL_SIGN | OPEN_ANGLE | CLOSE_ANGLE)+
+    ///   (ASTERISK | PLUS | SLASH | EQUAL_SIGN | OPEN_ANGLE | CLOSE_ANGLE)+
     /// ```
     Operator(Vec<Token>),
 
@@ -694,6 +696,56 @@ pub enum NodeKind {
         expression: Id,
         period: Option<Token>,
     },
+
+    /// ```bnf
+    /// Doc ::=
+    ///   DOC_LINE_MARKER
+    ///   DocBlock*
+    /// ```
+    Doc {
+        doc_line_marker: Token,
+        blocks: Vec<Id>,
+    },
+
+    /// ```bnf
+    /// DocBlock ::=
+    ///   DocParagraphBlock
+    /// ```
+
+    /// ```bnf
+    /// DocParagraphBlock ::=
+    ///   DocElement+
+    /// ```
+    DocParagraphBlock { elements: Vec<Id> },
+
+    /// ```bnf
+    /// DocElement ::=
+    ///   DocTextElement |
+    ///   DocItalicElement |
+    ///   DocBoldElement
+    /// ```
+
+    /// ```bnf
+    /// DocTextElement ::=
+    ///   <basic tokens>+
+    /// ```
+    DocTextElement(Vec<Token>),
+
+    /// ```bnf
+    /// DocItalicElement ::=
+    ///   UNDERSCORE
+    ///   <basic tokens>+
+    ///   UNDERSCORE
+    /// ```
+    DocItalicElement(Token, Vec<Token>, Token),
+
+    /// ```bnf
+    /// DocBoldElement ::=
+    ///   ASTERISK
+    ///   <basic tokens>+
+    ///   ASTERISK
+    /// ```
+    DocBoldElement(Token, Vec<Token>, Token),
 }
 
 pub use NodeKind::*;
@@ -701,6 +753,10 @@ pub use NodeKind::*;
 impl NodeKind {
     pub fn leaves(&self) -> Vec<&Token> {
         let option_tokens: Vec<Option<&Token>> = match self {
+            Module { .. } => vec![],
+
+            REPLLine { .. } => vec![],
+
             REPLDirective {
                 ref colon,
                 ref period,
@@ -709,7 +765,7 @@ impl NodeKind {
 
             REPLExpression { ref period, .. } => vec![period.as_ref()],
 
-            Exported(ref token, _) => vec![Some(token)],
+            Exported(_, ref token, _) => vec![Some(token)],
 
             NamespaceDirective {
                 ref namespace_keyword,
@@ -727,6 +783,8 @@ impl NodeKind {
                 as_keyword.as_ref(),
                 period.as_ref(),
             ],
+
+            QualifiedSymbol { .. } => vec![],
 
             Symbol(ref token) => vec![Some(token)],
 
@@ -768,6 +826,21 @@ impl NodeKind {
                 native_keyword.as_ref(),
                 period.as_ref(),
             ],
+
+            Signature { .. } => vec![],
+
+            UnaryMessagePattern { .. } => vec![],
+            BinaryMessagePattern { .. } => vec![],
+            KeywordMessagePattern { .. } => vec![],
+
+            UnaryMessage { .. } => vec![],
+            BinaryMessage { .. } => vec![],
+            KeywordMessage { .. } => vec![],
+            MessageSendExpression { .. } => vec![],
+
+            ParameterPattern { .. } => vec![],
+            ReferenceTypeExpression { .. } => vec![],
+            ReferenceExpression { .. } => vec![],
 
             IsDirective {
                 ref is_keyword,
@@ -816,7 +889,28 @@ impl NodeKind {
                 ..
             } => vec![let_keyword.as_ref(), equal_sign.as_ref(), period.as_ref()],
 
-            _ => vec![],
+            Doc {
+                ref doc_line_marker,
+                ..
+            } => vec![Some(doc_line_marker)],
+
+            DocParagraphBlock { .. } => vec![],
+
+            DocTextElement(ref tokens) => tokens.iter().map(Some).collect(),
+
+            DocItalicElement(ref open, ref tokens, ref close) => {
+                let mut r = tokens.iter().map(Some).collect::<Vec<_>>();
+                r.insert(0, Some(open));
+                r.push(Some(close));
+                r
+            }
+
+            DocBoldElement(ref open, ref tokens, ref close) => {
+                let mut r = tokens.iter().map(Some).collect::<Vec<_>>();
+                r.insert(0, Some(open));
+                r.push(Some(close));
+                r
+            }
         };
 
         option_tokens.into_iter().filter_map(|t| t).collect()
@@ -847,7 +941,8 @@ impl NodeKind {
             REPLExpression { expression, .. } => {
                 children.push(expression);
             }
-            Exported(_, declaration) => {
+            Exported(doc, _, declaration) => {
+                children.push(doc);
                 children.push(declaration);
             }
             NamespaceDirective {
@@ -868,11 +963,13 @@ impl NodeKind {
             }
             Symbol(_) => {}
             Class {
+                doc,
                 symbol,
                 type_parameter_list,
                 class_body,
                 ..
             } => {
+                children.push(doc);
                 children.push(symbol);
                 children.push(type_parameter_list);
                 children.push(class_body);
@@ -1005,6 +1102,15 @@ impl NodeKind {
                 children.push(symbol);
                 children.push(expression);
             }
+            Doc { blocks, .. } => {
+                children.extend(blocks);
+            }
+            DocParagraphBlock { elements } => {
+                children.extend(elements);
+            }
+            DocTextElement(_) => {}
+            DocItalicElement(_, _, _) => {}
+            DocBoldElement(_, _, _) => {}
         }
 
         children

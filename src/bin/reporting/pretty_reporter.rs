@@ -179,7 +179,7 @@ impl Reporter for PrettyReporter {
             if let Some(source) = navigator.source(&uri) {
                 result.push_str(Self::code_frames(diagnostics, source).as_str());
             }
-            print!("{}", result);
+            eprint!("{}", result);
         }
     }
 }

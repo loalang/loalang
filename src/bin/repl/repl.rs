@@ -110,8 +110,9 @@ pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
                 | TokenKind::OpenCurly
                 | TokenKind::CloseCurly
                 | TokenKind::LineComment(_)
-                | TokenKind::DocComment(_)
-                | TokenKind::Underscore => lexeme.bright_black().to_string(),
+                | TokenKind::DocLineMarker
+                | TokenKind::DocText(_)
+                | TokenKind::DocNewLine(_) => lexeme.bright_black().to_string(),
 
                 TokenKind::SimpleString(_) | TokenKind::SimpleCharacter(_) => {
                     lexeme.green().to_string()
@@ -135,6 +136,8 @@ pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
                 | TokenKind::LetKeyword
                 | TokenKind::NativeKeyword => lexeme.blue().to_string(),
                 TokenKind::Plus => lexeme,
+                TokenKind::Asterisk => lexeme,
+                TokenKind::Underscore => lexeme,
                 TokenKind::Colon => lexeme,
                 TokenKind::Slash => lexeme,
                 TokenKind::EqualSign => lexeme,

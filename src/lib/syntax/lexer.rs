@@ -24,7 +24,7 @@ pub fn is_valid_binary_selector(string: &String) -> bool {
     for token in tokens {
         if !matches!(
             token.kind,
-            Plus | Slash | EqualSign | OpenAngle | CloseAngle
+            Asterisk | Plus | Slash | EqualSign | OpenAngle | CloseAngle
         ) {
             return false;
         }
@@ -58,19 +58,32 @@ pub fn is_valid_keyword_selector(string: &String, length: usize) -> bool {
     return true;
 }
 
+#[derive(PartialEq)]
+enum LexerState {
+    Normal,
+    Doc,
+}
+
 pub fn tokenize(source: Arc<Source>) -> Vec<Token> {
     let mut chars = source.code.encode_utf16().enumerate().peekmore();
     let mut end_offset = 0;
     let mut tokens = vec![];
+    let mut state = LexerState::Normal;
 
     loop {
-        match next_token(&source, &mut chars) {
-            None => break,
-            Some(token) => {
-                end_offset = token.span.end.offset;
-                tokens.push(token)
-            }
-        }
+        let token = match state {
+            LexerState::Normal => match next_token(&source, &mut state, &mut chars) {
+                None => break,
+                Some(token) => token,
+            },
+
+            LexerState::Doc => match next_doc_token(&source, &mut state, &mut chars) {
+                None => break,
+                Some(token) => token,
+            },
+        };
+        end_offset = token.span.end.offset;
+        tokens.push(token)
     }
 
     tokens.push(Token {
@@ -91,6 +104,7 @@ const NEWLINE: u16 = '\n' as u16;
 const CARRIAGE_RETURN: u16 = '\r' as u16;
 const TAB: u16 = '\t' as u16;
 const UNDERSCORE: u16 = '_' as u16;
+const ASTERISK: u16 = '*' as u16;
 const APOSTROPHE: u16 = '\'' as u16;
 const PLUS: u16 = '+' as u16;
 const COLON: u16 = ':' as u16;
@@ -105,7 +119,11 @@ const EQUAL_SIGN: u16 = '=' as u16;
 const DOUBLE_QUOTE: u16 = '"' as u16;
 const HASH: u16 = '#' as u16;
 
-fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
+fn next_token(
+    source: &Arc<Source>,
+    state: &mut LexerState,
+    stream: &mut CharStream,
+) -> Option<Token> {
     let (offset, ch) = stream.next()?;
     let mut kind;
     let mut end_offset = offset;
@@ -130,25 +148,27 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
             kind = TokenKind::Whitespace(characters_to_string(chars.into_iter()));
         }
 
-        // LineComment & DocComment
+        // LineComment & DocLineMarker
         (SLASH, SLASH) => {
             let (o, _) = stream.next().unwrap();
             end_offset = o;
-            let mut chars = vec![];
-            loop {
-                match stream.peek() {
-                    Some((_, NEWLINE)) | None => break,
-                    Some((_, _)) => {
-                        let (o, c) = stream.next().unwrap();
-                        end_offset = o;
-                        chars.push(c);
+
+            if stream.peek().map(|(_, c)| *c == SLASH).unwrap_or(false) {
+                stream.next().unwrap();
+                *state = LexerState::Doc;
+                kind = TokenKind::DocLineMarker;
+            } else {
+                let mut chars = vec![];
+                loop {
+                    match stream.peek() {
+                        Some((_, NEWLINE)) | None => break,
+                        Some((_, _)) => {
+                            let (o, c) = stream.next().unwrap();
+                            end_offset = o;
+                            chars.push(c);
+                        }
                     }
                 }
-            }
-            if chars.len() > 0 && chars[0] == SLASH {
-                chars.remove(0);
-                kind = TokenKind::DocComment(characters_to_string(chars.into_iter()));
-            } else {
                 kind = TokenKind::LineComment(characters_to_string(chars.into_iter()));
             }
         }
@@ -220,6 +240,7 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
         (HASH, f)
             if (f as u8 as char).is_alphabetic()
                 || f == APOSTROPHE
+                || f == ASTERISK
                 || f == PLUS
                 || f == SLASH
                 || f == EQUAL_SIGN
@@ -247,7 +268,8 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
                 // Binary symbol
                 loop {
                     match stream.peek() {
-                        Some((_, PLUS))
+                        Some((_, ASTERISK))
+                        | Some((_, PLUS))
                         | Some((_, SLASH))
                         | Some((_, EQUAL_SIGN))
                         | Some((_, OPEN_ANGLE))
@@ -309,6 +331,9 @@ fn next_token(source: &Arc<Source>, stream: &mut CharStream) -> Option<Token> {
                 lexeme => kind = TokenKind::SimpleSymbol(lexeme.into()),
             }
         }
+
+        // Asterisk
+        (ASTERISK, _) => kind = TokenKind::Asterisk,
 
         // Plus
         (PLUS, _) => kind = TokenKind::Plus,
@@ -457,6 +482,123 @@ fn consume_number(
     } else {
         *kind = SimpleInteger(first_int)
     }
+}
+
+fn next_doc_token(
+    source: &Arc<Source>,
+    state: &mut LexerState,
+    stream: &mut CharStream,
+) -> Option<Token> {
+    let (offset, first_char) = stream.next()?;
+
+    match first_char {
+        NEWLINE => {
+            if sees_doc_newline(stream).unwrap_or(false) {
+                stream.reset_view();
+                return consume_doc_newline(source, stream, offset, first_char);
+            }
+
+            *state = LexerState::Normal;
+            return Some(Token {
+                span: Span::at_range(source, offset..offset + 1),
+                kind: TokenKind::Whitespace("\n".into()),
+                before: vec![],
+                after: vec![],
+            });
+        }
+
+        UNDERSCORE => {
+            return Some(Token {
+                span: Span::at_range(source, offset..offset + 1),
+                kind: TokenKind::Underscore,
+                before: vec![],
+                after: vec![],
+            })
+        }
+
+        ASTERISK => {
+            return Some(Token {
+                span: Span::at_range(source, offset..offset + 1),
+                kind: TokenKind::Asterisk,
+                before: vec![],
+                after: vec![],
+            })
+        }
+
+        _ => {}
+    }
+
+    let mut end_offset = offset;
+    let mut chars = vec![first_char];
+
+    loop {
+        match stream.peek() {
+            None | Some((_, NEWLINE)) | Some((_, UNDERSCORE)) | Some((_, ASTERISK)) => break,
+            _ => {
+                let (o, c) = stream.next()?;
+                end_offset = o;
+                chars.push(c);
+            }
+        }
+    }
+
+    Some(Token {
+        span: Span::at_range(source, offset..end_offset + 1),
+        kind: TokenKind::DocText(characters_to_string(chars.into_iter())),
+        before: vec![],
+        after: vec![],
+    })
+}
+
+fn sees_doc_newline(stream: &mut CharStream) -> Option<bool> {
+    loop {
+        let (_, c) = stream.peek()?;
+        if let SPACE | NEWLINE | CARRIAGE_RETURN | TAB = *c {
+            stream.move_next();
+            continue;
+        }
+        break;
+    }
+    if let (_, SLASH) = stream.peek()? {
+        if let (_, SLASH) = stream.peek_next()? {
+            if let (_, SLASH) = stream.peek_next()? {
+                return Some(true);
+            }
+        }
+    }
+    Some(false)
+}
+
+fn consume_doc_newline(
+    source: &Arc<Source>,
+    stream: &mut CharStream,
+    offset: usize,
+    first_char: u16,
+) -> Option<Token> {
+    let mut chars = vec![first_char];
+    loop {
+        if let Some((_, c)) = stream.peek() {
+            match *c {
+                SPACE | NEWLINE | CARRIAGE_RETURN | TAB => {
+                    let (_, c) = stream.next()?;
+                    chars.push(c);
+                }
+                _ => break,
+            }
+        }
+    }
+
+    chars.push(stream.next()?.1);
+    chars.push(stream.next()?.1);
+    let (end_offset, c) = stream.next()?;
+    chars.push(c);
+
+    Some(Token {
+        span: Span::at_range(source, offset..end_offset + 1),
+        kind: TokenKind::DocNewLine(characters_to_string(chars.into_iter())),
+        before: vec![],
+        after: vec![],
+    })
 }
 
 #[cfg(test)]

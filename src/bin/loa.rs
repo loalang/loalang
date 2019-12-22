@@ -258,7 +258,7 @@ fn main() -> Result<(), clap::Error> {
                 let port_str = matches.value_of("port").unwrap();
                 match u16::from_str(port_str) {
                     Ok(port) => {
-                        let (_, analysis) = parse(None);
+                        let analysis = parse_and_report(None);
                         docs::serve(port, analysis.into())
                     }
                     Err(_) => eprintln!("Invalid port: {}", port_str),
@@ -266,7 +266,7 @@ fn main() -> Result<(), clap::Error> {
             }
             ("inspect", Some(matches)) => {
                 log_to_file();
-                let (_, analysis) = parse(None);
+                let analysis = parse_and_report(None);
                 let lockfile = ManifestFile::new(".pkg.lock");
                 let pkgfile = ManifestFile::new("pkg.yml");
                 let mut docs: Docs = analysis.into();
@@ -415,14 +415,20 @@ fn parse(main: Option<&str>) -> (Vec<loa::Diagnostic>, loa::semantics::Analysis)
     (diagnostics, analysis)
 }
 
-fn build(main: &str) -> Instructions {
-    let (diagnostics, mut analysis) = parse(Some(main));
+fn parse_and_report(main: Option<&str>) -> loa::semantics::Analysis {
+    let (diagnostics, analysis) = parse(main);
 
     if loa::Diagnostic::failed(&diagnostics) {
         <PrettyReporter as loa::Reporter>::report(diagnostics, &analysis.navigator);
         exit(1);
     }
     <PrettyReporter as loa::Reporter>::report(diagnostics, &analysis.navigator);
+
+    analysis
+}
+
+fn build(main: &str) -> Instructions {
+    let mut analysis = parse_and_report(Some(main));
 
     let mut generator = loa::generation::Generator::new(&mut analysis);
     match generator.generate_all() {

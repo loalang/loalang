@@ -269,7 +269,7 @@ impl Navigator {
     pub fn find_import_directives_from_declaration(&self, declaration: &Node) -> Vec<Node> {
         let mut imports = vec![];
 
-        if let Some((Some(module_id), syntax::Exported(_, _))) =
+        if let Some((Some(module_id), syntax::Exported(_, _, _))) =
             self.parent(declaration).map(|n| (n.parent_id, n.kind))
         {
             if let Some(module) = self.find_node_in(&declaration.span.start.uri, module_id) {
@@ -406,7 +406,7 @@ impl Navigator {
 
         if let Some((name, _)) = self.symbol_of(declaration) {
             // If the declaration is exported
-            if let Some((module_id, syntax::Exported(_, _))) =
+            if let Some((module_id, syntax::Exported(_, _, _))) =
                 self.parent(declaration).map(|n| (n.parent_id, n.kind))
             {
                 if let Some(refs) = module_id
@@ -666,7 +666,7 @@ impl Navigator {
                 .iter()
                 .filter_map(|mdi| self.find_child(module, *mdi))
                 .filter_map(|module_declaration| {
-                    if let Exported(_, d) = module_declaration.kind {
+                    if let Exported(_, _, d) = module_declaration.kind {
                         Some((true, self.find_child(module, d)?))
                     } else {
                         Some((false, module_declaration))
@@ -888,7 +888,7 @@ impl Navigator {
 
     pub fn declaration_is_exported(&self, declaration: &Node) -> bool {
         if let Some(parent) = self.parent(declaration) {
-            if let Exported(_, _) = parent.kind {
+            if let Exported(_, _, _) = parent.kind {
                 return true;
             }
         }
@@ -1174,5 +1174,29 @@ impl Navigator {
 
     pub fn tree_of(&self, node: &Node) -> Option<&Arc<Tree>> {
         self.modules.get(&node.span.start.uri)
+    }
+
+    pub fn doc_of(&self, node: &Node) -> Option<Node> {
+        if let Class { doc, .. } = node.kind {
+            if let Some(doc) = self.find_child(node, doc) {
+                return Some(doc);
+            }
+        }
+        if let Exported(doc, _, _) = self.parent(node)?.kind {
+            return self.find_child(node, doc);
+        }
+        None
+    }
+
+    pub fn blocks_of_doc(&self, doc: &Node) -> Vec<Node> {
+        let mut result = vec![];
+        if let Doc { ref blocks, .. } = doc.kind {
+            for block in blocks {
+                if let Some(block) = self.find_child(doc, *block) {
+                    result.push(block);
+                }
+            }
+        }
+        result
     }
 }

@@ -6,6 +6,7 @@ pub struct Formatter<'a> {
     tree: &'a Tree,
     indentation: usize,
     indent: &'a str,
+    is_in_doc: bool,
 }
 
 impl<'a> Formatter<'a> {
@@ -14,6 +15,7 @@ impl<'a> Formatter<'a> {
             tree,
             indentation: 0,
             indent,
+            is_in_doc: false,
         }
     }
 
@@ -87,6 +89,9 @@ impl<'a> Formatter<'a> {
         for _ in 0..self.indentation {
             write!(f, "{}", self.indent)?;
         }
+        if self.is_in_doc {
+            write!(f, "/// ")?;
+        }
         Ok(())
     }
 
@@ -138,7 +143,8 @@ impl<'a> Formatter<'a> {
                 self.write_child(f, expression)?;
                 self.write_token_or(f, period, ".")
             }
-            Exported(export_keyword, declaration) => {
+            Exported(doc, export_keyword, declaration) => {
+                self.write_child(f, doc)?;
                 self.write_token(f, export_keyword)?;
                 self.space(f)?;
                 self.write_child(f, declaration)
@@ -182,6 +188,7 @@ impl<'a> Formatter<'a> {
             }
             Symbol(token) => self.write_token(f, token),
             Class {
+                doc,
                 partial_keyword,
                 class_keyword,
                 symbol,
@@ -189,6 +196,7 @@ impl<'a> Formatter<'a> {
                 class_body,
                 period,
             } => {
+                self.write_child(f, doc)?;
                 if let Some(partial_keyword) = partial_keyword {
                     self.write_token(f, partial_keyword)?;
                     self.space(f)?;
@@ -446,6 +454,54 @@ impl<'a> Formatter<'a> {
                 self.space(f)?;
                 self.write_child(f, expression)?;
                 self.write_token_or(f, period, ".")
+            }
+
+            Doc {
+                doc_line_marker,
+                blocks,
+            } => {
+                self.write_token(f, doc_line_marker)?;
+                self.space(f)?;
+                self.is_in_doc = true;
+                for (i, block) in blocks.iter().enumerate() {
+                    if i > 0 {
+                        self.break_line(f)?;
+                        self.break_line(f)?;
+                    }
+                    self.write_child(f, block)?;
+                }
+                self.is_in_doc = false;
+                self.break_line(f)
+            }
+
+            DocParagraphBlock { elements } => {
+                for element in elements.iter() {
+                    self.write_child(f, element)?;
+                }
+                Ok(())
+            }
+
+            DocTextElement(ref tokens) => {
+                for token in tokens.iter() {
+                    self.write_token(f, token)?;
+                }
+                Ok(())
+            }
+
+            DocItalicElement(ref open, ref tokens, ref close) => {
+                self.write_token(f, open)?;
+                for token in tokens.iter() {
+                    self.write_token(f, token)?;
+                }
+                self.write_token(f, close)
+            }
+
+            DocBoldElement(ref open, ref tokens, ref close) => {
+                self.write_token(f, open)?;
+                for token in tokens.iter() {
+                    self.write_token(f, token)?;
+                }
+                self.write_token(f, close)
             }
         }
     }
