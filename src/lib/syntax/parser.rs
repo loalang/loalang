@@ -12,12 +12,16 @@ macro_rules! sees {
     };
 }
 
+#[derive(Clone)]
 pub struct Parser {
     source: Arc<Source>,
     tokens: Vec<Token>,
     pub diagnostics: Vec<Diagnostic>,
     last_token_span: Span,
     leading_insignificants: Vec<Token>,
+
+    #[cfg(test)]
+    test_comments: Vec<Token>,
 }
 
 impl Parser {
@@ -29,6 +33,9 @@ impl Parser {
             diagnostics: vec![],
             last_token_span: Span::new(start.clone(), start),
             leading_insignificants: vec![],
+
+            #[cfg(test)]
+            test_comments: vec![],
         };
         parser.move_past_insignificants();
         parser
@@ -67,6 +74,14 @@ impl Parser {
     fn move_past_insignificants(&mut self) {
         while sees!(self, Whitespace(_) | LineComment(_)) {
             let insignificant = self.next_insignificant();
+            #[cfg(test)]
+            {
+                if let TokenKind::LineComment(ref content) = insignificant.kind {
+                    if content.starts_with("$") {
+                        self.test_comments.push(insignificant.clone());
+                    }
+                }
+            }
             self.leading_insignificants.push(insignificant);
         }
     }
@@ -94,6 +109,17 @@ impl Parser {
     }
 
     pub fn parse(mut self) -> (Arc<Tree>, Vec<Diagnostic>) {
+        let tree = self.parse_root();
+        (Arc::new(tree), self.diagnostics)
+    }
+
+    #[cfg(test)]
+    pub fn parse_with_test_comments(mut self) -> (Arc<Tree>, Vec<Diagnostic>, Vec<Token>) {
+        let tree = self.parse_root();
+        (Arc::new(tree), self.diagnostics, self.test_comments)
+    }
+
+    fn parse_root(&mut self) -> Tree {
         let mut tree = Tree::new(self.source.clone());
         let builder = NodeBuilder::new(&mut tree, self.peek().span.start.clone());
         match self.source.kind {
@@ -104,7 +130,7 @@ impl Parser {
                 self.parse_repl_line(builder);
             }
         }
-        (Arc::new(tree), self.diagnostics)
+        tree
     }
 
     #[inline]
@@ -327,7 +353,7 @@ impl Parser {
 
         if sees!(self, ExportKeyword) {
             let export_keyword = self.next();
-            let class = self.parse_class(doc, self.child(&mut builder));
+            let class = self.parse_class(Id::NULL, self.child(&mut builder));
             self.finalize(builder, Exported(doc, export_keyword, class))
         } else {
             self.parse_class(doc, builder)
@@ -338,7 +364,8 @@ impl Parser {
         let doc_line_marker = self.next();
         let mut blocks = vec![];
 
-        while sees!(self, DocText(_) | DocNewLine(_) | Underscore | Asterisk) {
+        while sees!(self, DocText(_) | DocNewLine(_) | Underscore | Asterisk | OpenBracket | CloseBracket | OpenParen | CloseParen)
+        {
             blocks.push(self.parse_doc_block(self.child(&mut builder)));
         }
 
@@ -360,28 +387,103 @@ impl Parser {
 
     fn parse_doc_paragraph_block(&mut self, mut builder: NodeBuilder) -> Id {
         let mut elements = vec![];
-        while sees!(self, DocText(_) | Underscore | DocNewLine(_) | Asterisk) {
+        while sees!(self, DocText(_) | Underscore | DocNewLine(_) | Asterisk | OpenBracket | CloseBracket | OpenParen | CloseParen)
+        {
             if self.sees_doc_block_break() {
                 break;
+            }
+            while sees!(self, DocNewLine(_)) {
+                self.next();
             }
             elements.push(self.parse_doc_element(self.child(&mut builder)));
         }
         self.finalize(builder, DocParagraphBlock { elements })
     }
 
-    fn parse_doc_element(&mut self, builder: NodeBuilder) -> Id {
+    fn parse_doc_element(&mut self, mut builder: NodeBuilder) -> Id {
         if sees!(self, Underscore) {
             self.parse_doc_italic_element(builder)
         } else if sees!(self, Asterisk) {
             self.parse_doc_bold_element(builder)
+        } else if sees!(self, OpenBracket) {
+            let save = self.clone();
+            if let Some(k) = self.parse_doc_link_element(&mut builder) {
+                self.finalize(builder, k)
+            } else {
+                *self = save;
+                self.parse_doc_text_element(builder)
+            }
         } else {
             self.parse_doc_text_element(builder)
         }
     }
 
-    fn parse_doc_text_element(&mut self, builder: NodeBuilder) -> Id {
+    fn parse_doc_link_element(&mut self, builder: &mut NodeBuilder) -> Option<NodeKind> {
+        let text = self.parse_doc_link_text(self.child(builder))?;
+        let mut re = Id::NULL;
+
+        if sees!(self, OpenParen) {
+            if let Some(r) = self.parse_doc_link_ref() {
+                re = self.finalize(self.child(builder), r);
+            }
+        }
+
+        Some(DocLinkElement(text, re))
+    }
+
+    fn parse_doc_link_text(&mut self, builder: NodeBuilder) -> Option<Id> {
+        if !sees!(self, OpenBracket) {
+            return None;
+        }
+        let open = self.next();
         let mut tokens = vec![];
-        while sees!(self, DocText(_) | DocNewLine(_)) {
+        while sees!(self, DocText(_) | DocNewLine(_) | Asterisk | Underscore | OpenBracket | OpenParen | CloseParen)
+        {
+            if self.sees_doc_block_break() {
+                return None;
+            }
+            if sees!(self, DocNewLine(_)) {
+                self.next();
+                continue;
+            }
+            tokens.push(self.next());
+        }
+        if !sees!(self, CloseBracket) {
+            return None;
+        }
+        let close = self.next();
+
+        Some(self.finalize(builder, DocLinkText(open, tokens, close)))
+    }
+
+    fn parse_doc_link_ref(&mut self) -> Option<NodeKind> {
+        if !sees!(self, OpenParen) {
+            return None;
+        }
+        let open = self.next();
+        let mut tokens = vec![];
+        while sees!(self, DocText(_) | DocNewLine(_) | Asterisk | Underscore | OpenBracket | OpenParen | CloseBracket)
+        {
+            if self.sees_doc_block_break() {
+                return None;
+            }
+            if sees!(self, DocNewLine(_)) {
+                self.next();
+                continue;
+            }
+            tokens.push(self.next());
+        }
+        if !sees!(self, CloseParen) {
+            return None;
+        }
+        let close = self.next();
+
+        Some(DocLinkRef(open, tokens, close))
+    }
+
+    fn parse_doc_text_element(&mut self, builder: NodeBuilder) -> Id {
+        let mut tokens = vec![self.next()];
+        while sees!(self, DocText(_) | DocNewLine(_) | CloseBracket | OpenParen | CloseParen) {
             if self.sees_doc_block_break() {
                 break;
             }
@@ -401,7 +503,7 @@ impl Parser {
     fn parse_doc_italic_element(&mut self, builder: NodeBuilder) -> Id {
         let open = self.next();
         let mut tokens = vec![];
-        while sees!(self, DocText(_) | DocNewLine(_)) {
+        while sees!(self, DocText(_) | DocNewLine(_) | CloseBracket | OpenParen | CloseParen) {
             if self.sees_doc_block_break() {
                 break;
             }
@@ -424,7 +526,7 @@ impl Parser {
     fn parse_doc_bold_element(&mut self, builder: NodeBuilder) -> Id {
         let open = self.next();
         let mut tokens = vec![];
-        while sees!(self, DocText(_) | DocNewLine(_)) {
+        while sees!(self, DocText(_) | DocNewLine(_) | CloseBracket | OpenParen | CloseParen) {
             if self.sees_doc_block_break() {
                 break;
             }
@@ -587,8 +689,14 @@ impl Parser {
         }
 
         while !sees!(self, CloseCurly | EOF) {
+            let mut doc = Id::NULL;
+
+            if sees!(self, DocLineMarker) {
+                doc = self.parse_doc(self.child(&mut builder));
+            }
+
             if sees!(self, PublicKeyword | PrivateKeyword) {
-                class_members.push(self.parse_method(self.child(&mut builder)));
+                class_members.push(self.parse_method(doc, self.child(&mut builder)));
                 continue;
             }
 
@@ -644,12 +752,16 @@ impl Parser {
         )
     }
 
-    fn parse_method(&mut self, mut builder: NodeBuilder) -> Id {
+    fn parse_method(&mut self, mut doc: Id, mut builder: NodeBuilder) -> Id {
         let mut visibility = None;
         let mut native_keyword = None;
         let signature;
         let mut method_body = Id::NULL;
         let mut period = None;
+
+        if doc == Id::NULL && sees!(self, DocLineMarker) {
+            doc = self.parse_doc(self.child(&mut builder));
+        }
 
         if sees!(self, PrivateKeyword | PublicKeyword) {
             visibility = Some(self.next());
@@ -674,6 +786,7 @@ impl Parser {
         self.finalize(
             builder,
             Method {
+                doc,
                 visibility,
                 native_keyword,
                 signature,

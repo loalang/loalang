@@ -19,28 +19,31 @@ path = "src/bin/loavm.rs"
 required-features = ["build-binary"]
 
 [features]
-build-binary = [
-    "jsonrpc-stdio-server",
-    "lsp-server",
-    "lsp-types",
-    "serde_json",
-    "log-panics",
-    "simple-logging",
-    "rustyline",
-    "colored",
-    "clap",
-    "reqwest",
-    "http",
-    "graphql_client",
-    "rpassword",
-    "dirs",
-    "tar",
-    "rust-crypto",
+test-library = [
     "serde_yaml",
-    "ignore",
-    "tee",
+]
+build-binary = [
+    "clap",
+    "colored",
+    "dirs",
+    "graphql_client",
+    "http",
     "hyper",
     "hyper-staticfile",
+    "ignore",
+    "jsonrpc-stdio-server",
+    "log-panics",
+    "lsp-server",
+    "lsp-types",
+    "reqwest",
+    "rpassword",
+    "rust-crypto",
+    "rustyline",
+    "serde_json",
+    "serde_yaml",
+    "simple-logging",
+    "tar",
+    "tee",
 ]
 
 [dependencies]
@@ -75,3 +78,5 @@ fraction = { version = "0.6", features = ["with-serde-support"] }
 peekmore = "0.4.0"
 atty = "0.2"
 matches = "0.1.8"
+strum = "0.17.1"
+strum_macros = "0.17.1"

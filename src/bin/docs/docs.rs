@@ -221,7 +221,7 @@ pub enum MarkupElement {
 }
 
 impl MarkupElement {
-    pub fn extract(_analysis: &Analysis, element: &Node) -> Option<MarkupElement> {
+    pub fn extract(analysis: &Analysis, element: &Node) -> Option<MarkupElement> {
         match element.kind {
             NodeKind::DocTextElement(ref tokens) => Some(MarkupElement::Text {
                 value: tokens.iter().map(Token::lexeme).collect(),
@@ -232,6 +232,25 @@ impl MarkupElement {
             NodeKind::DocBoldElement(_, ref tokens, _) => Some(MarkupElement::Bold {
                 value: tokens.iter().map(Token::lexeme).collect(),
             }),
+            NodeKind::DocLinkElement(text, re) => {
+                let text = analysis.navigator.find_child(element, text)?;
+
+                if let NodeKind::DocLinkText(_, ref tokens, _) = text.kind {
+                    let value: String = tokens.iter().map(Token::lexeme).collect();
+                    let to;
+                    if let Some(NodeKind::DocLinkRef(_, ref tokens, _)) =
+                        analysis.navigator.find_child(element, re).map(|n| n.kind)
+                    {
+                        to = tokens.iter().map(Token::lexeme).collect();
+                    } else {
+                        to = value.clone();
+                    }
+
+                    Some(MarkupElement::Link { value, to })
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }

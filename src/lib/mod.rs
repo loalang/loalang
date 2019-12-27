@@ -28,6 +28,10 @@ extern crate bincode;
 
 extern crate peekmore;
 
+extern crate strum;
+#[macro_use]
+extern crate strum_macros;
+
 #[macro_use]
 extern crate matches;
 
@@ -57,3 +61,6 @@ pub mod vm;
 pub mod server;
 
 pub mod format;
+
+#[cfg(test)]
+mod fixture_tests;

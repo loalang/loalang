@@ -40,6 +40,10 @@ pub enum TokenKind {
     CloseAngle,
     OpenCurly,
     CloseCurly,
+    OpenBracket,
+    CloseBracket,
+    OpenParen,
+    CloseParen,
 
     SimpleInteger(String),
     SimpleFloat(String),
@@ -102,6 +106,10 @@ impl Token {
             CloseAngle => ">".into(),
             OpenCurly => "{".into(),
             CloseCurly => "}".into(),
+            OpenBracket => "[".into(),
+            CloseBracket => "]".into(),
+            OpenParen => "(".into(),
+            CloseParen => ")".into(),
 
             Underscore => "_".into(),
 

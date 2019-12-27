@@ -109,6 +109,8 @@ pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
                 | TokenKind::Comma
                 | TokenKind::OpenCurly
                 | TokenKind::CloseCurly
+                | TokenKind::OpenParen
+                | TokenKind::CloseParen
                 | TokenKind::LineComment(_)
                 | TokenKind::DocLineMarker
                 | TokenKind::DocText(_)
@@ -143,6 +145,8 @@ pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
                 TokenKind::EqualSign => lexeme,
                 TokenKind::OpenAngle => lexeme,
                 TokenKind::CloseAngle => lexeme,
+                TokenKind::OpenBracket => lexeme,
+                TokenKind::CloseBracket => lexeme,
                 TokenKind::SimpleInteger(_) | TokenKind::SimpleFloat(_) => {
                     lexeme.magenta().to_string()
                 }

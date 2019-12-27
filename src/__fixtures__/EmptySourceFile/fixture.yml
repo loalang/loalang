@@ -1,0 +1,4 @@
+description: An empty source file must include a namespace directive, so this one fails.
+expected:
+  success: false
+  stdout: []

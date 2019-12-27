@@ -90,7 +90,7 @@ impl<'a> Formatter<'a> {
             write!(f, "{}", self.indent)?;
         }
         if self.is_in_doc {
-            write!(f, "/// ")?;
+            write!(f, "///")?;
         }
         Ok(())
     }
@@ -260,12 +260,14 @@ impl<'a> Formatter<'a> {
                 self.write_token_or(f, close_curly, "}")
             }
             Method {
+                doc,
                 visibility,
                 native_keyword,
                 signature,
                 method_body,
                 period,
             } => {
+                self.write_child(f, doc)?;
                 self.write_token_or(f, visibility, "private")?;
                 self.space(f)?;
                 if native_keyword.is_some() {
@@ -461,7 +463,6 @@ impl<'a> Formatter<'a> {
                 blocks,
             } => {
                 self.write_token(f, doc_line_marker)?;
-                self.space(f)?;
                 self.is_in_doc = true;
                 for (i, block) in blocks.iter().enumerate() {
                     if i > 0 {
@@ -488,15 +489,18 @@ impl<'a> Formatter<'a> {
                 Ok(())
             }
 
-            DocItalicElement(ref open, ref tokens, ref close) => {
-                self.write_token(f, open)?;
-                for token in tokens.iter() {
-                    self.write_token(f, token)?;
+            DocLinkElement(ref text, ref re) => {
+                self.write_child(f, text)?;
+                if !re.is_null() {
+                    self.write_child(f, re)?;
                 }
-                self.write_token(f, close)
+                Ok(())
             }
 
-            DocBoldElement(ref open, ref tokens, ref close) => {
+            DocItalicElement(ref open, ref tokens, ref close)
+            | DocBoldElement(ref open, ref tokens, ref close)
+            | DocLinkText(ref open, ref tokens, ref close)
+            | DocLinkRef(ref open, ref tokens, ref close) => {
                 self.write_token(f, open)?;
                 for token in tokens.iter() {
                     self.write_token(f, token)?;

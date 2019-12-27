@@ -1,0 +1,4 @@
+description: An empty project can be built, but it doesn't do anything.
+expected:
+  success: true
+  stdout: []

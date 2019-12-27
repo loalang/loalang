@@ -1,0 +1,5 @@
+namespace HelloWorld.
+
+export class Main {
+  public run => Main.
+}

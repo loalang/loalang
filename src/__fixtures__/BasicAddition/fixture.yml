@@ -1,0 +1,6 @@
+description: Some constant addition.
+main_class: BasicAddition/Main
+expected:
+  success: true
+  stdout:
+    - 123

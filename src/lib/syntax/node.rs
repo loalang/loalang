@@ -433,6 +433,7 @@ pub enum NodeKind {
     ///   PERIOD
     /// ```
     Method {
+        doc: Id,
         visibility: Option<Token>,
         native_keyword: Option<Token>,
         signature: Id,
@@ -722,19 +723,20 @@ pub enum NodeKind {
     /// DocElement ::=
     ///   DocTextElement |
     ///   DocItalicElement |
-    ///   DocBoldElement
+    ///   DocBoldElement |
+    ///   DocLinkElement
     /// ```
 
     /// ```bnf
     /// DocTextElement ::=
-    ///   <basic tokens>+
+    ///   DOC_TEXT+
     /// ```
     DocTextElement(Vec<Token>),
 
     /// ```bnf
     /// DocItalicElement ::=
     ///   UNDERSCORE
-    ///   <basic tokens>+
+    ///   DOC_TEXT+
     ///   UNDERSCORE
     /// ```
     DocItalicElement(Token, Vec<Token>, Token),
@@ -742,10 +744,33 @@ pub enum NodeKind {
     /// ```bnf
     /// DocBoldElement ::=
     ///   ASTERISK
-    ///   <basic tokens>+
+    ///   DOC_TEXT+
     ///   ASTERISK
     /// ```
     DocBoldElement(Token, Vec<Token>, Token),
+
+    /// ```bnf
+    /// DocLinkElement ::=
+    ///   DocLinkText
+    ///   DocLinkRef?
+    /// ```
+    DocLinkElement(Id, Id),
+
+    /// ```bnf
+    /// DocLinkText ::=
+    ///   OPEN_BRACKET
+    ///   DOC_TEXT+
+    ///   CLOSE_BRACKET
+    /// ```
+    DocLinkText(Token, Vec<Token>, Token),
+
+    /// ```bnf
+    /// DocLinkRef ::=
+    ///   OPEN_PAREN
+    ///   DOC_TEXT+
+    ///   CLOSE_PAREN
+    /// ```
+    DocLinkRef(Token, Vec<Token>, Token),
 }
 
 pub use NodeKind::*;
@@ -897,15 +922,12 @@ impl NodeKind {
             DocParagraphBlock { .. } => vec![],
 
             DocTextElement(ref tokens) => tokens.iter().map(Some).collect(),
+            DocLinkElement(_, _) => vec![],
 
-            DocItalicElement(ref open, ref tokens, ref close) => {
-                let mut r = tokens.iter().map(Some).collect::<Vec<_>>();
-                r.insert(0, Some(open));
-                r.push(Some(close));
-                r
-            }
-
-            DocBoldElement(ref open, ref tokens, ref close) => {
+            DocItalicElement(ref open, ref tokens, ref close)
+            | DocBoldElement(ref open, ref tokens, ref close)
+            | DocLinkText(ref open, ref tokens, ref close)
+            | DocLinkRef(ref open, ref tokens, ref close) => {
                 let mut r = tokens.iter().map(Some).collect::<Vec<_>>();
                 r.insert(0, Some(open));
                 r.push(Some(close));
@@ -1111,6 +1133,12 @@ impl NodeKind {
             DocTextElement(_) => {}
             DocItalicElement(_, _, _) => {}
             DocBoldElement(_, _, _) => {}
+            DocLinkElement(text, re) => {
+                children.push(text);
+                children.push(re);
+            }
+            DocLinkText(_, _, _) => {}
+            DocLinkRef(_, _, _) => {}
         }
 
         children

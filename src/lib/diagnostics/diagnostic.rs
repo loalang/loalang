@@ -2,7 +2,7 @@ use crate::*;
 use std::f64::INFINITY;
 use std::fmt;
 
-#[derive(Clone)]
+#[derive(Clone, IntoStaticStr)]
 pub enum Diagnostic {
     SyntaxError(Span, String),
     UndefinedTypeReference(Span, String),
@@ -105,13 +105,21 @@ impl Diagnostic {
     }
 }
 
-impl ToString for Diagnostic {
-    fn to_string(&self) -> String {
-        format!("{:?}", self)
+impl fmt::Debug for Diagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let name: &'static str = self.into();
+        write!(
+            f,
+            "{:?} ({} @ {}:{})",
+            self.to_string(),
+            name,
+            self.span().start.uri,
+            self.span().start.line,
+        )
     }
 }
 
-impl fmt::Debug for Diagnostic {
+impl fmt::Display for Diagnostic {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Diagnostic::*;
 

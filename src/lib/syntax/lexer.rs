@@ -115,6 +115,10 @@ const OPEN_ANGLE: u16 = '<' as u16;
 const CLOSE_ANGLE: u16 = '>' as u16;
 const OPEN_CURLY: u16 = '{' as u16;
 const CLOSE_CURLY: u16 = '}' as u16;
+const OPEN_BRACKET: u16 = '[' as u16;
+const CLOSE_BRACKET: u16 = ']' as u16;
+const OPEN_PAREN: u16 = '(' as u16;
+const CLOSE_PAREN: u16 = ')' as u16;
 const EQUAL_SIGN: u16 = '=' as u16;
 const DOUBLE_QUOTE: u16 = '"' as u16;
 const HASH: u16 = '#' as u16;
@@ -375,6 +379,14 @@ fn next_token(
         (OPEN_CURLY, _) => kind = TokenKind::OpenCurly,
         (CLOSE_CURLY, _) => kind = TokenKind::CloseCurly,
 
+        // (Open/Close)Bracket
+        (OPEN_BRACKET, _) => kind = TokenKind::OpenBracket,
+        (CLOSE_BRACKET, _) => kind = TokenKind::CloseBracket,
+
+        // (Open/Close)Paren
+        (OPEN_PAREN, _) => kind = TokenKind::OpenParen,
+        (CLOSE_PAREN, _) => kind = TokenKind::CloseParen,
+
         // Unknown
         (c, _) => {
             kind = TokenKind::Unknown(c);
@@ -525,6 +537,42 @@ fn next_doc_token(
             })
         }
 
+        OPEN_BRACKET => {
+            return Some(Token {
+                span: Span::at_range(source, offset..offset + 1),
+                kind: TokenKind::OpenBracket,
+                before: vec![],
+                after: vec![],
+            })
+        }
+
+        CLOSE_BRACKET => {
+            return Some(Token {
+                span: Span::at_range(source, offset..offset + 1),
+                kind: TokenKind::CloseBracket,
+                before: vec![],
+                after: vec![],
+            })
+        }
+
+        OPEN_PAREN => {
+            return Some(Token {
+                span: Span::at_range(source, offset..offset + 1),
+                kind: TokenKind::OpenParen,
+                before: vec![],
+                after: vec![],
+            })
+        }
+
+        CLOSE_PAREN => {
+            return Some(Token {
+                span: Span::at_range(source, offset..offset + 1),
+                kind: TokenKind::CloseParen,
+                before: vec![],
+                after: vec![],
+            })
+        }
+
         _ => {}
     }
 
@@ -533,7 +581,14 @@ fn next_doc_token(
 
     loop {
         match stream.peek() {
-            None | Some((_, NEWLINE)) | Some((_, UNDERSCORE)) | Some((_, ASTERISK)) => break,
+            None
+            | Some((_, NEWLINE))
+            | Some((_, UNDERSCORE))
+            | Some((_, ASTERISK))
+            | Some((_, OPEN_BRACKET))
+            | Some((_, CLOSE_BRACKET))
+            | Some((_, OPEN_PAREN))
+            | Some((_, CLOSE_PAREN)) => break,
             _ => {
                 let (o, c) = stream.next()?;
                 end_offset = o;

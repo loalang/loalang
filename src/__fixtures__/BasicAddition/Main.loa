@@ -1,0 +1,5 @@
+namespace BasicAddition.
+
+export class Main {
+  public run => 120 + 3.
+}

@@ -74,3 +74,9 @@ impl Analysis {
         declarations.into_iter().collect()
     }
 }
+
+impl<I: Iterator<Item = (URI, Arc<syntax::Tree>)>> From<I> for Analysis {
+    fn from(iterator: I) -> Self {
+        Self::new(Arc::new(iterator.collect()))
+    }
+}

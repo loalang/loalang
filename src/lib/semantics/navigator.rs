@@ -1177,7 +1177,7 @@ impl Navigator {
     }
 
     pub fn doc_of(&self, node: &Node) -> Option<Node> {
-        if let Class { doc, .. } = node.kind {
+        if let Class { doc, .. } | Method { doc, .. } = node.kind {
             if let Some(doc) = self.find_child(node, doc) {
                 return Some(doc);
             }

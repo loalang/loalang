@@ -21,6 +21,17 @@ impl Source {
         Arc::new(Source { kind, uri, code })
     }
 
+    pub fn main<S: AsRef<str>>(main_class: S) -> Arc<Source> {
+        let main_class = main_class.as_ref();
+        let class_name = main_class.split("/").collect::<Vec<_>>().pop().unwrap();
+
+        Source::new(
+            SourceKind::REPLLine,
+            URI::Main,
+            format!("import {}.\n\n{} run.", main_class, class_name),
+        )
+    }
+
     pub fn file(path: PathBuf) -> io::Result<Arc<Source>> {
         let uri = URI::File(path.clone());
         Self::file_with_uri(path, uri)

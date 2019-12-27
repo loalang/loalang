@@ -1,4 +1,4 @@
-use crate::vm::{CallStack, ConstValue, Object, VMResult, VM};
+use crate::vm::{CallStack, Class, ConstValue, Method, Object, VMResult, VM};
 use fraction::{BigFraction, BigUint};
 use num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
@@ -454,6 +454,12 @@ fn add_f64(lhs: f64, rhs: f64) -> Arc<Object> {
 
 fn add_fbig(lhs: &BigFraction, rhs: &BigFraction) -> Arc<Object> {
     Object::box_fbig(lhs + rhs)
+}
+
+impl Runtime for () {
+    fn print_panic(message: String, call_stack: Vec<(String, Arc<Class>, Arc<Method>)>) {
+        panic!("{}\n{:?}", message, call_stack)
+    }
 }
 
 #[allow(non_camel_case_types)]

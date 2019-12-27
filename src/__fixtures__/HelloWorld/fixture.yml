@@ -1,0 +1,6 @@
+description: A basic Hello World program.
+main_class: HelloWorld/Main
+expected:
+  success: true
+  stdout:
+    - a HelloWorld/Main

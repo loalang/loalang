@@ -391,11 +391,7 @@ fn parse(main: Option<&str>) -> (Vec<loa::Diagnostic>, loa::semantics::Analysis)
     sources.extend(loa::Source::files("**/*.loa").expect("failed to read in sources"));
 
     if let Some(main) = main {
-        sources.push(loa::Source::new(
-            loa::SourceKind::REPLLine,
-            loa::URI::Main,
-            format!("import {} as Main.\n\nMain run.", main),
-        ));
+        sources.push(loa::Source::main(main));
     }
 
     let mut diagnostics = vec![];
