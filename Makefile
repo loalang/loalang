@@ -2,7 +2,7 @@
 
 .PHONY: build install test debug docker/base docker/loa docker/vm docker/all docker/push dist dist/macos dist/linux _dist _dist/build version
 
-VERSION=$(shell toml get Cargo.toml 'package.version' | jq -r)
+VERSION ?= $(shell toml get Cargo.toml 'package.version' | jq -r)
 
 build:
 	cargo build --release --features build-binary
@@ -67,7 +67,7 @@ dist/macos:
 	gsutil cp target/dist/$(VERSION)_x86_64-macos.tar.gz gs://loalang-releases/
 
 dist/linux: docker/base
-	docker run --rm -v $(PWD)/target:/loalang/target -w /loalang -e DIST_NAME=x86_64-linux -e TARGET_TRIPLE=x86_64-unknown-linux-gnu loalang/base make _dist
+	docker run --rm -v $(PWD)/target:/loalang/target -w /loalang -e VERSION=$(VERSION) -e DIST_NAME=x86_64-linux -e TARGET_TRIPLE=x86_64-unknown-linux-gnu loalang/base make _dist
 	gsutil cp target/dist/$(VERSION)_x86_64-linux.tar.gz gs://loalang-releases/
 
 _dist:
