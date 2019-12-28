@@ -656,6 +656,14 @@ impl Navigator {
         }
     }
 
+    pub fn operator_to_string(&self, symbol: &Node) -> Option<String> {
+        if let Operator(ref t) = symbol.kind {
+            Some(t.iter().map(Token::lexeme).collect())
+        } else {
+            None
+        }
+    }
+
     pub fn module_declarations_in(&self, module: &Node) -> Vec<(bool, Node)> {
         if let Module {
             ref module_declarations,

@@ -1,5 +1,5 @@
 use crate::pkg::config::{Lockfile, Pkgfile};
-use loa::semantics::Analysis;
+use loa::semantics::{Analysis, Behaviour, BehaviourMessage, Type};
 use loa::syntax::{Node, NodeKind, Token};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -64,10 +64,11 @@ impl From<Analysis> for Docs {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ClassDoc {
     pub name: QualifiedNameDoc,
     pub description: Markup,
-    pub super_classes: Vec<String>,
+    pub super_types: Vec<TypeDoc>,
     pub sub_classes: Vec<String>,
     pub behaviours: BTreeMap<String, BehaviourDoc>,
 }
@@ -77,11 +78,11 @@ impl ClassDoc {
         Some(ClassDoc {
             name: QualifiedNameDoc::extract(analysis, class)?,
             description: Markup::extract(analysis, class)?,
-            super_classes: analysis
-                .navigator
-                .all_super_classes_of(class)
+            super_types: analysis
+                .types
+                .get_super_types(class)
                 .into_iter()
-                .filter_map(|c| Some(analysis.navigator.qualified_name_of(&c)?.0))
+                .filter_map(|t| TypeDoc::extract(analysis, &t))
                 .collect(),
             sub_classes: analysis
                 .navigator
@@ -90,10 +91,10 @@ impl ClassDoc {
                 .filter_map(|c| Some(analysis.navigator.qualified_name_of(&c)?.0))
                 .collect(),
             behaviours: analysis
-                .navigator
-                .methods_of_class(class)
+                .types
+                .get_behaviours(&analysis.types.get_type_of_declaration(class))
                 .into_iter()
-                .filter_map(|method| BehaviourDoc::extract(analysis, &method))
+                .filter_map(|behaviour| BehaviourDoc::extract(analysis, &behaviour))
                 .map(|b| (b.selector.clone(), b))
                 .collect(),
         })
@@ -101,12 +102,12 @@ impl ClassDoc {
 
     pub fn apply_versions(&mut self, versions: &Versions) {
         self.name.apply_versions(versions);
-        self.super_classes
-            .iter_mut()
-            .for_each(|s| apply_versions(s, versions));
         self.sub_classes
             .iter_mut()
             .for_each(|s| apply_versions(s, versions));
+        self.super_types
+            .iter_mut()
+            .for_each(|s| s.apply_versions(versions));
         self.behaviours
             .values_mut()
             .for_each(|b| b.apply_versions(versions));
@@ -146,17 +147,143 @@ impl QualifiedNameDoc {
 pub struct BehaviourDoc {
     pub selector: String,
     pub description: Markup,
+    pub signature: SignatureDoc,
 }
 
 impl BehaviourDoc {
-    pub fn extract(analysis: &Analysis, method: &Node) -> Option<BehaviourDoc> {
+    pub fn extract(analysis: &Analysis, behaviour: &Behaviour) -> Option<BehaviourDoc> {
         Some(BehaviourDoc {
-            selector: analysis.navigator.method_selector(method)?,
-            description: Markup::extract(analysis, method)?,
+            selector: behaviour.selector(),
+            description: Markup::extract(
+                analysis,
+                &analysis.navigator.find_node(behaviour.method_id)?,
+            )?,
+            signature: SignatureDoc::extract(analysis, behaviour)?,
         })
     }
 
-    pub fn apply_versions(&mut self, _versions: &Versions) {}
+    pub fn apply_versions(&mut self, versions: &Versions) {
+        self.signature.apply_versions(versions);
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(tag = "__type", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SignatureDoc {
+    #[serde(rename_all = "camelCase")]
+    Unary {
+        symbol: String,
+        return_type: TypeDoc,
+    },
+    #[serde(rename_all = "camelCase")]
+    Binary {
+        operator: String,
+        operand_type: TypeDoc,
+        return_type: TypeDoc,
+    },
+    #[serde(rename_all = "camelCase")]
+    Keyword {
+        parameters: Vec<KeywordTypeDoc>,
+        return_type: TypeDoc,
+    },
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct KeywordTypeDoc {
+    pub keyword: String,
+    #[serde(rename = "type")]
+    pub type_: TypeDoc,
+}
+
+impl SignatureDoc {
+    pub fn extract(analysis: &Analysis, behaviour: &Behaviour) -> Option<SignatureDoc> {
+        match behaviour.message {
+            BehaviourMessage::Unary(ref symbol) => Some(SignatureDoc::Unary {
+                symbol: symbol.clone(),
+                return_type: TypeDoc::extract(analysis, &behaviour.return_type)?,
+            }),
+            BehaviourMessage::Binary(ref operator, ref operand) => Some(SignatureDoc::Binary {
+                operator: operator.clone(),
+                operand_type: TypeDoc::extract(analysis, operand)?,
+                return_type: TypeDoc::extract(analysis, &behaviour.return_type)?,
+            }),
+            BehaviourMessage::Keyword(ref kws) => Some(SignatureDoc::Keyword {
+                parameters: kws
+                    .iter()
+                    .filter_map(|(keyword, type_)| {
+                        Some(KeywordTypeDoc {
+                            keyword: keyword.clone(),
+                            type_: TypeDoc::extract(analysis, type_)?,
+                        })
+                    })
+                    .collect(),
+                return_type: TypeDoc::extract(analysis, &behaviour.return_type)?,
+            }),
+        }
+    }
+
+    pub fn apply_versions(&mut self, versions: &Versions) {
+        match self {
+            SignatureDoc::Unary { return_type, .. } => {
+                return_type.apply_versions(versions);
+            }
+            SignatureDoc::Binary {
+                operand_type,
+                return_type,
+                ..
+            } => {
+                operand_type.apply_versions(versions);
+                return_type.apply_versions(versions);
+            }
+            SignatureDoc::Keyword {
+                parameters,
+                return_type,
+            } => {
+                for param in parameters.iter_mut() {
+                    param.type_.apply_versions(versions);
+                }
+                return_type.apply_versions(versions);
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(tag = "__type", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TypeDoc {
+    Reference {
+        class: String,
+        arguments: Vec<TypeDoc>,
+    },
+}
+
+impl TypeDoc {
+    pub fn extract(analysis: &Analysis, type_: &Type) -> Option<TypeDoc> {
+        match type_ {
+            Type::Class(_, class, arguments) => Some(TypeDoc::Reference {
+                class: analysis
+                    .navigator
+                    .qualified_name_of(&analysis.navigator.find_node(*class)?)?
+                    .0,
+                arguments: arguments
+                    .iter()
+                    .filter_map(|a| TypeDoc::extract(analysis, a))
+                    .collect(),
+            }),
+            _ => None,
+        }
+    }
+
+    pub fn apply_versions(&mut self, versions: &Versions) {
+        match self {
+            TypeDoc::Reference { class, arguments } => {
+                apply_versions(class, versions);
+                for arg in arguments.iter_mut() {
+                    arg.apply_versions(versions);
+                }
+            }
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
