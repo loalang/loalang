@@ -1,6 +1,6 @@
 .SILENT:
 
-.PHONY: build install test debug docker/base docker/loa docker/vm docker/all docker/push dist dist/macos dist/linux _dist _dist/build version
+.PHONY: build install test debug docker/base docker/loa docker/vm docker/all docker/push dist dist/std dist/macos dist/linux _dist _dist/build version
 
 VERSION ?= $(shell toml get Cargo.toml 'package.version' | jq -r)
 
@@ -53,22 +53,26 @@ docker/push: docker/all
 	docker push loalang/vm:latest
 	docker push loalang/vm:$(VERSION)
 
-dist: dist/macos dist/linux
+dist: dist/macos dist/linux dist/std
 	echo "# Published loa v$(VERSION)"
 	echo "# MacOS"
 	echo "sha256: $(shell shasum -a 256 target/dist/$(VERSION)_x86_64-macos.tar.gz | awk '{ print $$1 }')"
-	echo "archive: https://storage.googleapis.com/loalang-releases/$(VERSION)_x86_64-macos.tar.gz"
+	echo "archive: https://cdn.loalang.xyz/$(VERSION)_x86_64-macos.tar.gz"
 	echo "# Linux"
 	echo "sha256: $(shell shasum -a 256 target/dist/$(VERSION)_x86_64-linux.tar.gz | awk '{ print $$1 }')"
-	echo "archive: https://storage.googleapis.com/loalang-releases/$(VERSION)_x86_64-linux.tar.gz"
+	echo "archive: https://cdn.loalang.xyz/$(VERSION)_x86_64-linux.tar.gz"
 
 dist/macos:
 	DIST_NAME=x86_64-macos TARGET_TRIPLE=x86_64-apple-darwin make _dist
-	gsutil cp target/dist/$(VERSION)_x86_64-macos.tar.gz gs://loalang-releases/
+	gsutil cp target/dist/$(VERSION)_x86_64-macos.tar.gz gs://cdn.loalang.xyz/
 
 dist/linux: docker/base
 	docker run --rm -v $(PWD)/target:/loalang/target -w /loalang -e VERSION=$(VERSION) -e DIST_NAME=x86_64-linux -e TARGET_TRIPLE=x86_64-unknown-linux-gnu loalang/base make _dist
-	gsutil cp target/dist/$(VERSION)_x86_64-linux.tar.gz gs://loalang-releases/
+	gsutil cp target/dist/$(VERSION)_x86_64-linux.tar.gz gs://cdn.loalang.xyz/
+
+dist/std:
+	gsutil rsync -d std gs://cdn.loalang.xyz/$(VERSION)/std
+	tree -J std | jq '.[0].contents' | gsutil cp - gs://cdn.loalang.xyz/$(VERSION)/std/manifest.json
 
 _dist:
 	rm -rf target/dist/$(VERSION)/$(DIST_NAME)
