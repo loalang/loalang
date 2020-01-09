@@ -1,6 +1,6 @@
 [package]
 name = "loalang"
-version = "0.1.7"
+version = "0.1.8"
 authors = ["Emil Broman <emil@emilbroman.me>"]
 edition = "2018"
 
