@@ -73,6 +73,7 @@ dist/linux: docker/base
 dist/std:
 	gsutil rsync -d std gs://cdn.loalang.xyz/$(VERSION)/std
 	tree -J std | jq '.[0].contents' | gsutil cp - gs://cdn.loalang.xyz/$(VERSION)/std/manifest.json
+	gsutil setmeta -h "Content-Type: application/loa" gs://cdn.loalang.xyz/$(VERSION)/std/*.loa
 
 _dist:
 	rm -rf target/dist/$(VERSION)/$(DIST_NAME)
