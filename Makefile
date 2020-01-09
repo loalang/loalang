@@ -5,17 +5,17 @@
 VERSION ?= $(shell toml get Cargo.toml 'package.version' | jq -r)
 
 build:
-	cargo build --release --features build-binary
+	cargo build --release --features build-bin-loa
 
 debug:
-	cargo build --features build-binary
+	cargo build --features build-bin-loa
 
 version:
 	echo $(VERSION)
 
 test:
 	RUST_BACKTRACE=1 cargo test --features=test-library --lib
-	RUST_BACKTRACE=1 cargo test --features=test-library,build-binary --bin loa
+	RUST_BACKTRACE=1 cargo test --features=test-library,build-bin-loa --bin loa
 
 install:
 	git submodule init
@@ -53,7 +53,7 @@ docker/push: docker/all
 	docker push loalang/vm:latest
 	docker push loalang/vm:$(VERSION)
 
-dist: dist/macos dist/linux dist/std
+dist: dist/macos dist/linux dist/std docker/push
 	echo "# Published loa v$(VERSION)"
 	echo "# MacOS"
 	echo "sha256: $(shell shasum -a 256 target/dist/$(VERSION)_x86_64-macos.tar.gz | awk '{ print $$1 }')"
@@ -82,7 +82,8 @@ _dist:
 	mkdir -p target/dist/$(VERSION)/$(DIST_NAME)/var/log
 	touch target/dist/$(VERSION)/$(DIST_NAME)/var/log/loa.log
 	cp -r src/bin/docs/public target/dist/$(VERSION)/$(DIST_NAME)/lib/loa/docs-html
-	cargo build --release --target $(TARGET_TRIPLE) --features build-binary
+	cargo build --release --target $(TARGET_TRIPLE) --bin loa --features build-bin-loa
+	cargo build --release --target $(TARGET_TRIPLE) --bin loavm --features build-bin-vm
 	cp target/$(TARGET_TRIPLE)/release/loa target/dist/$(VERSION)/$(DIST_NAME)/bin/loa
 	cp target/$(TARGET_TRIPLE)/release/loavm target/dist/$(VERSION)/$(DIST_NAME)/bin/loavm
 	cp -r std target/dist/$(VERSION)/$(DIST_NAME)/lib/loa/std

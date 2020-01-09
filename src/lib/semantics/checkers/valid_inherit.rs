@@ -43,7 +43,7 @@ impl InvalidInherit {
 
         'super_behaviours: for super_behaviour in analysis.types.get_behaviours(&super_type) {
             let super_selector = super_behaviour.selector();
-            'sub_behaviours: for sub_behaviour in analysis.types.get_behaviours(&sub_type) {
+            for sub_behaviour in analysis.types.get_behaviours(&sub_type) {
                 let sub_selector = sub_behaviour.selector();
                 if super_selector == sub_selector {
                     let super_behaviour_type =

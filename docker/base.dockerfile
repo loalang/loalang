@@ -21,12 +21,8 @@ RUN echo "fn main() {}" > src/bin/loa.rs
 RUN echo "fn main() {}" > src/bin/loavm.rs
 # }}}
 
-# RUN cargo build --release --target=x86_64-unknown-linux-musl --features build-binary
-RUN cargo build --release --target=x86_64-unknown-linux-gnu --features build-binary
+RUN cargo build --release --target=x86_64-unknown-linux-gnu --features build-bin-loa,build-bin-vm
 
-# RUN rm -rf src \
-#   target/x86_64-unknown-linux-musl/release/deps/loa-* \
-#   target/x86_64-unknown-linux-musl/release/deps/libloa-*
 RUN rm -rf src \
   target/x86_64-unknown-linux-gnu/release/deps/loa-* \
   target/x86_64-unknown-linux-gnu/release/deps/libloa-*

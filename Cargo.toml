@@ -11,18 +11,21 @@ path = "src/lib/mod.rs"
 [[bin]]
 name = "loa"
 path = "src/bin/loa.rs"
-required-features = ["build-binary"]
+required-features = ["build-bin-loa"]
 
 [[bin]]
 name = "loavm"
 path = "src/bin/loavm.rs"
-required-features = ["build-binary"]
+required-features = ["build-bin-vm"]
 
 [features]
 test-library = [
     "serde_yaml",
 ]
-build-binary = [
+build-bin-vm = [
+    "colored",
+]
+build-bin-loa = [
     "clap",
     "colored",
     "dirs",
