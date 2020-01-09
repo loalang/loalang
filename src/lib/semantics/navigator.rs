@@ -1207,4 +1207,12 @@ impl Navigator {
         }
         result
     }
+
+    pub fn visibility_of_method(&self, method: &Node) -> Option<Token> {
+        if let Method { ref visibility, .. } = method.kind {
+            visibility.clone()
+        } else {
+            None
+        }
+    }
 }

@@ -1,0 +1,4 @@
+description: Private methods are only accessible from within the class definition.
+expected:
+  success: false
+  stdout: []

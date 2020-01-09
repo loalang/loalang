@@ -1,0 +1,13 @@
+namespace PrivateMethods.
+
+class Test {
+  private method => 123.
+
+  public x => self method.
+
+  public y => Test method.
+}
+
+class Other {
+  public x => Test method. //$ `PrivateMethods/Test#method` is private.
+}

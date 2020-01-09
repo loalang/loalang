@@ -25,6 +25,7 @@ pub enum Diagnostic {
     OutOfBounds(Span, semantics::Type, String),
     TooPreciseFloat(Span, semantics::Type, BigFraction),
     WrongNumberOfTypeArguments(Span, String, usize, usize),
+    InvalidAccessToPrivateMethod(Span, String, String),
 }
 
 #[derive(Clone)]
@@ -51,6 +52,7 @@ impl Diagnostic {
             OutOfBounds(ref s, _, _) => s,
             TooPreciseFloat(ref s, _, _) => s,
             WrongNumberOfTypeArguments(ref s, _, _, _) => s,
+            InvalidAccessToPrivateMethod(ref s, _, _) => s,
         }
     }
 
@@ -71,6 +73,7 @@ impl Diagnostic {
             OutOfBounds(_, _, _) => DiagnosticLevel::Error,
             TooPreciseFloat(_, _, _) => DiagnosticLevel::Warning,
             WrongNumberOfTypeArguments(_, _, _, _) => DiagnosticLevel::Error,
+            InvalidAccessToPrivateMethod(_, _, _) => DiagnosticLevel::Error,
         }
     }
 
@@ -91,6 +94,7 @@ impl Diagnostic {
             OutOfBounds(_, _, _) => 11,
             TooPreciseFloat(_, _, _) => 12,
             WrongNumberOfTypeArguments(_, _, _, _) => 13,
+            InvalidAccessToPrivateMethod(_, _, _) => 14,
         }
     }
 
@@ -193,6 +197,9 @@ impl fmt::Display for Diagnostic {
                     args.to_string()
                 },
             ),
+            InvalidAccessToPrivateMethod(_, class_name, method_selector) => {
+                write!(f, "`{}#{}` is private.", class_name, method_selector)
+            }
         }
     }
 }

@@ -111,7 +111,7 @@ impl PrettyReporter {
                             "",
                             format!(
                                 "↑ {}",
-                                format!("{:?}", diagnostic).replace(
+                                format!("{}", diagnostic).replace(
                                     "\n",
                                     format!(
                                         "\n{:gutter$}{pipe}{:space$}",
