@@ -66,7 +66,8 @@ fn main() -> Result<(), clap::Error> {
     let default_main = format!("{}/Main", project_name);
     let default_out = format!("{}.loabin", project_name);
 
-    let arg = clap::Arg::with_name("main")
+    let main_class_option = clap::Arg::with_name("main")
+        .help("The qualified identifier of the class to use as the program's entrypoint.")
         .takes_value(true)
         .default_value(default_main.as_ref())
         .value_name("MAIN_CLASS");
@@ -78,49 +79,67 @@ fn main() -> Result<(), clap::Error> {
 
     let mut app = clap::App::new("loa")
         .version(env!("CARGO_PKG_VERSION"))
+        .about("Compiler Toolchain for the Loa Programming Language. Visit https://loalang.xyz for more information.")
         .subcommands(vec![
-            clap::SubCommand::with_name("server"),
-            clap::SubCommand::with_name("repl"),
+            clap::SubCommand::with_name("server")
+                .about("Starts a Language Server using STDIO. Used by editors to provide an integrated experience for Loa development."),
+            clap::SubCommand::with_name("repl")
+                .about("Starts an interactive Read-Eval-Print-Loop that can be used to quickly explore APIs and make quick calculations."),
             clap::SubCommand::with_name("build")
+                .about("Builds the current project into a Loa VM bytecode file, that can be executed in many different environments using the Loa VM.")
                 .arg(
                     clap::Arg::with_name("out")
+                        .help("The output file path for the bytecode file.")
                         .long("out")
                         .short("o")
                         .takes_value(true)
                         .default_value(default_out.as_ref()),
                 )
-                .arg(arg.clone()),
-            clap::SubCommand::with_name("run").arg(arg),
-            clap::SubCommand::with_name("exec").arg(
+                .arg(main_class_option.clone()),
+            clap::SubCommand::with_name("run")
+                .about("Builds and immediately runs the current project. This is not suitable for a production environment, but handy for quickly running your program.").arg(main_class_option),
+            clap::SubCommand::with_name("exec")
+                .about("Executes a bytecode file using the Loa VM.")
+                .arg(
                 clap::Arg::with_name("loabin")
+                    .help("The path to the bytecode file (.loabin).")
                     .takes_value(true)
                     .value_name("BINARY_FILE"),
             ),
-            clap::SubCommand::with_name("format").arg(
+            clap::SubCommand::with_name("format")
+                .about("Runs the Loa code formatter on the provided files. Outputs to stdout, and does not modify the files themselves.")
+                .arg(
                 clap::Arg::with_name("files")
+                    .help("The files that will be formatted.")
                     .takes_value(true)
                     .multiple(true)
                     .value_name("FILES"),
             ),
-            clap::SubCommand::with_name("docs").subcommands(vec![
+            clap::SubCommand::with_name("docs")
+                .about("Commands regarding automatically generated API documentation for the current project.")
+                .subcommands(vec![
                 clap::SubCommand::with_name("inspect")
+                    .about("Output generated docs to stdout.")
                     .arg(
                         clap::Arg::with_name("all")
-                            .help("Include stdlib and dependencies")
+                            .help("Include stdlib and dependencies.")
                             .long("all")
                             .short("a"),
                     )
                     .arg(
                         clap::Arg::with_name("format")
-                            .help("Output format (json|yaml)")
+                            .help("Output format (json|yaml).")
                             .long("format")
                             .short("f")
                             .takes_value(true)
                             .value_name("FORMAT")
                             .default_value("json"),
                     ),
-                clap::SubCommand::with_name("serve").arg(
+                clap::SubCommand::with_name("serve")
+                    .about("Starts a local web server, with a user friendly interface for browsing documentation.")
+                    .arg(
                     clap::Arg::with_name("port")
+                        .help("The local port to start the server on.")
                         .long("port")
                         .short("p")
                         .takes_value(true)
@@ -129,8 +148,10 @@ fn main() -> Result<(), clap::Error> {
                 ),
             ]),
             clap::SubCommand::with_name("pkg")
+                .about("Commands regarding the Loa Package Manager.")
                 .arg(
                     clap::Arg::with_name("server")
+                        .help("The remote server to use for resolving and downloading dependencies.")
                         .long("server")
                         .short("s")
                         .takes_value(true)
@@ -139,6 +160,7 @@ fn main() -> Result<(), clap::Error> {
                 )
                 .arg(
                     clap::Arg::with_name("config")
+                        .help("The config file to use for storing authentication details etc.")
                         .long("config")
                         .short("c")
                         .takes_value(true)
@@ -146,28 +168,41 @@ fn main() -> Result<(), clap::Error> {
                         .default_value(config_file.to_str().unwrap()),
                 )
                 .subcommands(vec![
-                    clap::SubCommand::with_name("login"),
-                    clap::SubCommand::with_name("logout"),
-                    clap::SubCommand::with_name("whoami"),
-                    clap::SubCommand::with_name("get").arg(
+                    clap::SubCommand::with_name("login")
+                        .about("Authenticate yourself with the remote server."),
+                    clap::SubCommand::with_name("logout")
+                        .about("Remove any authentication previously established with the server."),
+                    clap::SubCommand::with_name("whoami")
+                        .about("Display details about the currently logged in user."),
+                    clap::SubCommand::with_name("get")
+                        .about("Download and install any registered dependencies.").arg(
                         clap::Arg::with_name("no-update")
+                            .help("Only install exactly what's in the lockfile, as opposed to resolving appropriate versions and regenerating the lockfile.")
                             .long("no-update")
                             .short("n"),
                     ),
-                    clap::SubCommand::with_name("add").arg(
+                    clap::SubCommand::with_name("add")
+                        .about("Add, download, and install a new dependency of this project.")
+                        .arg(
                         clap::Arg::with_name("package")
+                            .help("The name of the package to add.")
                             .takes_value(true)
                             .multiple(true)
                             .value_name("PACKAGE_NAME"),
                     ),
-                    clap::SubCommand::with_name("remove").arg(
+                    clap::SubCommand::with_name("remove")
+                        .about("Remove and uninstall an existing dependency of this project.").arg(
                         clap::Arg::with_name("package")
+                            .help("The name of the package to remove.")
                             .takes_value(true)
                             .multiple(true)
                             .value_name("PACKAGE_NAME"),
                     ),
-                    clap::SubCommand::with_name("publish").arg(
+                    clap::SubCommand::with_name("publish")
+                        .about("Pack and upload a version of the current project.")
+                        .arg(
                         clap::Arg::with_name("version")
+                            .help("The version number of this release.")
                             .takes_value(true)
                             .value_name("VERSION"),
                     ),
