@@ -412,16 +412,20 @@ impl Server {
         types: &semantics::Types,
         prefix: String,
     ) -> Option<server::Completion> {
-        let declarations = self
+        let mut declarations = self
             .analysis
             .navigator
-            .declarations_in_scope(from.clone(), kind);
+            .declarations_in_scope(from.clone(), kind)
+            .into_iter()
+            .filter(|(s, _)| s.starts_with(&prefix))
+            .collect::<Vec<_>>();
+
+        declarations.sort_by_relevance(prefix.as_str());
 
         Some(server::Completion::VariablesInScope(
             prefix.clone(),
             declarations
                 .into_iter()
-                .filter(|(s, _)| s.starts_with(&prefix))
                 .filter_map(|(name, dec)| {
                     Some(server::Variable {
                         name,

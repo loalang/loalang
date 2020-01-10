@@ -16,6 +16,9 @@ pub use self::type_assignability::*;
 mod checker;
 pub use self::checker::*;
 
+mod relevance;
+pub use self::relevance::*;
+
 pub mod checkers;
 
 #[cfg(debug_assertions)]
