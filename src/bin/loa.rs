@@ -28,6 +28,7 @@ mod server_handler;
 pub use self::reporting::*;
 mod runtime;
 use self::runtime::ServerRuntime;
+use colored::Colorize;
 
 mod pkg;
 
@@ -283,6 +284,8 @@ fn main() -> Result<(), clap::Error> {
                 }
                 Some(outfile) => {
                     std::fs::write(outfile, instructions.to_bytes().unwrap()).unwrap();
+
+                    println!("{} {}", "Built".bright_black(), outfile.green());
                 }
             }
         }
