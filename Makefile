@@ -1,6 +1,6 @@
 .SILENT:
 
-.PHONY: build install test debug docker/base docker/loa docker/vm docker/all docker/push dist dist/std dist/macos dist/linux _dist _dist/build version
+.PHONY: build install test debug docker/base docker/vm-base docker/loa-base docker/loa docker/vm docker/all docker/push dist dist/std dist/macos dist/linux _dist _dist/build version
 
 VERSION ?= $(shell toml get Cargo.toml 'package.version' | jq -r)
 
@@ -39,10 +39,16 @@ clean:
 docker/base:
 	docker build -t loalang/base:latest -f docker/base.dockerfile .
 
-docker/loa: docker/base
+docker/loa-base: docker/base
+	docker build -t loalang/loa-base:latest -f docker/loa-base.dockerfile .
+
+docker/vm-base: docker/base
+	docker build -t loalang/vm-base:latest -f docker/vm-base.dockerfile .
+
+docker/loa: docker/loa-base
 	docker build -t loalang/loa:$(VERSION) -t loalang/loa:latest -f docker/loa.dockerfile .
 
-docker/vm: docker/base
+docker/vm: docker/vm-base
 	docker build -t loalang/vm:$(VERSION) -t loalang/vm:latest -f docker/vm.dockerfile .
 
 docker/all: docker/loa docker/vm
@@ -66,8 +72,8 @@ dist/macos:
 	DIST_NAME=x86_64-macos TARGET_TRIPLE=x86_64-apple-darwin make _dist
 	gsutil cp target/dist/$(VERSION)_x86_64-macos.tar.gz gs://cdn.loalang.xyz/
 
-dist/linux: docker/base
-	docker run --rm -v $(PWD)/target:/loalang/target -w /loalang -e VERSION=$(VERSION) -e DIST_NAME=x86_64-linux -e TARGET_TRIPLE=x86_64-unknown-linux-gnu loalang/base make _dist
+dist/linux: docker/loa-base
+	docker run --rm -v $(PWD)/target:/loalang/target -w /loalang -e VERSION=$(VERSION) -e DIST_NAME=x86_64-linux -e TARGET_TRIPLE=x86_64-unknown-linux-gnu loalang/loa-base make _dist
 	gsutil cp target/dist/$(VERSION)_x86_64-linux.tar.gz gs://cdn.loalang.xyz/
 
 dist/std:
