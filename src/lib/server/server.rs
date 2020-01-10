@@ -37,9 +37,9 @@ impl Server {
                 .unwrap()
                 .extend(cell.diagnostics.iter().cloned());
         }
-        for diagnostic in self.analysis.check() {
+        for diagnostic in self.analysis.check().iter() {
             if let Some(d) = all.get_mut(&diagnostic.span().start.uri) {
-                d.push(diagnostic);
+                d.push(diagnostic.clone());
             }
         }
         all

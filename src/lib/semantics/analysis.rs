@@ -5,6 +5,8 @@ use crate::*;
 pub struct Analysis {
     pub types: Types,
     pub navigator: Navigator,
+
+    diagnostics_cache: Option<Vec<Diagnostic>>,
 }
 
 impl Analysis {
@@ -12,17 +14,24 @@ impl Analysis {
         let navigator = Navigator::new(modules);
         let types = Types::new(navigator.clone());
 
-        Analysis { navigator, types }
+        Analysis {
+            navigator,
+            types,
+            diagnostics_cache: None,
+        }
     }
 
-    pub fn check(&mut self) -> Vec<Diagnostic> {
-        let mut diagnostics = vec![];
+    pub fn check(&mut self) -> &Vec<Diagnostic> {
+        if self.diagnostics_cache.is_none() {
+            let mut diagnostics = vec![];
 
-        for checker in checkers::checkers().iter() {
-            checker.check(self, &mut diagnostics);
+            for checker in checkers::checkers().iter() {
+                checker.check(self, &mut diagnostics);
+            }
+
+            self.diagnostics_cache = Some(diagnostics);
         }
-
-        diagnostics
+        self.diagnostics_cache.as_ref().unwrap()
     }
 }
 

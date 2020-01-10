@@ -53,7 +53,7 @@ fn fixtures() {
             })
             .into();
 
-        diagnostics.extend(analysis.check());
+        diagnostics.extend(analysis.check().clone());
 
         let actual_success = !Diagnostic::failed(&diagnostics);
 

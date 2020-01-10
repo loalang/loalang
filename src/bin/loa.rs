@@ -406,7 +406,7 @@ fn parse(main: Option<&str>) -> (Vec<loa::Diagnostic>, loa::semantics::Analysis)
         })
         .collect();
     let mut analysis = loa::semantics::Analysis::new(loa::Arc::new(modules));
-    diagnostics.extend(analysis.check());
+    diagnostics.extend(analysis.check().clone());
 
     (diagnostics, analysis)
 }
