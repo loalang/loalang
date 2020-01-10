@@ -1,5 +1,4 @@
 use crate::semantics::*;
-use crate::syntax::TokenKind::PrivateKeyword;
 use crate::syntax::*;
 use crate::*;
 
@@ -13,14 +12,8 @@ impl PrivateMethods {
         analysis: &mut Analysis,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Option<()> {
-        if analysis.navigator.visibility_of_method(method)?.kind != PrivateKeyword {
-            return None;
-        }
-
-        let method_class = analysis.navigator.closest_class_upwards(method)?;
-        let message_class = analysis.navigator.closest_class_upwards(message);
-
-        if message_class.is_none() || method_class.id != message_class?.id {
+        if !analysis.navigator.method_is_visible_from(method, message)? {
+            let method_class = analysis.navigator.closest_class_upwards(method)?;
             diagnostics.push(Diagnostic::InvalidAccessToPrivateMethod(
                 message.span.clone(),
                 analysis.navigator.qualified_name_of(&method_class)?.0,

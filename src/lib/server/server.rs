@@ -331,6 +331,17 @@ impl Server {
                         .types
                         .get_behaviours(&type_)
                         .into_iter()
+                        .filter(|b| {
+                            self.analysis
+                                .navigator
+                                .find_node(b.method_id)
+                                .and_then(|method| {
+                                    self.analysis
+                                        .navigator
+                                        .method_is_visible_from(&method, &before)
+                                })
+                                .unwrap_or(true)
+                        })
                         .filter(|b| b.selector().starts_with(&prefix))
                         .collect(),
                 ))
@@ -401,7 +412,10 @@ impl Server {
         types: &semantics::Types,
         prefix: String,
     ) -> Option<server::Completion> {
-        let declarations = self.analysis.declarations_in_scope(from.clone(), kind);
+        let declarations = self
+            .analysis
+            .navigator
+            .declarations_in_scope(from.clone(), kind);
 
         Some(server::Completion::VariablesInScope(
             prefix.clone(),

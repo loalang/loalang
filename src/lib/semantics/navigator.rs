@@ -7,6 +7,8 @@ pub struct Navigator {
     modules: Arc<HashMap<URI, Arc<Tree>>>,
 
     usage_cache: Cache<(DeclarationKind, Id), Option<Arc<Usage>>>,
+    stdlib_class_cache: Cache<String, Option<Node>>,
+    stdlib_classes_cache: Cache<(), HashMap<String, Node>>,
 }
 
 impl Navigator {
@@ -14,6 +16,8 @@ impl Navigator {
         Navigator {
             modules,
             usage_cache: Cache::new(),
+            stdlib_class_cache: Cache::new(),
+            stdlib_classes_cache: Cache::new(),
         }
     }
 
@@ -1040,21 +1044,41 @@ impl Navigator {
         None
     }
 
-    pub fn find_stdlib_class(&self, name: &str) -> Option<Node> {
-        for (u, t) in self.modules.iter() {
-            if u.is_stdlib() {
-                if let Some(root) = t.root() {
-                    for class in self.all_classes_downwards(root) {
-                        if let Some((qn, _, _)) = self.qualified_name_of(&class) {
-                            if qn == name {
-                                return Some(class);
+    pub fn all_stdlib_classes(&self) -> HashMap<String, Node> {
+        self.stdlib_classes_cache.gate(&(), || {
+            let mut classes = HashMap::new();
+            for (u, t) in self.modules.iter() {
+                if u.is_stdlib() {
+                    if let Some(root) = t.root() {
+                        for class in self.all_classes_downwards(root) {
+                            if let Some((qn, _, _)) = self.qualified_name_of(&class) {
+                                classes.insert(qn, class);
                             }
                         }
                     }
                 }
             }
-        }
-        None
+            classes
+        })
+    }
+
+    pub fn find_stdlib_class(&self, name: &str) -> Option<Node> {
+        self.stdlib_class_cache.gate(&name.into(), || {
+            for (u, t) in self.modules.iter() {
+                if u.is_stdlib() {
+                    if let Some(root) = t.root() {
+                        for class in self.all_classes_downwards(root) {
+                            if let Some((qn, _, _)) = self.qualified_name_of(&class) {
+                                if qn == name {
+                                    return Some(class);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            None
+        })
     }
 
     pub fn type_arguments_of_type_argument_list(&self, type_argument_list: &Node) -> Vec<Node> {
@@ -1214,5 +1238,71 @@ impl Navigator {
         } else {
             None
         }
+    }
+
+    pub fn method_is_visible_from(&self, method: &Node, source_node: &Node) -> Option<bool> {
+        if self.visibility_of_method(method)?.kind != TokenKind::PrivateKeyword {
+            return Some(true);
+        }
+
+        let method_class = self.closest_class_upwards(method)?;
+        let source_class = self.closest_class_upwards(source_node);
+
+        Some(source_class.is_some() && method_class.id == source_class?.id)
+    }
+
+    pub fn declarations_in_scope(
+        &self,
+        mut from: syntax::Node,
+        kind: DeclarationKind,
+    ) -> Vec<(String, syntax::Node)> {
+        let uri = from.span.start.uri.clone();
+
+        let mut declarations = HashMap::new();
+
+        while let Some(scope_root) = self.closest_scope_root_upwards(&from) {
+            let mut traverse = |n: &syntax::Node| {
+                if n.is_declaration(kind) {
+                    if let Some((name, _)) = self.symbol_of(&n) {
+                        declarations.insert(name, n.clone());
+                    }
+                }
+
+                if n.is_import_directive() {
+                    if let Some((name, _)) = self.symbol_of(&n) {
+                        if let Some(n) = self.find_declaration_from_import(&n) {
+                            declarations.insert(name, n.clone());
+                        }
+                    }
+                }
+
+                // Don't traverse into lower scopes.
+                n.id == scope_root.id || !n.is_scope_root() || n.is_repl_line()
+            };
+            if scope_root.is_repl_line() {
+                self.traverse_all_repl_lines(&mut traverse);
+            } else {
+                self.traverse(&scope_root, &mut traverse);
+            }
+
+            if let Some(parent) = scope_root
+                .parent_id
+                .and_then(|pid| self.find_node_in(&uri, pid))
+            {
+                from = parent;
+            } else {
+                break;
+            }
+        }
+
+        for (_, class) in self.all_stdlib_classes() {
+            if let Some((name, _)) = self.symbol_of(&class) {
+                if !declarations.contains_key(&name) {
+                    declarations.insert(name, class);
+                }
+            }
+        }
+
+        declarations.into_iter().collect()
     }
 }
