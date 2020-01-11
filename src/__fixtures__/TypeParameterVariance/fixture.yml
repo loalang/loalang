@@ -1,0 +1,5 @@
+description: Type parameter variance must be honored.
+main_class: TypeParameterVariance/Main
+expected:
+  success: false
+  stdout: []

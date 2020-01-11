@@ -129,6 +129,13 @@ impl Node {
         }
     }
 
+    pub fn is_type_parameter(&self) -> bool {
+        match self.kind {
+            TypeParameter { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn is_import_directive(&self) -> bool {
         match self.kind {
             ImportDirective { .. } => true,

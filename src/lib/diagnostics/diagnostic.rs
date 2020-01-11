@@ -26,6 +26,7 @@ pub enum Diagnostic {
     TooPreciseFloat(Span, semantics::Type, BigFraction),
     WrongNumberOfTypeArguments(Span, String, usize, usize),
     InvalidAccessToPrivateMethod(Span, String, String),
+    InvalidTypeParameterReferenceVarianceUsage(Span, String, &'static str, &'static str),
 }
 
 #[derive(Clone)]
@@ -53,6 +54,7 @@ impl Diagnostic {
             TooPreciseFloat(ref s, _, _) => s,
             WrongNumberOfTypeArguments(ref s, _, _, _) => s,
             InvalidAccessToPrivateMethod(ref s, _, _) => s,
+            InvalidTypeParameterReferenceVarianceUsage(ref s, _, _, _) => s,
         }
     }
 
@@ -74,6 +76,7 @@ impl Diagnostic {
             TooPreciseFloat(_, _, _) => DiagnosticLevel::Warning,
             WrongNumberOfTypeArguments(_, _, _, _) => DiagnosticLevel::Error,
             InvalidAccessToPrivateMethod(_, _, _) => DiagnosticLevel::Error,
+            InvalidTypeParameterReferenceVarianceUsage(_, _, _, _) => DiagnosticLevel::Error,
         }
     }
 
@@ -95,6 +98,7 @@ impl Diagnostic {
             TooPreciseFloat(_, _, _) => 12,
             WrongNumberOfTypeArguments(_, _, _, _) => 13,
             InvalidAccessToPrivateMethod(_, _, _) => 14,
+            InvalidTypeParameterReferenceVarianceUsage(_, _, _, _) => 15,
         }
     }
 
@@ -200,6 +204,11 @@ impl fmt::Display for Diagnostic {
             InvalidAccessToPrivateMethod(_, class_name, method_selector) => {
                 write!(f, "`{}#{}` is private.", class_name, method_selector)
             }
+            InvalidTypeParameterReferenceVarianceUsage(_, name, usage, mark) => write!(
+                f,
+                "`{}` cannot be used in {} position, because it's marked as `{}`.",
+                name, usage, mark
+            ),
         }
     }
 }

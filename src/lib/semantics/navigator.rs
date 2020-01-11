@@ -313,6 +313,10 @@ impl Navigator {
         self.all_matching(|n| n.is_message_send())
     }
 
+    pub fn all_type_parameters(&self) -> Vec<Node> {
+        self.all_matching(|n| n.is_type_parameter())
+    }
+
     pub fn all_messages(&self) -> Vec<Node> {
         self.all_matching(|n| n.is_message())
     }

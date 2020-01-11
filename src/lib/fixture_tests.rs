@@ -17,8 +17,7 @@ struct FixtureExpectations {
 
 #[test]
 fn fixtures() {
-    let mut unfulfilled_expectations = vec![];
-    let mut unexpected_diagnostics = vec![];
+    let mut failures = vec![];
 
     for entry in glob::glob("src/__fixtures__/*").unwrap() {
         let entry = entry.unwrap();
@@ -63,7 +62,11 @@ fn fixtures() {
                     continue 'expected_comment;
                 }
             }
-            unfulfilled_expectations.push(comment.clone());
+            failures.push(format!(
+                "Expected diagnostic: {:?} @ {}",
+                comment.lexeme(),
+                comment.span
+            ));
         }
         'actual_diagnostic: for diagnostic in diagnostics {
             for comment in test_comments.iter() {
@@ -71,7 +74,11 @@ fn fixtures() {
                     continue 'actual_diagnostic;
                 }
             }
-            unexpected_diagnostics.push(diagnostic);
+            failures.push(format!("Unexpected diagnostic: {:#?}", diagnostic));
+        }
+
+        if !actual_success {
+            continue;
         }
 
         if let Some(_) = fixture_config.main_class {
@@ -88,32 +95,30 @@ fn fixtures() {
                 .map(|s| format!("{}\n", s))
                 .collect();
 
-            assert_eq!(actual_stdout, expected_stdout);
+            if actual_stdout != expected_stdout {
+                failures.push(format!(
+                    "{}:\nExpected output: {}\n  Actual output: {}",
+                    entry.to_str().unwrap(),
+                    expected_stdout,
+                    actual_stdout
+                ));
+            }
         }
 
-        assert_eq!(
-            fixture_config.expected.success,
-            actual_success,
-            "Expected {} to {}",
-            entry.to_str().unwrap(),
-            if fixture_config.expected.success {
-                "be successful"
-            } else {
-                "fail"
-            }
-        );
+        if fixture_config.expected.success != actual_success {
+            failures.push(format!(
+                "Expected {} to {}",
+                entry.to_str().unwrap(),
+                if fixture_config.expected.success {
+                    "be successful"
+                } else {
+                    "fail"
+                }
+            ));
+        }
     }
 
-    assert!(
-        unexpected_diagnostics.is_empty(),
-        "Unexpected diagnostics: {:#?}",
-        unexpected_diagnostics
-    );
-    assert!(
-        unfulfilled_expectations.is_empty(),
-        "Unfulfilled expectations: {:#?}",
-        unfulfilled_expectations
-    );
+    assert!(failures.is_empty(), "\n\n{}", failures.join("\n\n"));
 }
 
 fn matches(comment: &syntax::Token, diagnostic: &Diagnostic) -> bool {

@@ -1,0 +1,17 @@
+namespace TypeParameterVariance.
+
+class Gives<a out> {
+  public takes: a -> String. //$ `a` cannot be used in input position, because it's marked as `out`.
+
+  public gives -> a.
+}
+
+class Takes<a in> {
+  public takes: a -> String.
+
+  public gives -> a. //$ `a` cannot be used in output position, because it's marked as `in`.
+}
+
+export class Main {
+  public run => Main.
+}
