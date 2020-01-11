@@ -1,9 +1,39 @@
+use crate::docs::{BehaviourDoc, ClassDoc};
 use crate::server_handler::*;
+use loa::semantics::Analysis;
 use lsp_types::{Documentation, MarkupContent, MarkupKind};
 
 pub struct CompletionRequestHandler;
 
 impl CompletionRequestHandler {
+    fn documentation_of_type(type_: &semantics::Type, analysis: &Analysis) -> String {
+        let mut result = type_.to_markdown(&analysis.navigator);
+
+        if let semantics::Type::Class(_, class, _) = type_ {
+            if let Some(doc) = analysis
+                .navigator
+                .find_node(*class)
+                .and_then(|c| ClassDoc::extract(analysis, &c))
+            {
+                result.push_str("\n\n");
+                result.push_str(doc.description.to_markdown().as_str());
+            }
+        }
+
+        result
+    }
+
+    fn documentation_of_behaviour(behaviour: &semantics::Behaviour, analysis: &Analysis) -> String {
+        let mut result = behaviour.to_markdown(&analysis.navigator);
+
+        if let Some(doc) = BehaviourDoc::extract(analysis, &behaviour) {
+            result.push_str("\n\n");
+            result.push_str(doc.description.to_markdown().as_str());
+        }
+
+        result
+    }
+
     fn handle_impl(
         context: &mut ServerContext,
         params: CompletionParams,
@@ -28,7 +58,7 @@ impl CompletionRequestHandler {
                         detail: Some(v.type_.to_string()),
                         documentation: Some(Documentation::MarkupContent(MarkupContent {
                             kind: MarkupKind::Markdown,
-                            value: v.type_.to_markdown(&context.server.analysis.navigator),
+                            value: Self::documentation_of_type(&v.type_, &context.server.analysis),
                         })),
                         deprecated: None,
                         preselect: Some(i == 0),
@@ -52,7 +82,7 @@ impl CompletionRequestHandler {
                         detail: Some(b.to_string()),
                         documentation: Some(Documentation::MarkupContent(MarkupContent {
                             kind: MarkupKind::Markdown,
-                            value: b.to_markdown(&context.server.analysis.navigator),
+                            value: Self::documentation_of_behaviour(&b, &context.server.analysis),
                         })),
                         deprecated: None,
                         preselect: Some(i == 0),

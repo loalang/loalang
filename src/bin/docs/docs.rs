@@ -131,8 +131,9 @@ pub struct QualifiedNameDoc {
 impl QualifiedNameDoc {
     pub fn extract(analysis: &Analysis, node: &Node) -> Option<QualifiedNameDoc> {
         let (_, namespace, name) = analysis.navigator.qualified_name_of(node)?;
-        let namespace = namespace?;
-        let namespace = analysis.navigator.qualified_symbol_to_string(&namespace);
+        let namespace = namespace
+            .map(|namespace| analysis.navigator.qualified_symbol_to_string(&namespace))
+            .unwrap_or(String::new());
         let name = analysis.navigator.symbol_to_string(&name)?;
 
         Some(QualifiedNameDoc { name, namespace })
@@ -140,6 +141,16 @@ impl QualifiedNameDoc {
 
     pub fn apply_versions(&mut self, versions: &Versions) {
         apply_versions(&mut self.namespace, versions);
+    }
+}
+
+impl std::fmt::Display for QualifiedNameDoc {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if self.namespace.is_empty() {
+            write!(f, "{}", self.name)
+        } else {
+            write!(f, "{}/{}", self.namespace, self.name)
+        }
     }
 }
 
@@ -301,6 +312,20 @@ impl Markup {
         }
         Some(Markup { blocks })
     }
+
+    pub fn to_markdown(&self) -> String {
+        let mut output = String::new();
+
+        for (i, block) in self.blocks.iter().enumerate() {
+            if i > 0 {
+                output.push_str("\n\n");
+            }
+
+            output.push_str(block.to_markdown().as_str());
+        }
+
+        output
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -320,6 +345,18 @@ impl MarkupBlock {
                     .collect(),
             }),
             _ => None,
+        }
+    }
+
+    pub fn to_markdown(&self) -> String {
+        match self {
+            MarkupBlock::Paragraph { elements } => {
+                let mut output = String::new();
+                for element in elements.iter() {
+                    output.push_str(element.to_markdown().as_str());
+                }
+                output
+            }
         }
     }
 }
@@ -379,6 +416,20 @@ impl MarkupElement {
                 }
             }
             _ => None,
+        }
+    }
+
+    pub fn to_markdown(&self) -> String {
+        match self {
+            MarkupElement::Text { value } => value.clone(),
+            MarkupElement::Bold { value } => format!("**{}**", value),
+            MarkupElement::Italic { value } => format!("_{}_", value),
+            MarkupElement::Link { to, value } => format!("[{}]({})", value, to),
+            MarkupElement::Reference {
+                name,
+                uri,
+                location: (l, c),
+            } => format!("[{}]({}#L{},{})", name, uri, l, c),
         }
     }
 }
