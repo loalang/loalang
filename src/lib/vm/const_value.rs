@@ -1,7 +1,7 @@
 use fraction::BigFraction;
 use num_bigint::{BigInt, BigUint};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ConstValue {
     Nothing,
     String(String),

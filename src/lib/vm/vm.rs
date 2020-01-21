@@ -220,15 +220,22 @@ impl VM {
                             .push(self.stack[self.stack.len() - (arity as usize)].clone());
                     }
                     Instruction::Return(arity) => {
+                        log::info!("Stack after method (before return) (arity {}):", arity);
+                        self.log_stack();
                         let result = expect!(self, self.stack.pop(), "method didn't return");
                         for _ in 0..arity {
                             expect!(self, self.stack.pop(), "arguments were not loaded properly");
                         }
                         self.stack.push(result);
+                        log::info!("Stack after method (arity {}):", arity);
+                        self.log_stack();
                     }
                     Instruction::LoadLocal(index) => {
                         let local = self.stack[self.stack.len() - (index as usize) - 1].clone();
                         self.stack.push(local);
+                    }
+                    Instruction::DropLocal(index) => {
+                        self.stack.remove(self.stack.len() - (index as usize));
                     }
                     Instruction::ReferenceToClass(id) => {
                         let class = expect!(self, self.classes.get(&id), "deref unknown class");
@@ -238,6 +245,8 @@ impl VM {
                         }));
                     }
                     Instruction::SendMessage(location, id) => {
+                        log::info!("Stack before message {}:", location);
+                        self.log_stack();
                         let receiver = expect!(self, self.stack.last(), "empty stack");
                         let method = expect!(
                             self,
@@ -317,6 +326,14 @@ impl VM {
 
     pub fn pop(&mut self) -> VMResult<Arc<Object>> {
         VMResult::Ok(expect!(self, self.stack.pop(), "tried to pop empty stack"))
+    }
+
+    pub fn top(&self) -> VMResult<&Arc<Object>> {
+        VMResult::Ok(expect!(
+            self,
+            self.stack.last(),
+            "tried to peek at top of empty stack"
+        ))
     }
 
     pub fn push(&mut self, object: Arc<Object>) {

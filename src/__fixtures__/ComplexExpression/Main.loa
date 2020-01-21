@@ -1,0 +1,21 @@
+namespace ComplexExpression.
+
+export class Main {
+  public run =>
+    let SuperClass object = SubClass.
+    object keyword: object +<> SubClass unary.
+}
+
+partial class SuperClass {
+  public keyword: Number object =>
+    object + 2.
+
+  public +<> Number object =>
+    object + 20.
+}
+
+class SubClass {
+  is SuperClass.
+
+  public unary -> UInt8 => 20.
+}

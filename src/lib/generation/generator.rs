@@ -91,7 +91,9 @@ impl<'a> Generator<'a> {
                 LetBinding { .. } => {
                     instructions.extend(self.generate_let_binding(declaration)?);
                     instructions.push(Instruction::StoreGlobal(declaration.id));
-                    self.local_ids.remove(0);
+                    instructions.push(Instruction::DropLocal(self.index_of_local(&declaration)?));
+                    self.local_ids
+                        .retain(|existing_local| *existing_local != declaration.id);
                     self.local_count -= 1;
                 }
                 _ => return Err(invalid_node(declaration, "Expected declaration.")),
@@ -159,6 +161,13 @@ impl<'a> Generator<'a> {
         }
     }
 
+    fn index_of_local(&self, declaration: &Node) -> Option<u16> {
+        self.local_ids
+            .iter()
+            .position(|id| *id == declaration.id)
+            .map(|i| i as u16)
+    }
+
     fn generate_expression(&mut self, expression: &Node) -> GenerationResult {
         let result = match expression.kind {
             ReferenceExpression { .. } => {
@@ -175,15 +184,11 @@ impl<'a> Generator<'a> {
                             + self.local_count,
                     )
                     .into()),
-                    LetBinding { .. } => {
-                        Ok(
-                            match self.local_ids.iter().position(|id| *id == declaration.id) {
-                                Some(idx) => Instruction::LoadLocal(idx as u16),
-                                None => Instruction::LoadGlobal(declaration.id),
-                            }
-                            .into(),
-                        )
+                    LetBinding { .. } => Ok(match self.index_of_local(&declaration) {
+                        Some(idx) => Instruction::LoadLocal(idx),
+                        None => Instruction::LoadGlobal(declaration.id),
                     }
+                    .into()),
                     _ => Err(invalid_node(&declaration, "Expected declaration.")),
                 }
             }
@@ -519,7 +524,7 @@ impl<'a> Generator<'a> {
                         _ => return Err(invalid_node(&method_body, "Expected method body.")),
                     }
                     instructions.push(Instruction::Return(
-                        self.analysis.navigator.method_arity(method)? as u16 + self.local_count - 2,
+                        self.analysis.navigator.method_arity(method)? as u16 + self.local_count,
                     ));
                 }
                 instructions.push(Instruction::EndMethod(class.id));

@@ -21,6 +21,8 @@ required-features = ["build-bin-vm"]
 [features]
 test-library = [
     "serde_yaml",
+    "simple-logging",
+    "log-panics",
 ]
 build-bin-vm = [
     "colored",

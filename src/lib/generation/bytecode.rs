@@ -72,6 +72,7 @@ pub enum Instruction {
     // things onto the stack, in preparation of message sends.
     ReferenceToClass(Id),
     LoadLocal(u16),
+    DropLocal(u16),
     LoadArgument(u8),
 
     LoadGlobal(Id),
@@ -99,7 +100,7 @@ pub enum Instruction {
     CallNative(NativeMethod),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Instructions(Vec<Instruction>);
 
 impl Instructions {

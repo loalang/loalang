@@ -1,7 +1,11 @@
+use crate::vm::Object;
 use crate::*;
 use serde::Deserialize;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 extern crate serde_yaml;
+extern crate simple_logging;
 
 #[derive(Deserialize)]
 struct FixtureConfig {
@@ -15,8 +19,20 @@ struct FixtureExpectations {
     stdout: Vec<String>,
 }
 
+fn log_to_file() {
+    log_panics::init();
+    let log_file = std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(PathBuf::from_str("/usr/local/var/log/loa.log").unwrap())
+        .unwrap();
+    simple_logging::log_to(log_file, log::LevelFilter::Info);
+}
+
 #[test]
 fn fixtures() {
+    log_to_file();
+
     let mut failures = vec![];
 
     for entry in glob::glob("src/__fixtures__/*").unwrap() {
@@ -85,8 +101,17 @@ fn fixtures() {
             let mut generator = generation::Generator::new(&mut analysis);
             let instructions = generator.generate_all().unwrap();
 
-            let mut vm = vm::VM::new();
-            let result = vm.eval_pop::<()>(instructions).unwrap();
+            let result = match std::panic::catch_unwind::<_, Arc<Object>>(|| {
+                let mut vm = vm::VM::new();
+                vm.eval_pop::<()>(instructions.clone()).unwrap()
+            }) {
+                Ok(r) => r,
+                Err(_) => {
+                    eprintln!("{:#?}", instructions);
+                    panic!("VM panicked")
+                }
+            };
+
             let actual_stdout = format!("{}\n", result);
             let expected_stdout: String = fixture_config
                 .expected

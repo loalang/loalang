@@ -1,0 +1,6 @@
+description: More complex expression, with multiple levels of message sends.
+main_class: ComplexExpression/Main
+expected:
+  success: true
+  stdout:
+    - 42
