@@ -1,13 +1,14 @@
 use crate::generation::*;
 use crate::semantics::*;
 use crate::syntax::*;
-use crate::vm::NativeMethod;
+// use crate::vm::NativeMethod;
+use crate::assembly::*;
 use crate::*;
-use num_traits::ToPrimitive;
+// use num_traits::ToPrimitive;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-pub type GenerationResult = Result<Instructions, GenerationError>;
+pub type GenerationResult<T> = Result<T, GenerationError>;
 
 pub trait REPLDirectives {
     fn show_type(type_: Type);
@@ -41,31 +42,37 @@ impl<'a> Generator<'a> {
         Some(hasher.finish())
     }
 
-    pub fn generate_all(&mut self) -> GenerationResult {
-        let mut instructions = Instructions::new();
-        instructions.extend(
-            self.generate_declarations(&self.analysis.navigator.all_top_level_declarations())?,
-        );
+    pub fn generate_all(&mut self) -> GenerationResult<Assembly> {
+        let mut assembly = Assembly::new();
+        self.generate_declarations(
+            &mut assembly,
+            &self.analysis.navigator.all_top_level_declarations(),
+        )?;
         for source in self.analysis.navigator.sources() {
             if let SourceKind::REPLLine = source.kind {
-                instructions.extend(self.generate::<()>(&source.uri)?);
+                self.generate::<()>(&mut assembly, &source.uri)?;
             }
         }
-        Ok(instructions)
+        Ok(assembly)
     }
 
-    pub fn generate<D: REPLDirectives>(&mut self, uri: &URI) -> GenerationResult {
+    pub fn generate<D: REPLDirectives>(
+        &mut self,
+        assembly: &mut Assembly,
+        uri: &URI,
+    ) -> GenerationResult<()> {
         let root = self.analysis.navigator.root_of(uri)?;
 
         match root.kind {
-            Module { .. } => self.generate_module(&root),
-            REPLLine { .. } => self.generate_repl_line::<D>(&root),
+            Module { .. } => self.generate_module(assembly, &root),
+            REPLLine { .. } => self.generate_repl_line::<D>(assembly, &root),
             _ => Err(invalid_node(&root, "Module or REPLLine expected.")),
         }
     }
 
-    fn generate_module(&mut self, module: &Node) -> GenerationResult {
+    fn generate_module(&mut self, assembly: &mut Assembly, module: &Node) -> GenerationResult<()> {
         self.generate_declarations(
+            assembly,
             &self
                 .analysis
                 .navigator
@@ -76,7 +83,13 @@ impl<'a> Generator<'a> {
         )
     }
 
-    fn generate_declarations(&mut self, declarations: &Vec<Node>) -> GenerationResult {
+    fn generate_declarations(
+        &mut self,
+        assembly: &mut Assembly,
+        declarations: &Vec<Node>,
+    ) -> GenerationResult<()> {
+        Ok(())
+        /*
         let mut instructions = Instructions::new();
         for declaration in declarations.iter() {
             if let Class { .. } = declaration.kind {
@@ -105,9 +118,16 @@ impl<'a> Generator<'a> {
             }
         }
         Ok(instructions)
+        */
     }
 
-    fn generate_repl_line<D: REPLDirectives>(&mut self, repl_line: &Node) -> GenerationResult {
+    fn generate_repl_line<D: REPLDirectives>(
+        &mut self,
+        assembly: &mut Assembly,
+        repl_line: &Node,
+    ) -> GenerationResult<()> {
+        Ok(())
+        /*
         match repl_line.kind {
             REPLLine { ref statements } => {
                 let mut instructions = Instructions::new();
@@ -119,8 +139,10 @@ impl<'a> Generator<'a> {
             }
             _ => Err(invalid_node(repl_line, "REPLLine expected.")),
         }
+        */
     }
 
+    /*
     fn generate_repl_statement<D: REPLDirectives>(
         &mut self,
         repl_statement: &Node,
@@ -595,17 +617,9 @@ impl<'a> Generator<'a> {
             _ => Err(invalid_node(binding, "Expected let binding.")),
         }
     }
+    */
 }
 
 fn invalid_node(node: &Node, message: &str) -> GenerationError {
     GenerationError::InvalidNode(node.clone(), message.into())
-}
-
-pub enum BitSize {
-    Size8,
-    Size16,
-    Size32,
-    Size64,
-    Size128,
-    SizeBig,
 }

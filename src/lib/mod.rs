@@ -45,6 +45,9 @@ pub use self::id::*;
 mod cache;
 pub use self::cache::*;
 
+mod bit_size;
+pub use self::bit_size::*;
+
 #[macro_use]
 mod diagnostics;
 
@@ -61,6 +64,10 @@ pub mod vm;
 pub mod server;
 
 pub mod format;
+
+pub mod assembly;
+
+pub mod bytecode;
 
 #[cfg(test)]
 mod fixture_tests;

@@ -1,6 +1,6 @@
-use crate::generation::BitSize;
 use crate::semantics::*;
 use crate::syntax::*;
+use crate::BitSize;
 use crate::*;
 use fraction::ToPrimitive;
 

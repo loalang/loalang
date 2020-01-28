@@ -457,7 +457,7 @@ fn add_fbig(lhs: &BigFraction, rhs: &BigFraction) -> Arc<Object> {
 }
 
 impl Runtime for () {
-    fn print_panic(message: String, call_stack: Vec<(String, Arc<Class>, Arc<Method>)>) {
+    fn print_panic(message: String, call_stack: CallStack) {
         panic!("{}\n{:?}", message, call_stack)
     }
 }

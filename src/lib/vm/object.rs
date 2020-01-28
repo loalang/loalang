@@ -31,6 +31,13 @@ pub struct Object {
 }
 
 impl Object {
+    pub fn new(class: &Arc<Class>) -> Arc<Object> {
+        Arc::new(Object {
+            class: class.clone(),
+            const_value: ConstValue::Nothing,
+        })
+    }
+
     fn box_const(const_value: ConstValue, class_ptr: &mut *const Class) -> Arc<Object> {
         let class = unsafe { Arc::from_raw(*class_ptr) };
         *class_ptr = Arc::into_raw(class.clone());

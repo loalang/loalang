@@ -99,15 +99,15 @@ fn fixtures() {
 
         if let Some(_) = fixture_config.main_class {
             let mut generator = generation::Generator::new(&mut analysis);
-            let instructions = generator.generate_all().unwrap();
+            let assembly = generator.generate_all().unwrap();
 
             let result = match std::panic::catch_unwind::<_, Arc<Object>>(|| {
                 let mut vm = vm::VM::new();
-                vm.eval_pop::<()>(instructions.clone()).unwrap()
+                vm.eval_pop::<()>(assembly.clone().into()).unwrap()
             }) {
                 Ok(r) => r,
                 Err(_) => {
-                    eprintln!("{:#?}", instructions);
+                    eprintln!("{:#?}", assembly);
                     panic!("VM panicked")
                 }
             };
