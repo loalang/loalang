@@ -1,14 +1,23 @@
 use crate::bytecode::Instruction as BytecodeInstruction;
 use crate::HashMap;
+use std::fmt;
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Clone)]
 pub struct Assembly {
-    pub sections: Vec<Section>,
+    pub leading_sections: Vec<Section>,
+    sections: Vec<Section>,
 }
 
 impl Assembly {
     pub fn new() -> Assembly {
-        Assembly { sections: vec![] }
+        Assembly {
+            sections: vec![],
+            leading_sections: vec![],
+        }
+    }
+
+    pub fn add_leading_section(&mut self, section: Section) {
+        self.leading_sections.push(section);
     }
 
     pub fn add_section(&mut self, section: Section) {
@@ -20,20 +29,38 @@ impl Assembly {
         self
     }
 
+    pub fn iter(
+        &self,
+    ) -> std::iter::Chain<std::slice::Iter<'_, Section>, std::slice::Iter<'_, Section>> {
+        self.leading_sections.iter().chain(self.sections.iter())
+    }
+
+    pub fn into_iter(
+        self,
+    ) -> std::iter::Chain<std::vec::IntoIter<Section>, std::vec::IntoIter<Section>> {
+        self.leading_sections
+            .into_iter()
+            .chain(self.sections.into_iter())
+    }
+
     fn offsets(&self) -> HashMap<String, u64> {
         let mut offsets = HashMap::new();
         let mut offset: u64 = 0;
 
-        for section in self.sections.iter() {
+        for section in self.iter() {
             if let Some(ref label) = section.label {
                 offsets.insert(label.clone(), offset);
             }
-            for instruction in section.instructions.iter() {
-                offset += 1;
-            }
+            offset += section.instructions.len() as u64;
         }
 
         offsets
+    }
+}
+
+impl PartialEq for Assembly {
+    fn eq(&self, other: &Assembly) -> bool {
+        self.iter().collect::<Vec<_>>() == other.iter().collect::<Vec<_>>()
     }
 }
 
@@ -41,7 +68,7 @@ impl Into<Vec<BytecodeInstruction>> for Assembly {
     fn into(self) -> Vec<BytecodeInstruction> {
         let mut instructions = vec![];
         let offsets = self.offsets();
-        for section in self.sections {
+        for section in self.into_iter() {
             for assembly_instruction in section.instructions {
                 instructions.push(assembly_instruction.compile(&offsets));
             }
@@ -50,7 +77,28 @@ impl Into<Vec<BytecodeInstruction>> for Assembly {
     }
 }
 
-#[derive(Debug, Clone)]
+impl fmt::Debug for Assembly {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for section in self.iter() {
+            let indent = if let Some(ref label) = section.label {
+                write!(f, "@{}\n", label)?;
+                true
+            } else {
+                false
+            };
+
+            for instruction in section.instructions.iter() {
+                if indent {
+                    write!(f, "  ")?;
+                }
+                write!(f, "{:?}\n", instruction)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
 pub struct Section {
     pub leading_comment: Option<String>,
     pub label: Option<String>,
@@ -106,10 +154,30 @@ impl PartialEq for Section {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Instruction {
     pub leading_comment: Option<String>,
     pub kind: InstructionKind,
+}
+
+impl fmt::Debug for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use InstructionKind::*;
+        match self.kind {
+            Noop => write!(f, "Noop"),
+            Halt => write!(f, "Halt"),
+            DeclareClass(ref name) => write!(f, "DeclareClass {:?}", name),
+            DeclareMethod(ref selector, ref label) => {
+                write!(f, "DeclareMethod {:?} @{}", selector, label)
+            }
+            LoadObject(ref label) => write!(f, "LoadObject @{}", label),
+            CallMethod(ref label, ref uri, line, character) => {
+                write!(f, "CallMethod @{} {:?} {} {}", label, uri, line, character)
+            }
+            LoadLocal(index) => write!(f, "LoadLocal {}", index),
+            Return(arity) => write!(f, "Return {}", arity),
+        }
+    }
 }
 
 pub type Label = String;

@@ -28,9 +28,9 @@ impl BytecodeEncoding for Instruction {
             Instruction::DeclareClass(ref name) => {
                 Ok(DECLARE_CLASS.serialize(&mut w)? + name.serialize(w)?)
             }
-            Instruction::DeclareMethod(ref name, id) => {
-                Ok(DECLARE_METHOD.serialize(&mut w)? + name.serialize(&mut w)? + id.serialize(w)?)
-            }
+            Instruction::DeclareMethod(ref name, id) => Ok(DECLARE_METHOD.serialize(&mut w)?
+                + name.serialize(&mut w)?
+                + id.serialize(w)?),
             Instruction::LoadObject(id) => Ok(LOAD_OBJECT.serialize(&mut w)? + id.serialize(w)?),
             Instruction::CallMethod(id, ref uri, line, character) => Ok(CALL_METHOD
                 .serialize(&mut w)?

@@ -32,6 +32,17 @@ use colored::Colorize;
 
 mod pkg;
 
+use crate::docs::{Docs, Versions};
+use crate::pkg::ManifestFile;
+use loa::bytecode::BytecodeEncoding;
+use loa::bytecode::Instruction;
+use loa::vm::VM;
+use log::LevelFilter;
+use std::convert::identity;
+use std::io::stdout;
+use std::process::exit;
+use std::str::FromStr;
+
 fn log_to_file() {
     log_panics::init();
     let log_file = std::fs::OpenOptions::new()
@@ -254,7 +265,7 @@ fn main() -> Result<(), clap::Error> {
             Some(file) => {
                 log_to_stderr();
                 let instructions = std::fs::read(file)
-                    .map(|bytes| Instructions::from_bytes(bytes.as_slice()).unwrap())?;
+                    .map(|bytes| Vec::<_>::deserialize(bytes.as_slice()).unwrap())?;
 
                 let mut vm = VM::new();
                 if let Some(result) = vm.eval_pop::<ServerRuntime>(instructions) {
@@ -278,12 +289,16 @@ fn main() -> Result<(), clap::Error> {
 
             match matches.value_of("out") {
                 None => {
-                    stdout()
-                        .write(instructions.to_bytes().unwrap().as_slice())
-                        .unwrap();
+                    instructions.serialize(stdout()).unwrap();
                 }
                 Some(outfile) => {
-                    std::fs::write(outfile, instructions.to_bytes().unwrap()).unwrap();
+                    let mut outfile_sink = std::fs::OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .open(outfile)
+                        .unwrap();
+
+                    instructions.serialize(&mut outfile_sink).unwrap();
 
                     println!("{} {}", "Built".bright_black(), outfile.green());
                 }
@@ -414,16 +429,6 @@ fn main() -> Result<(), clap::Error> {
     Ok(())
 }
 
-use crate::docs::{Docs, Versions};
-use crate::pkg::ManifestFile;
-use loa::generation::Instructions;
-use loa::vm::VM;
-use log::LevelFilter;
-use std::convert::identity;
-use std::io::{stdout, Write};
-use std::process::exit;
-use std::str::FromStr;
-
 fn parse(main: Option<&str>) -> (Vec<loa::Diagnostic>, loa::semantics::Analysis) {
     let mut sources = loa::Source::stdlib().expect("failed to load stdlib");
     sources.extend(loa::Source::files("**/*.loa").expect("failed to read in sources"));
@@ -461,7 +466,7 @@ fn parse_and_report(main: Option<&str>) -> loa::semantics::Analysis {
     analysis
 }
 
-fn build(main: &str) -> Instructions {
+fn build(main: &str) -> Vec<Instruction> {
     let mut analysis = parse_and_report(Some(main));
 
     let mut generator = loa::generation::Generator::new(&mut analysis);
@@ -470,6 +475,6 @@ fn build(main: &str) -> Instructions {
             eprintln!("{:?}", err);
             exit(1);
         }
-        Ok(i) => i,
+        Ok(i) => i.into(),
     }
 }

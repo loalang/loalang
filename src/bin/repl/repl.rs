@@ -1,5 +1,6 @@
 use crate::*;
 use colored::{Color, Colorize};
+use loa::assembly::Assembly;
 use loa::generation::{Generator, REPLDirectives};
 use loa::semantics::Type;
 use loa::server::Server;
@@ -211,7 +212,7 @@ impl REPL {
             match server.generator().generate_all() {
                 Err(err) => eprintln!("{:?}", err),
                 Ok(i) => {
-                    vm.eval::<ServerRuntime>(i);
+                    vm.eval::<ServerRuntime>(i.into());
                 }
             };
         }
@@ -293,18 +294,21 @@ impl REPL {
                 })
                 .unwrap_or(false);
 
-            match Generator::new(&mut server.analysis).generate::<REPLDirectivesImpl>(&uri) {
+            let mut assembly = Assembly::new();
+            match Generator::new(&mut server.analysis)
+                .generate::<REPLDirectivesImpl>(&mut assembly, &uri)
+            {
                 Err(err) => {
                     server.remove(uri);
                     println!("{:?}", err)
                 }
-                Ok(instructions) => {
+                Ok(_) => {
                     if is_expression {
-                        if let Some(o) = self.vm.eval_pop::<ServerRuntime>(instructions) {
+                        if let Some(o) = self.vm.eval_pop::<ServerRuntime>(assembly.into()) {
                             println!("{}", o);
                         }
                     } else {
-                        self.vm.eval::<ServerRuntime>(instructions);
+                        self.vm.eval::<ServerRuntime>(assembly.into());
                     }
                 }
             }

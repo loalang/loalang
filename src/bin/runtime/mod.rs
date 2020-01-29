@@ -1,29 +1,37 @@
 extern crate atty;
 use colored::*;
-use loa::vm::{CallStack, Runtime};
+use loa::vm::{CallStack, Runtime, SourceCodeLocation, StackFrame};
 
 pub struct ServerRuntime;
 
 impl Runtime for ServerRuntime {
-    fn print_panic(message: String, mut call_stack: CallStack) {
+    fn print_panic(message: String, call_stack: CallStack) {
+        let mut call_stack: Vec<_> = call_stack.into();
         call_stack.reverse();
         if atty::is(atty::Stream::Stdout) {
             eprint!("{} ", " PANIC ".bold().white().on_red());
             eprintln!("{}", message.red());
-            for (location, class, method) in call_stack {
+            for StackFrame {
+                method,
+                callsite: SourceCodeLocation(uri, line, character),
+                ..
+            } in call_stack
+            {
                 eprintln!(
-                    "{} {}\n  {}{}{}",
-                    class.name.bright_red(),
+                    "{}\n  {}",
                     method.name.yellow(),
-                    "(".bright_black(),
-                    location.bright_black(),
-                    ")".bright_black(),
+                    format!("({}:{}:{})", uri, line, character).bright_black(),
                 );
             }
         } else {
             eprintln!("PANIC: {}", message);
-            for (location, class, method) in call_stack {
-                eprintln!("{} {}\n  ({})", class.name, method.name, location);
+            for StackFrame {
+                method,
+                callsite: SourceCodeLocation(uri, line, character),
+                ..
+            } in call_stack
+            {
+                eprintln!("{}\n  ({}:{}:{})", method.name, uri, line, character);
             }
         }
     }

@@ -1309,4 +1309,14 @@ impl Navigator {
 
         declarations.into_iter().collect()
     }
+
+    pub fn method_body(&self, method: &Node) -> Option<Node> {
+        if let Method { method_body, .. } = method.kind {
+            let method_body = self.find_child(method, method_body)?;
+            if let MethodBody { expression, .. } = method_body.kind {
+                return self.find_child(&method_body, expression);
+            }
+        }
+        None
+    }
 }

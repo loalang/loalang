@@ -5,8 +5,8 @@ use crate::syntax::*;
 use crate::assembly::*;
 use crate::*;
 // use num_traits::ToPrimitive;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+// use std::collections::hash_map::DefaultHasher;
+// use std::hash::{Hash, Hasher};
 
 pub type GenerationResult<T> = Result<T, GenerationError>;
 
@@ -22,25 +22,25 @@ impl REPLDirectives for () {
 
 pub struct Generator<'a> {
     analysis: &'a mut Analysis,
-    local_count: u16,
-    local_ids: Vec<Id>,
+    locals: Vec<Id>,
 }
 
 impl<'a> Generator<'a> {
     pub fn new(analysis: &'a mut Analysis) -> Generator<'a> {
         Generator {
             analysis,
-            local_count: 0,
-            local_ids: vec![],
+            locals: vec![],
         }
     }
 
+    /*
     fn behaviour_id(&self, method: &Node) -> Option<u64> {
         let mut hasher = DefaultHasher::new();
         let selector = self.analysis.navigator.method_selector(&method)?;
         selector.hash(&mut hasher);
         Some(hasher.finish())
     }
+    */
 
     pub fn generate_all(&mut self) -> GenerationResult<Assembly> {
         let mut assembly = Assembly::new();
@@ -88,6 +88,12 @@ impl<'a> Generator<'a> {
         assembly: &mut Assembly,
         declarations: &Vec<Node>,
     ) -> GenerationResult<()> {
+        for declaration in declarations.iter() {
+            if let Class { .. } = declaration.kind {
+                self.declare_class(assembly, declaration)?;
+            }
+        }
+
         Ok(())
         /*
         let mut instructions = Instructions::new();
@@ -121,10 +127,81 @@ impl<'a> Generator<'a> {
         */
     }
 
-    fn generate_repl_line<D: REPLDirectives>(
+    fn declare_class(&mut self, assembly: &mut Assembly, class: &Node) -> GenerationResult<()> {
+        let (qn, _, _) = self.analysis.navigator.qualified_name_of(class)?;
+        let mut section = Section::named(qn.as_str());
+        section.add_instruction(InstructionKind::DeclareClass(qn.clone()));
+
+        for method in self.analysis.navigator.methods_of_class(class) {
+            let (method_name, method_label) =
+                self.declare_method(assembly, qn.as_ref(), &method)?;
+
+            section.add_instruction(InstructionKind::DeclareMethod(method_name, method_label));
+        }
+
+        for behaviour in self
+            .analysis
+            .types
+            .get_behaviours(&self.analysis.types.get_type_of_declaration(class))
+        {
+            let method = self.analysis.navigator.find_node(behaviour.method_id)?;
+            let owning_class = self.analysis.navigator.closest_class_upwards(&method)?;
+
+            if owning_class.id != class.id {
+                let (owning_class_qn, _, _) =
+                    self.analysis.navigator.qualified_name_of(&owning_class)?;
+                let selector = self.analysis.navigator.method_selector(&method)?;
+                let label = format!("{}#{}", owning_class_qn, selector);
+
+                section.add_instruction(InstructionKind::DeclareMethod(selector, label));
+            }
+        }
+
+        assembly.add_leading_section(section);
+        Ok(())
+    }
+
+    fn declare_method(
         &mut self,
         assembly: &mut Assembly,
-        repl_line: &Node,
+        class_name: &str,
+        method: &Node,
+    ) -> GenerationResult<(String, Label)> {
+        let selector = self.analysis.navigator.method_selector(method)?;
+        let label = format!("{}#{}", class_name, selector);
+        let mut method_section = Section::named(label.as_str());
+
+        if let Some(body) = self.analysis.navigator.method_body(method) {
+            self.generate_expression(assembly, &mut method_section, &body)?;
+
+            method_section.add_instruction(InstructionKind::Return(
+                self.analysis.navigator.method_arity(method)? as u16,
+            ));
+        }
+
+        assembly.add_section(method_section);
+        Ok((selector, label))
+    }
+
+    fn generate_expression(
+        &mut self,
+        _assembly: &mut Assembly,
+        section: &mut Section,
+        expression: &Node,
+    ) -> GenerationResult<()> {
+        match expression.kind {
+            SelfExpression(_) => {
+                section.add_instruction(InstructionKind::LoadLocal(self.locals.len() as u16));
+            }
+            _ => return Err(invalid_node(expression, "Expected expression.")),
+        }
+        Ok(())
+    }
+
+    fn generate_repl_line<D: REPLDirectives>(
+        &mut self,
+        _assembly: &mut Assembly,
+        _repl_line: &Node,
     ) -> GenerationResult<()> {
         Ok(())
         /*
@@ -622,4 +699,95 @@ impl<'a> Generator<'a> {
 
 fn invalid_node(node: &Node, message: &str) -> GenerationError {
     GenerationError::InvalidNode(node.clone(), message.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::assembly::Parser as AssemblyParser;
+    use crate::generation::*;
+    use crate::semantics::Analysis;
+    use crate::syntax::Parser;
+    use crate::*;
+
+    fn assert_generates(input: &str, expected: &str) {
+        let source = Source::test(input);
+        let mut analysis = Analysis::new(Arc::new(
+            vec![(source.uri.clone(), Parser::new(source).parse().0)]
+                .into_iter()
+                .collect(),
+        ));
+        let mut generator = Generator::new(&mut analysis);
+        let assembly = generator.generate_all().unwrap();
+
+        let expected = AssemblyParser::new().parse(expected).unwrap();
+
+        assert_eq!(assembly, expected);
+    }
+
+    #[test]
+    fn empty_class() {
+        assert_generates(
+            r#"
+                namespace N.
+
+                class C.
+            "#,
+            r#"
+                @N/C
+                    DeclareClass "N/C"
+            "#,
+        );
+    }
+
+    #[test]
+    fn simple_method() {
+        assert_generates(
+            r#"
+                namespace N.
+
+                class C {
+                    public x => self.
+                }
+            "#,
+            r#"
+                @N/C
+                    DeclareClass "N/C"
+                    DeclareMethod "x" @N/C#x
+
+                @N/C#x
+                    LoadLocal 0
+                    Return 1
+            "#,
+        );
+    }
+
+    #[test]
+    fn inherited_method() {
+        assert_generates(
+            r#"
+                namespace N.
+
+                class A {
+                    public x => self.
+                }
+
+                class B {
+                    is A.
+                }
+            "#,
+            r#"
+                @N/A
+                    DeclareClass "N/A"
+                    DeclareMethod "x" @N/A#x
+
+                @N/B
+                    DeclareClass "N/B"
+                    DeclareMethod "x" @N/A#x
+
+                @N/A#x
+                    LoadLocal 0
+                    Return 1
+            "#,
+        );
+    }
 }

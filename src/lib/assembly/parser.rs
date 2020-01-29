@@ -13,7 +13,7 @@ impl Parser {
         let mut code = String::from(code.trim_start());
         Self::skip_leading_whitespace(&mut code);
         while !code.is_empty() {
-            assembly.sections.push(self.parse_section(&mut code)?);
+            assembly.add_section(self.parse_section(&mut code)?);
             Self::skip_leading_whitespace(&mut code);
         }
         Ok(assembly)

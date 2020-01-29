@@ -6,10 +6,10 @@ pub struct CallStack(Vec<StackFrame>);
 
 #[derive(Clone, Debug)]
 pub struct StackFrame {
-    method: Arc<Method>,
+    pub method: Arc<Method>,
 
-    return_address: usize,
-    callsite: SourceCodeLocation,
+    pub return_address: usize,
+    pub callsite: SourceCodeLocation,
 }
 
 #[derive(Clone, Debug)]
@@ -35,5 +35,11 @@ impl CallStack {
 
     pub fn ret(&mut self) -> Option<usize> {
         Some(self.0.pop()?.return_address)
+    }
+}
+
+impl Into<Vec<StackFrame>> for CallStack {
+    fn into(self) -> Vec<StackFrame> {
+        self.0
     }
 }
