@@ -1,72 +1,113 @@
 use crate::assembly::*;
 use std::num::ParseIntError;
 
-pub struct Parser;
+pub struct Parser {
+    indent_size: usize,
+}
 
 impl Parser {
     pub fn new() -> Parser {
-        Parser
+        Parser { indent_size: 0 }
     }
 
-    pub fn parse(&self, code: &str) -> ParseResult<Assembly> {
+    pub fn parse(&mut self, code: &str) -> ParseResult<Assembly> {
         let mut assembly = Assembly::new();
         let mut code = String::from(code.trim_start());
-        Self::skip_leading_whitespace(&mut code);
+        self.skip_leading_whitespace(&mut code);
         while !code.is_empty() {
             assembly.add_section(self.parse_section(&mut code)?);
-            Self::skip_leading_whitespace(&mut code);
+            self.skip_leading_whitespace(&mut code);
         }
         Ok(assembly)
     }
 
-    fn skip_leading_whitespace(s: &mut String) {
-        let trimmed = s.trim_start();
-        let trim_start = trimmed.as_ptr() as usize - s.as_ptr() as usize;
-        if trim_start > 0 {
-            s.drain(..trim_start);
+    fn skip_leading_whitespace(&mut self, s: &mut String) {
+        let mut is_in_indent = self.indent_size > 0;
+        loop {
+            if s.len() == 0 {
+                break;
+            }
+
+            let next = &(s.as_bytes()[0] as char);
+
+            match next {
+                ' ' | '\t' => {
+                    s.drain(..1);
+                    if is_in_indent {
+                        self.indent_size += 1;
+                    }
+                }
+                '\n' => {
+                    s.drain(..1);
+                    self.indent_size = 0;
+                    is_in_indent = true;
+                }
+                _ => {
+                    break;
+                }
+            }
         }
     }
 
-    fn parse_section(&self, code: &mut String) -> ParseResult<Section> {
+    fn parse_section(&mut self, code: &mut String) -> ParseResult<Section> {
         let mut section = Section::unnamed();
 
         if code.starts_with(";") {
             section.leading_comment = Some(self.parse_comment(code)?);
         }
 
-        Self::skip_leading_whitespace(code);
+        self.skip_leading_whitespace(code);
         if code.starts_with("@") {
             section.label = Some(self.parse_label(code)?);
         }
 
-        Self::skip_leading_whitespace(code);
+        self.skip_leading_whitespace(code);
+        let indent_before = self.indent_size;
         while !code.is_empty() {
             let mut leading_comment = None;
+
             if code.starts_with(";") {
                 leading_comment = Some(self.parse_comment(code)?);
             }
-            if code.starts_with("@") {
+
+            if self.indent_size < indent_before || code.starts_with("@") {
                 break;
-            } else if code.starts_with("Noop") {
+            }
+            // Noop
+            else if code.starts_with("Noop") {
                 code.drain(.."Noop".len());
                 section.instructions.push(Instruction {
                     leading_comment,
                     kind: InstructionKind::Noop,
                 });
-            } else if code.starts_with("Halt") {
+            }
+            // Halt
+            else if code.starts_with("Halt") {
                 code.drain(.."Halt".len());
                 section.instructions.push(Instruction {
                     leading_comment,
                     kind: InstructionKind::Halt,
                 });
-            } else if code.starts_with("DeclareClass") {
+            }
+            // Panic
+            else if code.starts_with("Panic") {
+                code.drain(.."Panic".len());
+                section.instructions.push(Instruction {
+                    leading_comment,
+                    kind: InstructionKind::Panic,
+                });
+            }
+            // DeclareClass <string>
+            else if code.starts_with("DeclareClass") {
                 code.drain(.."DeclareClass".len());
                 let name = self.parse_string(code)?;
                 section.instructions.push(Instruction {
                     leading_comment,
                     kind: InstructionKind::DeclareClass(name),
                 });
-            } else if code.starts_with("DeclareMethod") {
+            }
+            // DeclareMethod <string> <label>
+            else if code.starts_with("DeclareMethod") {
                 code.drain(.."DeclareMethod".len());
                 let name = self.parse_string(code)?;
                 let label = self.parse_label(code)?;
@@ -74,14 +115,18 @@ impl Parser {
                     leading_comment,
                     kind: InstructionKind::DeclareMethod(name, label),
                 });
-            } else if code.starts_with("LoadObject") {
+            }
+            // LoadObject <label>
+            else if code.starts_with("LoadObject") {
                 code.drain(.."LoadObject".len());
                 let label = self.parse_label(code)?;
                 section.instructions.push(Instruction {
                     leading_comment,
                     kind: InstructionKind::LoadObject(label),
                 });
-            } else if code.starts_with("CallMethod") {
+            }
+            // CallMethod <label> <string> <u46> <u64>
+            else if code.starts_with("CallMethod") {
                 code.drain(.."CallMethod".len());
                 let label = self.parse_label(code)?;
                 let uri = self.parse_string(code)?;
@@ -91,31 +136,46 @@ impl Parser {
                     leading_comment,
                     kind: InstructionKind::CallMethod(label, uri, line, character),
                 });
-            } else if code.starts_with("LoadLocal") {
+            }
+            // LoadLocal <u16>
+            else if code.starts_with("LoadLocal") {
                 code.drain(.."LoadLocal".len());
                 let index = self.parse_u16(code)?;
                 section.instructions.push(Instruction {
                     leading_comment,
                     kind: InstructionKind::LoadLocal(index),
                 });
-            } else if code.starts_with("Return") {
+            }
+            // Return <u16>
+            else if code.starts_with("Return") {
                 code.drain(.."Return".len());
                 let arity = self.parse_u16(code)?;
                 section.instructions.push(Instruction {
                     leading_comment,
                     kind: InstructionKind::Return(arity),
                 });
-            } else {
+            }
+            // LoadConstString <string>
+            else if code.starts_with("LoadConstString") {
+                code.drain(.."LoadConstString".len());
+                let value = self.parse_string(code)?;
+                section.instructions.push(Instruction {
+                    leading_comment,
+                    kind: InstructionKind::LoadConstString(value),
+                });
+            }
+            // ...
+            else {
                 return Err(ParseError::ExpectedInstruction(code.clone()));
             }
-            Self::skip_leading_whitespace(code);
+            self.skip_leading_whitespace(code);
         }
 
         Ok(section)
     }
 
-    fn parse_string(&self, code: &mut String) -> ParseResult<String> {
-        Self::skip_leading_whitespace(code);
+    fn parse_string(&mut self, code: &mut String) -> ParseResult<String> {
+        self.skip_leading_whitespace(code);
         if !code.starts_with("\"") {
             return Err(ParseError::ExpectedString(code.clone()));
         }
@@ -130,20 +190,20 @@ impl Parser {
         Ok(result)
     }
 
-    fn parse_comment(&self, code: &mut String) -> ParseResult<String> {
+    fn parse_comment(&mut self, code: &mut String) -> ParseResult<String> {
         let mut result = String::new();
         while code.starts_with(";") {
             code.drain(..";".len());
             while code.len() > 0 && !code.starts_with("\n") {
                 result.push(code.remove(0));
             }
-            Self::skip_leading_whitespace(code);
+            self.skip_leading_whitespace(code);
         }
         Ok(result)
     }
 
-    fn parse_label(&self, code: &mut String) -> ParseResult<Label> {
-        Self::skip_leading_whitespace(code);
+    fn parse_label(&mut self, code: &mut String) -> ParseResult<Label> {
+        self.skip_leading_whitespace(code);
         if !code.starts_with("@") {
             return Err(ParseError::ExpectedLabel(code.clone()));
         }
@@ -155,8 +215,8 @@ impl Parser {
         Ok(label)
     }
 
-    fn parse_u16(&self, code: &mut String) -> ParseResult<u16> {
-        Self::skip_leading_whitespace(code);
+    fn parse_u16(&mut self, code: &mut String) -> ParseResult<u16> {
+        self.skip_leading_whitespace(code);
         let mut number = String::new();
         while code.len() > 0 && (code.as_bytes()[0] as char).is_numeric() {
             number.push(code.remove(0));
@@ -164,8 +224,8 @@ impl Parser {
         Ok(number.parse()?)
     }
 
-    fn parse_u64(&self, code: &mut String) -> ParseResult<u64> {
-        Self::skip_leading_whitespace(code);
+    fn parse_u64(&mut self, code: &mut String) -> ParseResult<u64> {
+        self.skip_leading_whitespace(code);
         let mut number = String::new();
         while code.len() > 0 && (code.as_bytes()[0] as char).is_numeric() {
             number.push(code.remove(0));
@@ -195,7 +255,7 @@ mod tests {
     use super::*;
 
     fn assert_parses(code: &str, expected: Assembly) {
-        let parser = Parser::new();
+        let mut parser = Parser::new();
         let assembly = parser.parse(code).unwrap();
 
         assert_eq!(assembly, expected);
@@ -305,6 +365,39 @@ mod tests {
                         .with_comment("This is a comment on a section")
                         .with_instruction(InstructionKind::Noop)
                         .with_instruction(InstructionKind::Noop)
+                        .with_instruction(InstructionKind::Noop),
+                ),
+        );
+    }
+
+    #[test]
+    fn unnamed_section_after_named() {
+        assert_parses(
+            r#"
+            ; This is a comment on a section
+            @This_is_a_label_name!
+                Noop
+                Noop
+                Noop
+
+            ; This is a comment on an instruction
+            Noop
+            Noop
+            "#,
+            Assembly::new()
+                .with_section(
+                    Section::named("This_is_a_label_name!")
+                        .with_comment("This is a comment on a section")
+                        .with_instruction(InstructionKind::Noop)
+                        .with_instruction(InstructionKind::Noop)
+                        .with_instruction(InstructionKind::Noop),
+                )
+                .with_section(
+                    Section::unnamed()
+                        .with_commented_instruction(
+                            "This is a comment on an instruction",
+                            InstructionKind::Noop,
+                        )
                         .with_instruction(InstructionKind::Noop),
                 ),
         );

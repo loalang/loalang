@@ -410,6 +410,13 @@ impl<'a> Formatter<'a> {
                 self.space(f)?;
                 self.write_child(f, message)
             }
+            PanicExpression {
+                panic_keyword,
+                expression,
+            } => {
+                self.write_token(f, panic_keyword)?;
+                self.write_child(f, expression)
+            }
             UnaryMessage { symbol } => self.write_child(f, symbol),
             BinaryMessage {
                 operator,

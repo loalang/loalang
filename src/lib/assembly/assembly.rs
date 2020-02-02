@@ -2,6 +2,20 @@ use crate::bytecode::Instruction as BytecodeInstruction;
 use crate::HashMap;
 use std::fmt;
 
+pub struct Cursor {
+    pub end: u64,
+    pub labels: HashMap<Label, u64>,
+}
+
+impl Cursor {
+    pub fn new() -> Cursor {
+        Cursor {
+            end: 0,
+            labels: HashMap::new(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Assembly {
     pub leading_sections: Vec<Section>,
@@ -29,6 +43,13 @@ impl Assembly {
         self
     }
 
+    pub fn last_leading_mut(&mut self) -> &mut Section {
+        if self.leading_sections.is_empty() {
+            self.leading_sections.push(Section::unnamed());
+        }
+        self.leading_sections.last_mut().unwrap()
+    }
+
     pub fn iter(
         &self,
     ) -> std::iter::Chain<std::slice::Iter<'_, Section>, std::slice::Iter<'_, Section>> {
@@ -43,18 +64,21 @@ impl Assembly {
             .chain(self.sections.into_iter())
     }
 
-    fn offsets(&self) -> HashMap<String, u64> {
-        let mut offsets = HashMap::new();
-        let mut offset: u64 = 0;
-
+    pub fn compile(self, cursor: &mut Cursor) -> Vec<BytecodeInstruction> {
         for section in self.iter() {
             if let Some(ref label) = section.label {
-                offsets.insert(label.clone(), offset);
+                cursor.labels.insert(label.clone(), cursor.end);
             }
-            offset += section.instructions.len() as u64;
+            cursor.end += section.instructions.len() as u64;
         }
 
-        offsets
+        let mut instructions = vec![];
+        for section in self.into_iter() {
+            for assembly_instruction in section.instructions {
+                instructions.push(assembly_instruction.compile(&cursor.labels));
+            }
+        }
+        instructions
     }
 }
 
@@ -66,14 +90,7 @@ impl PartialEq for Assembly {
 
 impl Into<Vec<BytecodeInstruction>> for Assembly {
     fn into(self) -> Vec<BytecodeInstruction> {
-        let mut instructions = vec![];
-        let offsets = self.offsets();
-        for section in self.into_iter() {
-            for assembly_instruction in section.instructions {
-                instructions.push(assembly_instruction.compile(&offsets));
-            }
-        }
-        instructions
+        self.compile(&mut Cursor::new())
     }
 }
 
@@ -166,6 +183,7 @@ impl fmt::Debug for Instruction {
         match self.kind {
             Noop => write!(f, "Noop"),
             Halt => write!(f, "Halt"),
+            Panic => write!(f, "Panic"),
             DeclareClass(ref name) => write!(f, "DeclareClass {:?}", name),
             DeclareMethod(ref selector, ref label) => {
                 write!(f, "DeclareMethod {:?} @{}", selector, label)
@@ -176,6 +194,7 @@ impl fmt::Debug for Instruction {
             }
             LoadLocal(index) => write!(f, "LoadLocal {}", index),
             Return(arity) => write!(f, "Return {}", arity),
+            LoadConstString(ref value) => write!(f, "LoadConstString {:?}", value),
         }
     }
 }
@@ -186,12 +205,15 @@ pub type Label = String;
 pub enum InstructionKind {
     Noop,
     Halt,
+    Panic,
     DeclareClass(String),
     DeclareMethod(String, Label),
     LoadObject(Label),
     CallMethod(Label, String, u64, u64),
     LoadLocal(u16),
     Return(u16),
+
+    LoadConstString(String),
 }
 
 impl Instruction {
@@ -213,6 +235,7 @@ impl Instruction {
         match self.kind {
             InstructionKind::Noop => BytecodeInstruction::Noop,
             InstructionKind::Halt => BytecodeInstruction::Halt,
+            InstructionKind::Panic => BytecodeInstruction::Panic,
             InstructionKind::DeclareClass(ref s) => BytecodeInstruction::DeclareClass(s.clone()),
             InstructionKind::DeclareMethod(ref s, ref l) => BytecodeInstruction::DeclareMethod(
                 s.clone(),
@@ -237,6 +260,9 @@ impl Instruction {
             }
             InstructionKind::LoadLocal(i) => BytecodeInstruction::LoadLocal(i),
             InstructionKind::Return(a) => BytecodeInstruction::Return(a),
+            InstructionKind::LoadConstString(ref v) => {
+                BytecodeInstruction::LoadConstString(v.clone())
+            }
         }
     }
 }

@@ -3,28 +3,34 @@ use std::io::{self, Read, Write};
 pub enum Instruction {
     Noop,
     Halt,
+    Panic,
     DeclareClass(String),
     DeclareMethod(String, u64),
     LoadObject(u64),
     CallMethod(u64, String, u64, u64),
     LoadLocal(u16),
     Return(u16),
+    LoadConstString(String),
 }
 
-const NOOP: u8 = 0xf0;
-const HALT: u8 = 0xf1;
-const DECLARE_CLASS: u8 = 0xf2;
-const DECLARE_METHOD: u8 = 0xf3;
-const LOAD_OBJECT: u8 = 0xf4;
-const CALL_METHOD: u8 = 0xf5;
-const LOAD_LOCAL: u8 = 0xf6;
-const RETURN: u8 = 0xf7;
+const NOOP: u8 = 0xa0;
+const HALT: u8 = 0xa1;
+const PANIC: u8 = 0xa2;
+const DECLARE_CLASS: u8 = 0xa3;
+const DECLARE_METHOD: u8 = 0xa4;
+const LOAD_OBJECT: u8 = 0xa5;
+const CALL_METHOD: u8 = 0xa6;
+const LOAD_LOCAL: u8 = 0xa7;
+const RETURN: u8 = 0xa8;
+
+const LOAD_CONST_STRING: u8 = 0xa9;
 
 impl BytecodeEncoding for Instruction {
     fn serialize<W: Write>(&self, mut w: W) -> io::Result<usize> {
         match self {
             Instruction::Noop => NOOP.serialize(w),
             Instruction::Halt => HALT.serialize(w),
+            Instruction::Panic => PANIC.serialize(w),
             Instruction::DeclareClass(ref name) => {
                 Ok(DECLARE_CLASS.serialize(&mut w)? + name.serialize(w)?)
             }
@@ -42,6 +48,9 @@ impl BytecodeEncoding for Instruction {
                 Ok(LOAD_LOCAL.serialize(&mut w)? + index.serialize(w)?)
             }
             Instruction::Return(index) => Ok(RETURN.serialize(&mut w)? + index.serialize(w)?),
+            Instruction::LoadConstString(value) => {
+                Ok(LOAD_CONST_STRING.serialize(&mut w)? + value.serialize(w)?)
+            }
         }
     }
 
@@ -53,20 +62,22 @@ impl BytecodeEncoding for Instruction {
         match opcode {
             [NOOP] => Ok(Instruction::Noop),
             [HALT] => Ok(Instruction::Halt),
-            [DECLARE_CLASS] => Ok(Instruction::DeclareClass(BytecodeEncoding::deserialize(r)?)),
+            [PANIC] => Ok(Instruction::Panic),
+            [DECLARE_CLASS] => Ok(Instruction::DeclareClass(r.deserialize()?)),
             [DECLARE_METHOD] => Ok(Instruction::DeclareMethod(
-                BytecodeEncoding::deserialize(&mut r)?,
-                BytecodeEncoding::deserialize(r)?,
+                r.deserialize()?,
+                r.deserialize()?,
             )),
-            [LOAD_OBJECT] => Ok(Instruction::LoadObject(BytecodeEncoding::deserialize(r)?)),
+            [LOAD_OBJECT] => Ok(Instruction::LoadObject(r.deserialize()?)),
             [CALL_METHOD] => Ok(Instruction::CallMethod(
-                BytecodeEncoding::deserialize(&mut r)?,
-                BytecodeEncoding::deserialize(&mut r)?,
-                BytecodeEncoding::deserialize(&mut r)?,
-                BytecodeEncoding::deserialize(r)?,
+                r.deserialize()?,
+                r.deserialize()?,
+                r.deserialize()?,
+                r.deserialize()?,
             )),
-            [LOAD_LOCAL] => Ok(Instruction::LoadLocal(BytecodeEncoding::deserialize(r)?)),
-            [RETURN] => Ok(Instruction::Return(BytecodeEncoding::deserialize(r)?)),
+            [LOAD_LOCAL] => Ok(Instruction::LoadLocal(r.deserialize()?)),
+            [RETURN] => Ok(Instruction::Return(r.deserialize()?)),
+            [LOAD_CONST_STRING] => Ok(Instruction::LoadConstString(r.deserialize()?)),
             _ => Err(io::ErrorKind::InvalidInput.into()),
         }
     }
@@ -79,14 +90,11 @@ impl BytecodeEncoding for String {
     }
 
     fn deserialize<R: Read>(mut r: R) -> io::Result<String> {
-        let length: u16 = BytecodeEncoding::deserialize(&mut r)?;
+        let length: u16 = r.deserialize()?;
         let length = length as usize;
-        let mut result = String::with_capacity(length);
-        if r.read_to_string(&mut result)? != length {
-            return Err(io::ErrorKind::UnexpectedEof.into());
-        }
-
-        Ok(result)
+        let mut bytes = vec![0u8; length];
+        r.read_exact(&mut bytes)?;
+        Ok(unsafe { String::from_utf8_unchecked(bytes) })
     }
 }
 
@@ -154,4 +162,20 @@ where
 {
     fn serialize<W: Write>(&self, w: W) -> io::Result<usize>;
     fn deserialize<R: Read>(r: R) -> io::Result<Self>;
+
+    fn rotate(&self) -> io::Result<Self> {
+        let mut buffer = vec![];
+        self.serialize(&mut buffer)?;
+        Ok(Self::deserialize(buffer.as_slice())?)
+    }
+}
+
+pub trait BytecodeEncodingRead<T> {
+    fn deserialize(&mut self) -> io::Result<T>;
+}
+
+impl<R, T> BytecodeEncodingRead<T> for R where R: Read, T: BytecodeEncoding {
+    fn deserialize(&mut self) -> io::Result<T> {
+        T::deserialize(self)
+    }
 }

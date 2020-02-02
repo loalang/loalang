@@ -11,13 +11,13 @@ use crate::*;
 pub type GenerationResult<T> = Result<T, GenerationError>;
 
 pub trait REPLDirectives {
-    fn show_type(type_: Type);
-    fn show_behaviours(type_: Type, types: &Types);
+    fn show_type(&self, type_: Type);
+    fn show_behaviours(&self, type_: Type, types: &Types);
 }
 
 impl REPLDirectives for () {
-    fn show_type(_: Type) {}
-    fn show_behaviours(_: Type, _: &Types) {}
+    fn show_type(&self, _: Type) {}
+    fn show_behaviours(&self, _: Type, _: &Types) {}
 }
 
 pub struct Generator<'a> {
@@ -44,30 +44,53 @@ impl<'a> Generator<'a> {
 
     pub fn generate_all(&mut self) -> GenerationResult<Assembly> {
         let mut assembly = Assembly::new();
-        self.generate_declarations(
-            &mut assembly,
-            &self.analysis.navigator.all_top_level_declarations(),
-        )?;
         for source in self.analysis.navigator.sources() {
-            if let SourceKind::REPLLine = source.kind {
-                self.generate::<()>(&mut assembly, &source.uri)?;
+            if let SourceKind::Module = source.kind {
+                self.generate_source((), &mut assembly, &source.uri)?;
             }
         }
+        for source in self.analysis.navigator.sources() {
+            if let SourceKind::REPLLine = source.kind {
+                self.generate_source((), &mut assembly, &source.uri)?;
+            }
+        }
+        assembly
+            .last_leading_mut()
+            .add_instruction(InstructionKind::Halt);
+
         Ok(assembly)
     }
 
     pub fn generate<D: REPLDirectives>(
         &mut self,
+        directives: D,
+        assembly: &mut Assembly,
+        uri: &URI,
+    ) -> GenerationResult<()> {
+        self.generate_source(directives, assembly, uri)?;
+
+        assembly
+            .last_leading_mut()
+            .add_instruction(InstructionKind::Halt);
+
+        Ok(())
+    }
+
+    fn generate_source<D: REPLDirectives>(
+        &mut self,
+        directives: D,
         assembly: &mut Assembly,
         uri: &URI,
     ) -> GenerationResult<()> {
         let root = self.analysis.navigator.root_of(uri)?;
 
         match root.kind {
-            Module { .. } => self.generate_module(assembly, &root),
-            REPLLine { .. } => self.generate_repl_line::<D>(assembly, &root),
-            _ => Err(invalid_node(&root, "Module or REPLLine expected.")),
+            Module { .. } => self.generate_module(assembly, &root)?,
+            REPLLine { .. } => self.generate_repl_line(directives, assembly, &root)?,
+            _ => return Err(invalid_node(&root, "Module or REPLLine expected.")),
         }
+
+        Ok(())
     }
 
     fn generate_module(&mut self, assembly: &mut Assembly, module: &Node) -> GenerationResult<()> {
@@ -185,13 +208,64 @@ impl<'a> Generator<'a> {
 
     fn generate_expression(
         &mut self,
-        _assembly: &mut Assembly,
+        assembly: &mut Assembly,
         section: &mut Section,
         expression: &Node,
     ) -> GenerationResult<()> {
         match expression.kind {
             SelfExpression(_) => {
                 section.add_instruction(InstructionKind::LoadLocal(self.locals.len() as u16));
+            }
+            StringExpression(_, ref v) => {
+                section.add_instruction(InstructionKind::LoadConstString(v.clone()));
+            }
+            ReferenceExpression { .. } => {
+                let declaration = self
+                    .analysis
+                    .navigator
+                    .find_declaration(expression, DeclarationKind::Value)?;
+                match declaration.kind {
+                    Class { .. } => {
+                        let (qn, _, _) = self.analysis.navigator.qualified_name_of(&declaration)?;
+                        section.add_instruction(InstructionKind::LoadObject(qn));
+                    }
+                    _ => return Err(invalid_node(&declaration, "Expected value declaration.")),
+                }
+            }
+            MessageSendExpression {
+                expression: r,
+                message: _,
+            } => {
+                let behaviour = self
+                    .analysis
+                    .types
+                    .get_behaviour_from_message_send(expression)?;
+
+                let expression = self.analysis.navigator.find_child(expression, r)?;
+                self.generate_expression(assembly, section, &expression)?;
+
+                let qualified_name = match behaviour.receiver_type {
+                    Type::Class(_, class, _) => {
+                        let class = self.analysis.navigator.find_node(class)?;
+                        let (qn, _, _) = self.analysis.navigator.qualified_name_of(&class)?;
+                        qn
+                    }
+                    ref t => t.to_string(),
+                };
+
+                let label = format!("{}#{}", qualified_name, behaviour.selector());
+                let Location {
+                    ref uri,
+                    line,
+                    character,
+                    ..
+                } = expression.span.start;
+                section.add_instruction(InstructionKind::CallMethod(
+                    label,
+                    uri.to_string(),
+                    line as u64,
+                    character as u64,
+                ));
             }
             _ => return Err(invalid_node(expression, "Expected expression.")),
         }
@@ -200,65 +274,71 @@ impl<'a> Generator<'a> {
 
     fn generate_repl_line<D: REPLDirectives>(
         &mut self,
-        _assembly: &mut Assembly,
-        _repl_line: &Node,
+        directives: D,
+        assembly: &mut Assembly,
+        repl_line: &Node,
     ) -> GenerationResult<()> {
-        Ok(())
-        /*
         match repl_line.kind {
             REPLLine { ref statements } => {
-                let mut instructions = Instructions::new();
                 for statement in statements.iter() {
                     let statement = self.analysis.navigator.find_child(repl_line, *statement)?;
-                    instructions.extend(self.generate_repl_statement::<D>(&statement)?);
+                    self.generate_repl_statement(&directives, assembly, &statement)?;
                 }
-                Ok(instructions)
+                Ok(())
             }
             _ => Err(invalid_node(repl_line, "REPLLine expected.")),
         }
-        */
     }
 
-    /*
     fn generate_repl_statement<D: REPLDirectives>(
         &mut self,
+        directives: &D,
+        assembly: &mut Assembly,
         repl_statement: &Node,
-    ) -> GenerationResult {
+    ) -> GenerationResult<()> {
         match repl_statement.kind {
             REPLExpression { expression, .. } => {
                 let expression = self
                     .analysis
                     .navigator
                     .find_child(&repl_statement, expression)?;
-                self.generate_expression(&expression)
+                let mut section = Section::unnamed();
+                self.generate_expression(assembly, &mut section, &expression)?;
+                assembly.add_leading_section(section);
+                Ok(())
             }
             REPLDirective {
                 symbol, expression, ..
             } => {
                 let symbol = self.analysis.navigator.find_child(repl_statement, symbol)?;
-                let expression = self
-                    .analysis
-                    .navigator
-                    .find_child(repl_statement, expression)?;
                 if let syntax::Symbol(ref token) = symbol.kind {
                     match token.lexeme().as_ref() {
                         "t" | "type" => {
+                            let expression = self
+                                .analysis
+                                .navigator
+                                .find_child(repl_statement, expression)?;
                             let type_ = self.analysis.types.get_type_of_expression(&expression);
-                            D::show_type(type_);
+                            directives.show_type(type_);
                         }
                         "b" | "behaviours" => {
+                            let expression = self
+                                .analysis
+                                .navigator
+                                .find_child(repl_statement, expression)?;
                             let type_ = self.analysis.types.get_type_of_expression(&expression);
-                            D::show_behaviours(type_, &self.analysis.types);
+                            directives.show_behaviours(type_, &self.analysis.types);
                         }
                         _ => return Err(invalid_node(&symbol, "Invalid REPL directive.")),
                     }
                 }
-                Ok(vec![].into())
+                Ok(())
             }
-            ImportDirective { .. } => Ok(vec![].into()),
-            _ => self.generate_declarations(&vec![repl_statement.clone()]),
+            ImportDirective { .. } => Ok(()),
+            _ => self.generate_declarations(assembly, &vec![repl_statement.clone()]),
         }
     }
+    /*
 
     fn index_of_local(&self, declaration: &Node) -> Option<u16> {
         self.local_ids
@@ -709,8 +789,7 @@ mod tests {
     use crate::syntax::Parser;
     use crate::*;
 
-    fn assert_generates(input: &str, expected: &str) {
-        let source = Source::test(input);
+    fn assert_generates(source: Arc<Source>, expected: &str) {
         let mut analysis = Analysis::new(Arc::new(
             vec![(source.uri.clone(), Parser::new(source).parse().0)]
                 .into_iter()
@@ -727,11 +806,13 @@ mod tests {
     #[test]
     fn empty_class() {
         assert_generates(
-            r#"
-                namespace N.
+            Source::test(
+                r#"
+                    namespace N.
 
-                class C.
-            "#,
+                    class C.
+                "#,
+            ),
             r#"
                 @N/C
                     DeclareClass "N/C"
@@ -742,13 +823,15 @@ mod tests {
     #[test]
     fn simple_method() {
         assert_generates(
-            r#"
-                namespace N.
+            Source::test(
+                r#"
+                    namespace N.
 
-                class C {
-                    public x => self.
-                }
-            "#,
+                    class C {
+                        public x => self.
+                    }
+                "#,
+            ),
             r#"
                 @N/C
                     DeclareClass "N/C"
@@ -764,17 +847,19 @@ mod tests {
     #[test]
     fn inherited_method() {
         assert_generates(
-            r#"
-                namespace N.
+            Source::test(
+                r#"
+                    namespace N.
 
-                class A {
-                    public x => self.
-                }
+                    class A {
+                        public x => self.
+                    }
 
-                class B {
-                    is A.
-                }
-            "#,
+                    class B {
+                        is A.
+                    }
+                "#,
+            ),
             r#"
                 @N/A
                     DeclareClass "N/A"
@@ -785,6 +870,80 @@ mod tests {
                     DeclareMethod "x" @N/A#x
 
                 @N/A#x
+                    LoadLocal 0
+                    Return 1
+            "#,
+        );
+    }
+
+    #[test]
+    fn constant_string() {
+        assert_generates(
+            Source::test_repl(
+                r#"
+                    "hello"
+                "#,
+            ),
+            r#"
+                LoadConstString "hello"
+                Halt
+            "#,
+        );
+    }
+
+    #[test]
+    fn unary_message() {
+        assert_generates(
+            Source::test_repl(
+                r#"
+                    class A {
+                        public x => self.
+                    }
+
+                    A x.
+                "#,
+            ),
+            r#"
+                @A
+                    DeclareClass "A"
+                    DeclareMethod "x" @A#x
+
+                LoadObject @A
+                CallMethod @A#x "test:" 6 21
+                Halt
+
+                @A#x
+                    LoadLocal 0
+                    Return 1
+            "#,
+        );
+    }
+
+    #[test]
+    fn unary_message_send_to_self() {
+        assert_generates(
+            Source::test(
+                r#"
+                    namespace N.
+
+                    class A {
+                        public x => self y.
+                        public y => self.
+                    }
+                "#,
+            ),
+            r#"
+                @N/A
+                    DeclareClass "N/A"
+                    DeclareMethod "x" @N/A#x
+                    DeclareMethod "y" @N/A#y
+
+                @N/A#x
+                    LoadLocal 0
+                    CallMethod @N/A#y "test:" 5 37
+                    Return 1
+
+                @N/A#y
                     LoadLocal 0
                     Return 1
             "#,

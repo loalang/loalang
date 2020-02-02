@@ -84,6 +84,10 @@ fn main() -> Result<(), clap::Error> {
         .default_value(default_main.as_ref())
         .value_name("MAIN_CLASS");
 
+    let no_stdlib_option = clap::Arg::with_name("no_stdlib")
+        .long("no-stdlib")
+        .help("Don't include the standard library.");
+
     let mut config_file = dirs::config_dir().unwrap();
     config_file.push("loa");
     std::fs::create_dir_all(&config_file).expect("need write permission to config directory");
@@ -96,7 +100,8 @@ fn main() -> Result<(), clap::Error> {
             clap::SubCommand::with_name("server")
                 .about("Starts a Language Server using STDIO. Used by editors to provide an integrated experience for Loa development."),
             clap::SubCommand::with_name("repl")
-                .about("Starts an interactive Read-Eval-Print-Loop that can be used to quickly explore APIs and make quick calculations."),
+                .about("Starts an interactive Read-Eval-Print-Loop that can be used to quickly explore APIs and make quick calculations.")
+                .arg(no_stdlib_option.clone()),
             clap::SubCommand::with_name("build")
                 .about("Builds the current project into a Loa VM bytecode file, that can be executed in many different environments using the Loa VM.")
                 .arg(
@@ -107,9 +112,18 @@ fn main() -> Result<(), clap::Error> {
                         .takes_value(true)
                         .default_value(default_out.as_ref()),
                 )
+                .arg(
+                    clap::Arg::with_name("output_assembly")
+                        .help("Output Loa VM Assembly.")
+                        .long("assembly")
+                        .short("s"),
+                )
+                .arg(no_stdlib_option.clone())
                 .arg(main_class_option.clone()),
             clap::SubCommand::with_name("run")
-                .about("Builds and immediately runs the current project. This is not suitable for a production environment, but handy for quickly running your program.").arg(main_class_option),
+                .about("Builds and immediately runs the current project. This is not suitable for a production environment, but handy for quickly running your program.")
+                .arg(no_stdlib_option)
+                .arg(main_class_option),
             clap::SubCommand::with_name("exec")
                 .about("Executes a bytecode file using the Loa VM.")
                 .arg(
@@ -229,9 +243,9 @@ fn main() -> Result<(), clap::Error> {
     }
 
     match cli.subcommand() {
-        ("repl", _) => {
+        ("repl", Some(matches)) => {
             log_to_file();
-            repl::repl()
+            repl::repl(!matches.is_present("no_stdlib"))
         }
 
         ("server", _) => {
@@ -276,32 +290,53 @@ fn main() -> Result<(), clap::Error> {
 
         ("run", Some(matches)) => {
             log_to_stderr();
-            let instructions = build(matches.value_of("main").unwrap());
+            let assembly = build(
+                matches.value_of("main").unwrap(),
+                matches.is_present("no_stdlib"),
+            );
 
-            if let Some(result) = loa::vm::VM::new().eval_pop::<ServerRuntime>(instructions) {
+            if let Some(result) = loa::vm::VM::new().eval_pop::<ServerRuntime>(assembly.into()) {
                 println!("{}", result);
             }
         }
 
         ("build", Some(matches)) => {
             log_to_stderr();
-            let instructions = build(matches.value_of("main").unwrap());
+            let output_assembly = matches.is_present("output_assembly");
+            let assembly = build(
+                matches.value_of("main").unwrap(),
+                matches.is_present("no_stdlib"),
+            );
 
-            match matches.value_of("out") {
-                None => {
-                    instructions.serialize(stdout()).unwrap();
-                }
+            let mut write: Box<dyn std::io::Write> = match matches.value_of("out") {
+                None | Some("") => Box::new(stdout()),
                 Some(outfile) => {
-                    let mut outfile_sink = std::fs::OpenOptions::new()
+                    let mut outfile = outfile.to_string();
+
+                    if output_assembly && outfile == default_out {
+                        outfile.pop();
+                        outfile.pop();
+                        outfile.pop();
+                        outfile.push_str("asm");
+                    }
+
+                    println!("{} {}", "Building".bright_black(), outfile.green());
+
+                    let outfile_sink = std::fs::OpenOptions::new()
                         .create(true)
                         .write(true)
                         .open(outfile)
                         .unwrap();
 
-                    instructions.serialize(&mut outfile_sink).unwrap();
-
-                    println!("{} {}", "Built".bright_black(), outfile.green());
+                    Box::new(outfile_sink)
                 }
+            };
+
+            if output_assembly {
+                write.write(format!("{:?}", assembly).as_bytes())?;
+            } else {
+                let instructions: Vec<Instruction> = assembly.into();
+                instructions.serialize(write)?;
             }
         }
 
@@ -311,7 +346,7 @@ fn main() -> Result<(), clap::Error> {
                 let port_str = matches.value_of("port").unwrap();
                 match u16::from_str(port_str) {
                     Ok(port) => {
-                        let analysis = parse_and_report(None);
+                        let analysis = parse_and_report(None, true);
                         docs::serve(port, analysis.into())
                     }
                     Err(_) => eprintln!("Invalid port: {}", port_str),
@@ -319,7 +354,7 @@ fn main() -> Result<(), clap::Error> {
             }
             ("inspect", Some(matches)) => {
                 log_to_file();
-                let analysis = parse_and_report(None);
+                let analysis = parse_and_report(None, true);
                 let lockfile = ManifestFile::new(".pkg.lock");
                 let pkgfile = ManifestFile::new("pkg.yml");
                 let mut docs: Docs = analysis.into();
@@ -347,7 +382,7 @@ fn main() -> Result<(), clap::Error> {
         },
 
         ("pkg", Some(matches)) => {
-            let (_, analysis) = parse(None);
+            let (_, analysis) = parse(None, true);
 
             let api = pkg::APIClient::new(
                 matches.value_of("server").unwrap(),
@@ -429,8 +464,15 @@ fn main() -> Result<(), clap::Error> {
     Ok(())
 }
 
-fn parse(main: Option<&str>) -> (Vec<loa::Diagnostic>, loa::semantics::Analysis) {
-    let mut sources = loa::Source::stdlib().expect("failed to load stdlib");
+fn parse(
+    main: Option<&str>,
+    load_stdlib: bool,
+) -> (Vec<loa::Diagnostic>, loa::semantics::Analysis) {
+    let mut sources = if load_stdlib {
+        vec![]
+    } else {
+        loa::Source::stdlib().expect("failed to load stdlib")
+    };
     sources.extend(loa::Source::files("**/*.loa").expect("failed to read in sources"));
 
     if let Some(main) = main {
@@ -454,8 +496,8 @@ fn parse(main: Option<&str>) -> (Vec<loa::Diagnostic>, loa::semantics::Analysis)
     (diagnostics, analysis)
 }
 
-fn parse_and_report(main: Option<&str>) -> loa::semantics::Analysis {
-    let (diagnostics, analysis) = parse(main);
+fn parse_and_report(main: Option<&str>, load_stdlib: bool) -> loa::semantics::Analysis {
+    let (diagnostics, analysis) = parse(main, load_stdlib);
 
     if loa::Diagnostic::failed(&diagnostics) {
         <PrettyReporter as loa::Reporter>::report(diagnostics, &analysis.navigator);
@@ -466,8 +508,8 @@ fn parse_and_report(main: Option<&str>) -> loa::semantics::Analysis {
     analysis
 }
 
-fn build(main: &str) -> Vec<Instruction> {
-    let mut analysis = parse_and_report(Some(main));
+fn build(main: &str, load_stdlib: bool) -> loa::assembly::Assembly {
+    let mut analysis = parse_and_report(Some(main), load_stdlib);
 
     let mut generator = loa::generation::Generator::new(&mut analysis);
     match generator.generate_all() {
@@ -475,6 +517,6 @@ fn build(main: &str) -> Vec<Instruction> {
             eprintln!("{:?}", err);
             exit(1);
         }
-        Ok(i) => i.into(),
+        Ok(i) => i,
     }
 }

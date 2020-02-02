@@ -47,6 +47,10 @@ impl VM {
         }
     }
 
+    pub fn stack(&self) -> &Vec<Arc<Object>> {
+        &self.stack
+    }
+
     /*
     #[inline]
     fn raw_class_ptr(&self, id: Id) -> VMResult<*const Class> {
@@ -65,6 +69,20 @@ impl VM {
 
                 Instruction::Halt => {
                     break;
+                }
+
+                Instruction::Panic => {
+                    return VMResult::Panic(
+                        format!(
+                            "{:?}",
+                            self.stack
+                                .pop()
+                                .as_ref()
+                                .map(ToString::to_string)
+                                .unwrap_or(String::new())
+                        ),
+                        self.call_stack.clone(),
+                    )
                 }
 
                 Instruction::DeclareClass(ref name) => {
@@ -129,12 +147,16 @@ impl VM {
                 Instruction::Return(arity) => {
                     let result = unwrap!(self, self.pop());
 
-                    for _ in 0..arity - 1 {
+                    for _ in 0..arity {
                         unwrap!(self, self.pop());
                     }
 
                     self.push(result);
                     self.pc = expect!(self, self.call_stack.ret(), "empty call stack");
+                }
+
+                Instruction::LoadConstString(ref value) => {
+                    self.stack.push(Object::box_string(value.clone()))
                 }
             }
             /*
@@ -436,73 +458,77 @@ impl VM {
 mod tests {
     use super::*;
     use crate::assembly::*;
+    use crate::bytecode::{BytecodeEncoding, Instruction as BytecodeInstruction};
+
+    fn assert_evaluates(input: &str) {
+        let assembly = Parser::new().parse(input).unwrap();
+        let mut vm = VM::new();
+        let instructions: Vec<BytecodeInstruction> = assembly.into();
+        vm.eval::<()>(instructions.rotate().unwrap());
+    }
+
+    fn assert_evaluates_to(input: &str, expected: &str) {
+        let assembly = Parser::new().parse(input).unwrap();
+        let mut vm = VM::new();
+        let instructions: Vec<BytecodeInstruction> = assembly.into();
+        let result = vm.eval_pop::<()>(instructions.rotate().unwrap()).unwrap();
+
+        assert_eq!(result.to_string(), expected);
+        assert_eq!(vm.stack().len(), 0, "stack should be empty");
+    }
 
     #[test]
     fn noops_and_halt() {
-        let assembly = Parser::new()
-            .parse(
-                r#"
-                    Noop
-                    Noop
-                    Halt
-                "#,
-            )
-            .unwrap();
-        let mut vm = VM::new();
-        vm.eval::<()>(assembly.into());
+        assert_evaluates(
+            r#"
+                Noop
+                Noop
+                Halt
+            "#,
+        );
     }
 
     #[test]
     fn declare_and_instantiate_class() {
-        let assembly = Parser::new()
-            .parse(
-                r#"
-                @SomeClass
-                    DeclareClass "SomeClass"
-                    DeclareMethod "someMethod" @SomeClass#someMethod
+        assert_evaluates_to(
+            r#"
+            @SomeClass
+                DeclareClass "SomeClass"
+                DeclareMethod "someMethod" @SomeClass#someMethod
 
-                LoadObject @SomeClass
-                CallMethod @SomeClass#someMethod "call site" 1 1
-                Halt
+            LoadObject @SomeClass
+            CallMethod @SomeClass#someMethod "call site" 1 1
+            Halt
 
-                @SomeClass#someMethod
-                    LoadLocal 0
-                    Return 1
-                "#,
-            )
-            .unwrap();
-        let mut vm = VM::new();
-        let result = vm.eval_pop::<()>(assembly.into()).unwrap();
-
-        assert_eq!(result.to_string(), "a SomeClass");
+            @SomeClass#someMethod
+                LoadLocal 0
+                Return 1
+            "#,
+            "a SomeClass",
+        );
     }
 
     #[test]
     fn inherited_method() {
-        let assembly = Parser::new()
-            .parse(
-                r#"
-                @B
-                    DeclareClass "B"
-                    DeclareMethod "a" @A#a
+        assert_evaluates_to(
+            r#"
+            @B
+                DeclareClass "B"
+                DeclareMethod "a" @A#a
 
-                @A
-                    DeclareClass "A"
-                    DeclareMethod "a" @A#a
+            @A
+                DeclareClass "A"
+                DeclareMethod "a" @A#a
 
-                LoadObject @B
-                CallMethod @A#a "call site" 1 1
-                Halt
+            LoadObject @B
+            CallMethod @A#a "call site" 1 1
+            Halt
 
-                @A#a
-                    LoadLocal 0
-                    Return 1
-                "#,
-            )
-            .unwrap();
-        let mut vm = VM::new();
-        let result = vm.eval_pop::<()>(assembly.into()).unwrap();
-
-        assert_eq!(result.to_string(), "a B");
+            @A#a
+                LoadLocal 0
+                Return 1
+            "#,
+            "a B",
+        );
     }
 }

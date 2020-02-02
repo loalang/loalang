@@ -202,7 +202,8 @@ impl Node {
             | StringExpression(_, _)
             | CharacterExpression(_, _)
             | IntegerExpression(_, _)
-            | FloatExpression(_, _) => true,
+            | FloatExpression(_, _)
+            | PanicExpression { .. } => true,
             _ => false,
         }
     }
@@ -602,7 +603,8 @@ pub enum NodeKind {
     ///   CharacterExpression |
     ///   IntegerExpression |
     ///   FloatExpression |
-    ///   SymbolExpression
+    ///   SymbolExpression |
+    ///   PanicExpression
     /// ```
 
     /// ```bnf
@@ -653,6 +655,16 @@ pub enum NodeKind {
     ///   Message
     /// ```
     MessageSendExpression { expression: Id, message: Id },
+
+    /// ```bnf
+    /// PanicExpression ::=
+    ///   PANIC_KEYWORD
+    ///   Expression
+    /// ```
+    PanicExpression {
+        panic_keyword: Token,
+        expression: Id,
+    },
 
     /// ```bnf
     /// Message ::=
@@ -874,6 +886,10 @@ impl NodeKind {
             ReferenceTypeExpression { .. } => vec![],
             ReferenceExpression { .. } => vec![],
 
+            PanicExpression {
+                ref panic_keyword, ..
+            } => vec![Some(panic_keyword)],
+
             IsDirective {
                 ref is_keyword,
                 ref period,
@@ -1094,6 +1110,9 @@ impl NodeKind {
             } => {
                 children.push(expression);
                 children.push(message);
+            }
+            PanicExpression { expression, .. } => {
+                children.push(expression);
             }
             StringExpression(_, _) => {}
             CharacterExpression(_, _) => {}

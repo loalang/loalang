@@ -176,8 +176,13 @@ impl Parser {
             return Id::NULL;
         }
         let symbol = self.parse_symbol(self.child(&mut builder));
-        let expression = self.parse_expression(self.child(&mut builder));
+
+        let mut expression = Id::NULL;
         let mut period = None;
+
+        if !sees!(self, EOF | Period) {
+            expression = self.parse_expression(self.child(&mut builder));
+        }
 
         if sees!(self, Period) {
             period = Some(self.next());
@@ -1159,6 +1164,9 @@ impl Parser {
     }
 
     fn parse_leaf_expression(&mut self, builder: NodeBuilder) -> Id {
+        if sees!(self, PanicKeyword) {
+            return self.parse_panic_expression(builder);
+        }
         if sees!(self, SimpleString(_)) {
             return self.parse_string_expression(builder);
         }
@@ -1314,6 +1322,19 @@ impl Parser {
             self.syntax_error("Expected symbol.");
             Id::NULL
         }
+    }
+
+    fn parse_panic_expression(&mut self, mut builder: NodeBuilder) -> Id {
+        let panic_keyword = self.next();
+        let expression = self.parse_expression(self.child(&mut builder));
+
+        self.finalize(
+            builder,
+            PanicExpression {
+                panic_keyword,
+                expression,
+            },
+        )
     }
 
     fn parse_unary_message_send(&mut self, mut builder: NodeBuilder, receiver: Id) -> Id {

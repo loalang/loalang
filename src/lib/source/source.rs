@@ -84,6 +84,11 @@ impl Source {
     pub fn test(code: &str) -> Arc<Source> {
         Self::new(SourceKind::Module, URI::Test, code.into())
     }
+
+    #[cfg(test)]
+    pub fn test_repl(code: &str) -> Arc<Source> {
+        Self::new(SourceKind::REPLLine, URI::Test, code.into())
+    }
 }
 
 impl fmt::Display for Source {

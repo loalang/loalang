@@ -331,6 +331,7 @@ fn next_token(
                 "partial" => kind = TokenKind::PartialKeyword,
                 "let" => kind = TokenKind::LetKeyword,
                 "native" => kind = TokenKind::NativeKeyword,
+                "panic" => kind = TokenKind::PanicKeyword,
 
                 lexeme => kind = TokenKind::SimpleSymbol(lexeme.into()),
             }

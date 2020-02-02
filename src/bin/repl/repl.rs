@@ -1,7 +1,7 @@
 use crate::*;
 use colored::{Color, Colorize};
-use loa::assembly::Assembly;
-use loa::generation::{Generator, REPLDirectives};
+use loa::assembly::{Assembly, Cursor};
+use loa::generation::REPLDirectives;
 use loa::semantics::Type;
 use loa::server::Server;
 use loa::syntax::{characters_to_string, string_to_characters, tokenize, TokenKind};
@@ -137,7 +137,8 @@ pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
                 | TokenKind::ExportKeyword
                 | TokenKind::PartialKeyword
                 | TokenKind::LetKeyword
-                | TokenKind::NativeKeyword => lexeme.blue().to_string(),
+                | TokenKind::NativeKeyword
+                | TokenKind::PanicKeyword => lexeme.blue().to_string(),
                 TokenKind::Plus => lexeme,
                 TokenKind::Asterisk => lexeme,
                 TokenKind::Underscore => lexeme,
@@ -186,14 +187,17 @@ pub struct REPL {
     editor: Editor<EditorHelper>,
     server: Arc<Mutex<Server>>,
     vm: VM,
+    cursor: Cursor,
 }
 
 impl REPL {
-    pub fn new<R: Reporter>() -> REPL {
+    pub fn new<R: Reporter>(use_stdlib: bool) -> REPL {
         let mut server = Server::new();
 
         let mut sources = Source::files("**/*.loa").unwrap_or(vec![]);
-        sources.extend(Source::stdlib().expect("failed to load stdlib"));
+        if use_stdlib {
+            sources.extend(Source::stdlib().expect("failed to load stdlib"));
+        }
         server.add_all(sources.clone());
 
         let mut failure = false;
@@ -205,6 +209,7 @@ impl REPL {
         }
 
         let mut vm = VM::new();
+        let mut cursor = Cursor::new();
 
         if failure {
             server = Server::new();
@@ -212,7 +217,7 @@ impl REPL {
             match server.generator().generate_all() {
                 Err(err) => eprintln!("{:?}", err),
                 Ok(i) => {
-                    vm.eval::<ServerRuntime>(i.into());
+                    vm.eval::<ServerRuntime>(i.compile(&mut cursor));
                 }
             };
         }
@@ -227,7 +232,12 @@ impl REPL {
             uri: URI::REPLLine(0),
         }));
 
-        REPL { editor, server, vm }
+        REPL {
+            editor,
+            server,
+            vm,
+            cursor,
+        }
     }
 
     pub fn start<R: Reporter>(&mut self) {
@@ -295,20 +305,26 @@ impl REPL {
                 .unwrap_or(false);
 
             let mut assembly = Assembly::new();
-            match Generator::new(&mut server.analysis)
-                .generate::<REPLDirectivesImpl>(&mut assembly, &uri)
-            {
+            match server.generator().generate(
+                REPLDirectivesImpl { vm: &self.vm },
+                &mut assembly,
+                &uri,
+            ) {
                 Err(err) => {
                     server.remove(uri);
                     println!("{:?}", err)
                 }
                 Ok(_) => {
                     if is_expression {
-                        if let Some(o) = self.vm.eval_pop::<ServerRuntime>(assembly.into()) {
+                        if let Some(o) = self
+                            .vm
+                            .eval_pop::<ServerRuntime>(assembly.compile(&mut self.cursor))
+                        {
                             println!("{}", o);
                         }
                     } else {
-                        self.vm.eval::<ServerRuntime>(assembly.into());
+                        self.vm
+                            .eval::<ServerRuntime>(assembly.compile(&mut self.cursor));
                     }
                 }
             }
@@ -316,14 +332,17 @@ impl REPL {
     }
 }
 
-struct REPLDirectivesImpl;
+struct REPLDirectivesImpl<'a> {
+    #[allow(unused)]
+    vm: &'a VM,
+}
 
-impl REPLDirectives for REPLDirectivesImpl {
-    fn show_type(type_: Type) {
+impl<'a> REPLDirectives for REPLDirectivesImpl<'a> {
+    fn show_type(&self, type_: Type) {
         println!("{}", type_.to_string().blue());
     }
 
-    fn show_behaviours(type_: Type, types: &semantics::Types) {
+    fn show_behaviours(&self, type_: Type, types: &semantics::Types) {
         for b in types.get_behaviours(&type_) {
             println!("{}", b.to_string().magenta());
         }
