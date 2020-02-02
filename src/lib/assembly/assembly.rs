@@ -1,5 +1,6 @@
 use crate::bytecode::Instruction as BytecodeInstruction;
 use crate::HashMap;
+use crate::*;
 use std::fmt;
 
 pub struct Cursor {
@@ -194,7 +195,44 @@ impl fmt::Debug for Instruction {
             }
             LoadLocal(index) => write!(f, "LoadLocal {}", index),
             Return(arity) => write!(f, "Return {}", arity),
+
+            MarkClassString(ref label) => write!(f, "MarkClassString @{}", label),
+            MarkClassCharacter(ref label) => write!(f, "MarkClassCharacter @{}", label),
+            MarkClassSymbol(ref label) => write!(f, "MarkClassSymbol @{}", label),
+            MarkClassU8(ref label) => write!(f, "MarkClassU8 @{}", label),
+            MarkClassU16(ref label) => write!(f, "MarkClassU16 @{}", label),
+            MarkClassU32(ref label) => write!(f, "MarkClassU32 @{}", label),
+            MarkClassU64(ref label) => write!(f, "MarkClassU64 @{}", label),
+            MarkClassU128(ref label) => write!(f, "MarkClassU128 @{}", label),
+            MarkClassUBig(ref label) => write!(f, "MarkClassUBig @{}", label),
+            MarkClassI8(ref label) => write!(f, "MarkClassI8 @{}", label),
+            MarkClassI16(ref label) => write!(f, "MarkClassI16 @{}", label),
+            MarkClassI32(ref label) => write!(f, "MarkClassI32 @{}", label),
+            MarkClassI64(ref label) => write!(f, "MarkClassI64 @{}", label),
+            MarkClassI128(ref label) => write!(f, "MarkClassI128 @{}", label),
+            MarkClassIBig(ref label) => write!(f, "MarkClassIBig @{}", label),
+            MarkClassF32(ref label) => write!(f, "MarkClassF32 @{}", label),
+            MarkClassF64(ref label) => write!(f, "MarkClassF64 @{}", label),
+            MarkClassFBig(ref label) => write!(f, "MarkClassFBig @{}", label),
+
             LoadConstString(ref value) => write!(f, "LoadConstString {:?}", value),
+            LoadConstCharacter(ref value) => write!(f, "LoadConstCharacter {:?}", value),
+            LoadConstSymbol(ref value) => write!(f, "LoadConstSymbol {:?}", value),
+            LoadConstU8(ref value) => write!(f, "LoadConstU8 {:?}", value),
+            LoadConstU16(ref value) => write!(f, "LoadConstU16 {:?}", value),
+            LoadConstU32(ref value) => write!(f, "LoadConstU32 {:?}", value),
+            LoadConstU64(ref value) => write!(f, "LoadConstU64 {:?}", value),
+            LoadConstU128(ref value) => write!(f, "LoadConstU128 {:?}", value),
+            LoadConstUBig(ref value) => write!(f, "LoadConstUBig {:?}", value),
+            LoadConstI8(ref value) => write!(f, "LoadConstI8 {:?}", value),
+            LoadConstI16(ref value) => write!(f, "LoadConstI16 {:?}", value),
+            LoadConstI32(ref value) => write!(f, "LoadConstI32 {:?}", value),
+            LoadConstI64(ref value) => write!(f, "LoadConstI64 {:?}", value),
+            LoadConstI128(ref value) => write!(f, "LoadConstI128 {:?}", value),
+            LoadConstIBig(ref value) => write!(f, "LoadConstIBig {:?}", value),
+            LoadConstF32(ref value) => write!(f, "LoadConstF32 {:?}", value),
+            LoadConstF64(ref value) => write!(f, "LoadConstF64 {:?}", value),
+            LoadConstFBig(ref value) => write!(f, "LoadConstFBig {:?}", value),
         }
     }
 }
@@ -213,7 +251,43 @@ pub enum InstructionKind {
     LoadLocal(u16),
     Return(u16),
 
+    MarkClassString(Label),
+    MarkClassCharacter(Label),
+    MarkClassSymbol(Label),
+    MarkClassU8(Label),
+    MarkClassU16(Label),
+    MarkClassU32(Label),
+    MarkClassU64(Label),
+    MarkClassU128(Label),
+    MarkClassUBig(Label),
+    MarkClassI8(Label),
+    MarkClassI16(Label),
+    MarkClassI32(Label),
+    MarkClassI64(Label),
+    MarkClassI128(Label),
+    MarkClassIBig(Label),
+    MarkClassF32(Label),
+    MarkClassF64(Label),
+    MarkClassFBig(Label),
+
     LoadConstString(String),
+    LoadConstCharacter(u16),
+    LoadConstSymbol(String),
+    LoadConstU8(u8),
+    LoadConstU16(u16),
+    LoadConstU32(u32),
+    LoadConstU64(u64),
+    LoadConstU128(u128),
+    LoadConstUBig(BigUint),
+    LoadConstI8(i8),
+    LoadConstI16(i16),
+    LoadConstI32(i32),
+    LoadConstI64(i64),
+    LoadConstI128(i128),
+    LoadConstIBig(BigInt),
+    LoadConstF32(f32),
+    LoadConstF64(f64),
+    LoadConstFBig(BigFraction),
 }
 
 impl Instruction {
@@ -232,37 +306,109 @@ impl Instruction {
     }
 
     pub fn compile(&self, offsets: &HashMap<String, u64>) -> BytecodeInstruction {
+        macro_rules! label {
+            ($label:expr, $expected:expr) => {
+                *offsets
+                    .get($label)
+                    .expect(format!("{} {} not found", $expected, $label).as_ref())
+            };
+        }
         match self.kind {
             InstructionKind::Noop => BytecodeInstruction::Noop,
             InstructionKind::Halt => BytecodeInstruction::Halt,
             InstructionKind::Panic => BytecodeInstruction::Panic,
             InstructionKind::DeclareClass(ref s) => BytecodeInstruction::DeclareClass(s.clone()),
-            InstructionKind::DeclareMethod(ref s, ref l) => BytecodeInstruction::DeclareMethod(
-                s.clone(),
-                *offsets
-                    .get(l)
-                    .expect(format!("method {} not found", l).as_ref()),
-            ),
-            InstructionKind::LoadObject(ref l) => BytecodeInstruction::LoadObject(
-                *offsets
-                    .get(l)
-                    .expect(format!("class {} not found", l).as_ref()),
-            ),
+            InstructionKind::DeclareMethod(ref s, ref l) => {
+                BytecodeInstruction::DeclareMethod(s.clone(), label!(l, "method"))
+            }
+            InstructionKind::LoadObject(ref l) => {
+                BytecodeInstruction::LoadObject(label!(l, "class"))
+            }
             InstructionKind::CallMethod(ref l, ref uri, line, character) => {
-                BytecodeInstruction::CallMethod(
-                    *offsets
-                        .get(l)
-                        .expect(format!("method {} not found", l).as_ref()),
-                    uri.clone(),
-                    line,
-                    character,
-                )
+                BytecodeInstruction::CallMethod(label!(l, "method"), uri.clone(), line, character)
             }
             InstructionKind::LoadLocal(i) => BytecodeInstruction::LoadLocal(i),
             InstructionKind::Return(a) => BytecodeInstruction::Return(a),
+
+            InstructionKind::MarkClassString(ref l) => {
+                BytecodeInstruction::MarkClassString(label!(l, "class"))
+            }
+            InstructionKind::MarkClassCharacter(ref l) => {
+                BytecodeInstruction::MarkClassCharacter(label!(l, "class"))
+            }
+            InstructionKind::MarkClassSymbol(ref l) => {
+                BytecodeInstruction::MarkClassSymbol(label!(l, "class"))
+            }
+            InstructionKind::MarkClassU8(ref l) => {
+                BytecodeInstruction::MarkClassU8(label!(l, "class"))
+            }
+            InstructionKind::MarkClassU16(ref l) => {
+                BytecodeInstruction::MarkClassU16(label!(l, "class"))
+            }
+            InstructionKind::MarkClassU32(ref l) => {
+                BytecodeInstruction::MarkClassU32(label!(l, "class"))
+            }
+            InstructionKind::MarkClassU64(ref l) => {
+                BytecodeInstruction::MarkClassU64(label!(l, "class"))
+            }
+            InstructionKind::MarkClassU128(ref l) => {
+                BytecodeInstruction::MarkClassU128(label!(l, "class"))
+            }
+            InstructionKind::MarkClassUBig(ref l) => {
+                BytecodeInstruction::MarkClassUBig(label!(l, "class"))
+            }
+            InstructionKind::MarkClassI8(ref l) => {
+                BytecodeInstruction::MarkClassI8(label!(l, "class"))
+            }
+            InstructionKind::MarkClassI16(ref l) => {
+                BytecodeInstruction::MarkClassI16(label!(l, "class"))
+            }
+            InstructionKind::MarkClassI32(ref l) => {
+                BytecodeInstruction::MarkClassI32(label!(l, "class"))
+            }
+            InstructionKind::MarkClassI64(ref l) => {
+                BytecodeInstruction::MarkClassI64(label!(l, "class"))
+            }
+            InstructionKind::MarkClassI128(ref l) => {
+                BytecodeInstruction::MarkClassI128(label!(l, "class"))
+            }
+            InstructionKind::MarkClassIBig(ref l) => {
+                BytecodeInstruction::MarkClassIBig(label!(l, "class"))
+            }
+            InstructionKind::MarkClassF32(ref l) => {
+                BytecodeInstruction::MarkClassF32(label!(l, "class"))
+            }
+            InstructionKind::MarkClassF64(ref l) => {
+                BytecodeInstruction::MarkClassF64(label!(l, "class"))
+            }
+            InstructionKind::MarkClassFBig(ref l) => {
+                BytecodeInstruction::MarkClassFBig(label!(l, "class"))
+            }
+
             InstructionKind::LoadConstString(ref v) => {
                 BytecodeInstruction::LoadConstString(v.clone())
             }
+            InstructionKind::LoadConstCharacter(ref v) => {
+                BytecodeInstruction::LoadConstCharacter(v.clone())
+            }
+            InstructionKind::LoadConstSymbol(ref v) => {
+                BytecodeInstruction::LoadConstSymbol(v.clone())
+            }
+            InstructionKind::LoadConstU8(ref v) => BytecodeInstruction::LoadConstU8(v.clone()),
+            InstructionKind::LoadConstU16(ref v) => BytecodeInstruction::LoadConstU16(v.clone()),
+            InstructionKind::LoadConstU32(ref v) => BytecodeInstruction::LoadConstU32(v.clone()),
+            InstructionKind::LoadConstU64(ref v) => BytecodeInstruction::LoadConstU64(v.clone()),
+            InstructionKind::LoadConstU128(ref v) => BytecodeInstruction::LoadConstU128(v.clone()),
+            InstructionKind::LoadConstUBig(ref v) => BytecodeInstruction::LoadConstUBig(v.clone()),
+            InstructionKind::LoadConstI8(ref v) => BytecodeInstruction::LoadConstI8(v.clone()),
+            InstructionKind::LoadConstI16(ref v) => BytecodeInstruction::LoadConstI16(v.clone()),
+            InstructionKind::LoadConstI32(ref v) => BytecodeInstruction::LoadConstI32(v.clone()),
+            InstructionKind::LoadConstI64(ref v) => BytecodeInstruction::LoadConstI64(v.clone()),
+            InstructionKind::LoadConstI128(ref v) => BytecodeInstruction::LoadConstI128(v.clone()),
+            InstructionKind::LoadConstIBig(ref v) => BytecodeInstruction::LoadConstIBig(v.clone()),
+            InstructionKind::LoadConstF32(ref v) => BytecodeInstruction::LoadConstF32(v.clone()),
+            InstructionKind::LoadConstF64(ref v) => BytecodeInstruction::LoadConstF64(v.clone()),
+            InstructionKind::LoadConstFBig(ref v) => BytecodeInstruction::LoadConstFBig(v.clone()),
         }
     }
 }

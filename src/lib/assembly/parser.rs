@@ -1,5 +1,5 @@
 use crate::assembly::*;
-use std::num::ParseIntError;
+use std::num::{ParseFloatError, ParseIntError};
 
 pub struct Parser {
     indent_size: usize,
@@ -130,8 +130,8 @@ impl Parser {
                 code.drain(.."CallMethod".len());
                 let label = self.parse_label(code)?;
                 let uri = self.parse_string(code)?;
-                let line = self.parse_u64(code)?;
-                let character = self.parse_u64(code)?;
+                let line = self.parse_from_str(code)?;
+                let character = self.parse_from_str(code)?;
                 section.instructions.push(Instruction {
                     leading_comment,
                     kind: InstructionKind::CallMethod(label, uri, line, character),
@@ -140,7 +140,7 @@ impl Parser {
             // LoadLocal <u16>
             else if code.starts_with("LoadLocal") {
                 code.drain(.."LoadLocal".len());
-                let index = self.parse_u16(code)?;
+                let index = self.parse_from_str(code)?;
                 section.instructions.push(Instruction {
                     leading_comment,
                     kind: InstructionKind::LoadLocal(index),
@@ -149,20 +149,351 @@ impl Parser {
             // Return <u16>
             else if code.starts_with("Return") {
                 code.drain(.."Return".len());
-                let arity = self.parse_u16(code)?;
+                let arity = self.parse_from_str(code)?;
                 section.instructions.push(Instruction {
                     leading_comment,
                     kind: InstructionKind::Return(arity),
                 });
             }
-            // LoadConstString <string>
-            else if code.starts_with("LoadConstString") {
-                code.drain(.."LoadConstString".len());
-                let value = self.parse_string(code)?;
-                section.instructions.push(Instruction {
-                    leading_comment,
-                    kind: InstructionKind::LoadConstString(value),
-                });
+            // MarkClass..
+            else if code.starts_with("MarkClass") {
+                code.drain(.."MarkClass".len());
+                // ..String <label>
+                if code.starts_with("String") {
+                    code.drain(.."String".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassString(label),
+                    });
+                }
+                // ..Character <label>
+                else if code.starts_with("Character") {
+                    code.drain(.."Character".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassCharacter(label),
+                    });
+                }
+                // ..Symbol <label>
+                else if code.starts_with("Symbol") {
+                    code.drain(.."Symbol".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassSymbol(label),
+                    });
+                }
+                // ..U8 <label>
+                else if code.starts_with("U8") {
+                    code.drain(.."U8".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassU8(label),
+                    });
+                }
+                // ..U16 <label>
+                else if code.starts_with("U16") {
+                    code.drain(.."U16".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassU16(label),
+                    });
+                }
+                // ..U32 <label>
+                else if code.starts_with("U32") {
+                    code.drain(.."U32".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassU32(label),
+                    });
+                }
+                // ..u64 <label>
+                else if code.starts_with("U64") {
+                    code.drain(.."U64".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassU64(label),
+                    });
+                }
+                // ..U128 <label>
+                else if code.starts_with("U128") {
+                    code.drain(.."U128".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassU128(label),
+                    });
+                }
+                // ..UBig <label>
+                else if code.starts_with("UBig") {
+                    code.drain(.."UBig".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassUBig(label),
+                    });
+                }
+                // ..i8 <label>
+                else if code.starts_with("I8") {
+                    code.drain(.."I8".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassI8(label),
+                    });
+                }
+                // ..I16 <label>
+                else if code.starts_with("I16") {
+                    code.drain(.."I16".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassI16(label),
+                    });
+                }
+                // ..I32 <label>
+                else if code.starts_with("I32") {
+                    code.drain(.."I32".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassI32(label),
+                    });
+                }
+                // ..I64 <label>
+                else if code.starts_with("I64") {
+                    code.drain(.."I64".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassI64(label),
+                    });
+                }
+                // ..I128 <label>
+                else if code.starts_with("I128") {
+                    code.drain(.."I128".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassI128(label),
+                    });
+                }
+                // ..IBig <label>
+                else if code.starts_with("IBig") {
+                    code.drain(.."IBig".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassIBig(label),
+                    });
+                }
+                // ..F32 <label>
+                else if code.starts_with("F32") {
+                    code.drain(.."F32".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassF32(label),
+                    });
+                }
+                // ..F64 <label>
+                else if code.starts_with("F64") {
+                    code.drain(.."F64".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassF64(label),
+                    });
+                }
+                // ..FBig <label>
+                else if code.starts_with("FBig") {
+                    code.drain(.."FBig".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassFBig(label),
+                    });
+                }
+                // ..
+                else {
+                    return Err(ParseError::ExpectedConstTag(code.clone()));
+                }
+            }
+            // LoadConst..
+            else if code.starts_with("LoadConst") {
+                code.drain(.."LoadConst".len());
+                // ..String <string>
+                if code.starts_with("String") {
+                    code.drain(.."String".len());
+                    let value = self.parse_string(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstString(value),
+                    });
+                }
+                // ..Character <character>
+                else if code.starts_with("Character") {
+                    code.drain(.."Character".len());
+                    let value = self.parse_character(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstCharacter(value),
+                    });
+                }
+                // ..Symbol <symbol>
+                else if code.starts_with("Symbol") {
+                    code.drain(.."Symbol".len());
+                    let value = self.parse_symbol(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstSymbol(value),
+                    });
+                }
+                // ..U8 <integer>
+                else if code.starts_with("U8") {
+                    code.drain(.."U8".len());
+                    let value = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstU8(value),
+                    });
+                }
+                // ..U16 <integer>
+                else if code.starts_with("U16") {
+                    code.drain(.."U16".len());
+                    let value = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstU16(value),
+                    });
+                }
+                // ..U32 <integer>
+                else if code.starts_with("U32") {
+                    code.drain(.."U32".len());
+                    let value = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstU32(value),
+                    });
+                }
+                // ..u64 <integer>
+                else if code.starts_with("U64") {
+                    code.drain(.."U64".len());
+                    let value = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstU64(value),
+                    });
+                }
+                // ..U128 <integer>
+                else if code.starts_with("U128") {
+                    code.drain(.."U128".len());
+                    let value = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstU128(value),
+                    });
+                }
+                // ..UBig <integer>
+                else if code.starts_with("UBig") {
+                    code.drain(.."UBig".len());
+                    let value: u128 = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstUBig(value.into()),
+                    });
+                }
+                // ..i8 <integer>
+                else if code.starts_with("I8") {
+                    code.drain(.."I8".len());
+                    let value = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstI8(value),
+                    });
+                }
+                // ..I16 <integer>
+                else if code.starts_with("I16") {
+                    code.drain(.."I16".len());
+                    let value = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstI16(value),
+                    });
+                }
+                // ..I32 <integer>
+                else if code.starts_with("I32") {
+                    code.drain(.."I32".len());
+                    let value = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstI32(value),
+                    });
+                }
+                // ..I64 <integer>
+                else if code.starts_with("I64") {
+                    code.drain(.."I64".len());
+                    let value = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstI64(value),
+                    });
+                }
+                // ..I128 <integer>
+                else if code.starts_with("I128") {
+                    code.drain(.."I128".len());
+                    let value = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstI128(value),
+                    });
+                }
+                // ..IBig <integer>
+                else if code.starts_with("IBig") {
+                    code.drain(.."IBig".len());
+                    let value: i128 = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstIBig(value.into()),
+                    });
+                }
+                // ..F32 <float>
+                else if code.starts_with("F32") {
+                    code.drain(.."F32".len());
+                    let value = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstF32(value),
+                    });
+                }
+                // ..F64 <float>
+                else if code.starts_with("F64") {
+                    code.drain(.."F64".len());
+                    let value = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstF64(value),
+                    });
+                }
+                // ..FBig <float>
+                else if code.starts_with("FBig") {
+                    code.drain(.."FBig".len());
+                    let value: f64 = self.parse_from_str(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::LoadConstFBig(value.into()),
+                    });
+                }
+                // ..
+                else {
+                    return Err(ParseError::ExpectedConstTag(code.clone()));
+                }
             }
             // ...
             else {
@@ -190,6 +521,22 @@ impl Parser {
         Ok(result)
     }
 
+    fn parse_character(&mut self, code: &mut String) -> ParseResult<u16> {
+        self.skip_leading_whitespace(code);
+        if !code.starts_with("'") {
+            return Err(ParseError::ExpectedString(code.clone()));
+        }
+        code.drain(.."'".len());
+        let mut result = String::new();
+        while code.len() > 0 && !code.starts_with("'") {
+            result.push(code.remove(0));
+        }
+        if code.starts_with("'") {
+            code.drain(.."'".len());
+        }
+        Ok(crate::syntax::string_to_characters(result)[0])
+    }
+
     fn parse_comment(&mut self, code: &mut String) -> ParseResult<String> {
         let mut result = String::new();
         while code.starts_with(";") {
@@ -200,6 +547,19 @@ impl Parser {
             self.skip_leading_whitespace(code);
         }
         Ok(result)
+    }
+
+    fn parse_symbol(&mut self, code: &mut String) -> ParseResult<String> {
+        self.skip_leading_whitespace(code);
+        if !code.starts_with("#") {
+            return Err(ParseError::ExpectedLabel(code.clone()));
+        }
+        code.drain(.."#".len());
+        let mut symbol = String::new();
+        while code.len() > 0 && !(code.as_bytes()[0] as char).is_whitespace() {
+            symbol.push(code.remove(0));
+        }
+        Ok(symbol)
     }
 
     fn parse_label(&mut self, code: &mut String) -> ParseResult<Label> {
@@ -215,22 +575,16 @@ impl Parser {
         Ok(label)
     }
 
-    fn parse_u16(&mut self, code: &mut String) -> ParseResult<u16> {
+    fn parse_from_str<P: std::str::FromStr>(&mut self, code: &mut String) -> ParseResult<P>
+    where
+        P::Err: Into<ParseError>,
+    {
         self.skip_leading_whitespace(code);
         let mut number = String::new();
-        while code.len() > 0 && (code.as_bytes()[0] as char).is_numeric() {
+        while code.len() > 0 && !(code.as_bytes()[0] as char).is_whitespace() {
             number.push(code.remove(0));
         }
-        Ok(number.parse()?)
-    }
-
-    fn parse_u64(&mut self, code: &mut String) -> ParseResult<u64> {
-        self.skip_leading_whitespace(code);
-        let mut number = String::new();
-        while code.len() > 0 && (code.as_bytes()[0] as char).is_numeric() {
-            number.push(code.remove(0));
-        }
-        Ok(number.parse()?)
+        Ok(number.parse().map_err(Into::into)?)
     }
 }
 
@@ -239,14 +593,22 @@ pub type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug)]
 pub enum ParseError {
     ExpectedInstruction(String),
+    ExpectedConstTag(String),
     ExpectedString(String),
     ExpectedLabel(String),
     InvalidInteger(ParseIntError),
+    InvalidFloat(ParseFloatError),
 }
 
 impl From<ParseIntError> for ParseError {
     fn from(e: ParseIntError) -> ParseError {
         ParseError::InvalidInteger(e)
+    }
+}
+
+impl From<ParseFloatError> for ParseError {
+    fn from(e: ParseFloatError) -> ParseError {
+        ParseError::InvalidFloat(e)
     }
 }
 

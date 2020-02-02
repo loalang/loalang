@@ -4,7 +4,7 @@ use crate::syntax::*;
 // use crate::vm::NativeMethod;
 use crate::assembly::*;
 use crate::*;
-// use num_traits::ToPrimitive;
+use num_traits::ToPrimitive;
 // use std::collections::hash_map::DefaultHasher;
 // use std::hash::{Hash, Hasher};
 
@@ -155,6 +155,32 @@ impl<'a> Generator<'a> {
         let mut section = Section::named(qn.as_str());
         section.add_instruction(InstructionKind::DeclareClass(qn.clone()));
 
+        if class.span.start.uri.is_stdlib() {
+            let qn = qn.clone();
+            match qn.as_str() {
+                "Loa/String" => section.add_instruction(InstructionKind::MarkClassString(qn)),
+                "Loa/Character" => section.add_instruction(InstructionKind::MarkClassCharacter(qn)),
+                "Loa/Symbol" => section.add_instruction(InstructionKind::MarkClassSymbol(qn)),
+
+                "Loa/UInt8" => section.add_instruction(InstructionKind::MarkClassU8(qn)),
+                "Loa/UInt16" => section.add_instruction(InstructionKind::MarkClassU16(qn)),
+                "Loa/UInt32" => section.add_instruction(InstructionKind::MarkClassU32(qn)),
+                "Loa/UInt64" => section.add_instruction(InstructionKind::MarkClassU64(qn)),
+                "Loa/UInt128" => section.add_instruction(InstructionKind::MarkClassU128(qn)),
+                "Loa/BigNatural" => section.add_instruction(InstructionKind::MarkClassUBig(qn)),
+                "Loa/Int8" => section.add_instruction(InstructionKind::MarkClassI8(qn)),
+                "Loa/Int16" => section.add_instruction(InstructionKind::MarkClassI16(qn)),
+                "Loa/Int32" => section.add_instruction(InstructionKind::MarkClassI32(qn)),
+                "Loa/Int64" => section.add_instruction(InstructionKind::MarkClassI64(qn)),
+                "Loa/Int128" => section.add_instruction(InstructionKind::MarkClassI128(qn)),
+                "Loa/BigInteger" => section.add_instruction(InstructionKind::MarkClassIBig(qn)),
+                "Loa/Float32" => section.add_instruction(InstructionKind::MarkClassF32(qn)),
+                "Loa/Float64" => section.add_instruction(InstructionKind::MarkClassF64(qn)),
+                "Loa/BigFloat" => section.add_instruction(InstructionKind::MarkClassFBig(qn)),
+                _ => {}
+            }
+        }
+
         for method in self.analysis.navigator.methods_of_class(class) {
             let (method_name, method_label) =
                 self.declare_method(assembly, qn.as_ref(), &method)?;
@@ -218,6 +244,15 @@ impl<'a> Generator<'a> {
             }
             StringExpression(_, ref v) => {
                 section.add_instruction(InstructionKind::LoadConstString(v.clone()));
+            }
+            CharacterExpression(_, ref v) => {
+                section.add_instruction(InstructionKind::LoadConstCharacter(v.unwrap().clone()));
+            }
+            SymbolExpression(_, ref v) => {
+                section.add_instruction(InstructionKind::LoadConstSymbol(v.clone()));
+            }
+            IntegerExpression(_, _) | FloatExpression(_, _) => {
+                self.generate_number(section, expression)?;
             }
             ReferenceExpression { .. } => {
                 let declaration = self
@@ -451,15 +486,16 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn generate_number(&mut self, literal: &Node) -> GenerationResult {
+    */
+    fn generate_number(&mut self, section: &mut Section, literal: &Node) -> GenerationResult<()> {
         let type_ = self.analysis.types.get_type_of_expression(&literal);
 
         if let Type::UnresolvedInteger(_, _) = type_ {
-            return self.generate_int(literal, BitSize::SizeBig, true);
+            return self.generate_int(section, literal, BitSize::SizeBig, true);
         }
 
         if let Type::UnresolvedFloat(_, _) = type_ {
-            return self.generate_float(literal, BitSize::SizeBig);
+            return self.generate_float(section, literal, BitSize::SizeBig);
         }
 
         if let Type::Class(_, class, _) = type_ {
@@ -469,30 +505,40 @@ impl<'a> Generator<'a> {
             match qn.as_str() {
                 "Loa/Number" => {
                     if let IntegerExpression(_, _) = literal.kind {
-                        return self.generate_int(literal, BitSize::SizeBig, true);
+                        return self.generate_int(section, literal, BitSize::SizeBig, true);
                     } else {
-                        return self.generate_float(literal, BitSize::SizeBig);
+                        return self.generate_float(section, literal, BitSize::SizeBig);
                     }
                 }
-                "Loa/Integer" => return self.generate_int(literal, BitSize::SizeBig, true),
-                "Loa/Natural" => return self.generate_int(literal, BitSize::SizeBig, false),
-                "Loa/Float" => return self.generate_float(literal, BitSize::SizeBig),
+                "Loa/Integer" => {
+                    return self.generate_int(section, literal, BitSize::SizeBig, true)
+                }
+                "Loa/Natural" => {
+                    return self.generate_int(section, literal, BitSize::SizeBig, false)
+                }
+                "Loa/Float" => return self.generate_float(section, literal, BitSize::SizeBig),
 
-                "Loa/Int8" => return self.generate_int(literal, BitSize::Size8, true),
-                "Loa/Int16" => return self.generate_int(literal, BitSize::Size16, true),
-                "Loa/Int32" => return self.generate_int(literal, BitSize::Size32, true),
-                "Loa/Int64" => return self.generate_int(literal, BitSize::Size64, true),
-                "Loa/Int128" => return self.generate_int(literal, BitSize::Size128, true),
-                "Loa/BigInteger" => return self.generate_int(literal, BitSize::SizeBig, true),
-                "Loa/UInt8" => return self.generate_int(literal, BitSize::Size8, false),
-                "Loa/UInt16" => return self.generate_int(literal, BitSize::Size16, false),
-                "Loa/UInt32" => return self.generate_int(literal, BitSize::Size32, false),
-                "Loa/UInt64" => return self.generate_int(literal, BitSize::Size64, false),
-                "Loa/UInt128" => return self.generate_int(literal, BitSize::Size128, false),
-                "Loa/BigNatural" => return self.generate_int(literal, BitSize::SizeBig, false),
-                "Loa/Float32" => return self.generate_float(literal, BitSize::Size32),
-                "Loa/Float64" => return self.generate_float(literal, BitSize::Size64),
-                "Loa/BigFloat" => return self.generate_float(literal, BitSize::SizeBig),
+                "Loa/Int8" => return self.generate_int(section, literal, BitSize::Size8, true),
+                "Loa/Int16" => return self.generate_int(section, literal, BitSize::Size16, true),
+                "Loa/Int32" => return self.generate_int(section, literal, BitSize::Size32, true),
+                "Loa/Int64" => return self.generate_int(section, literal, BitSize::Size64, true),
+                "Loa/Int128" => return self.generate_int(section, literal, BitSize::Size128, true),
+                "Loa/BigInteger" => {
+                    return self.generate_int(section, literal, BitSize::SizeBig, true)
+                }
+                "Loa/UInt8" => return self.generate_int(section, literal, BitSize::Size8, false),
+                "Loa/UInt16" => return self.generate_int(section, literal, BitSize::Size16, false),
+                "Loa/UInt32" => return self.generate_int(section, literal, BitSize::Size32, false),
+                "Loa/UInt64" => return self.generate_int(section, literal, BitSize::Size64, false),
+                "Loa/UInt128" => {
+                    return self.generate_int(section, literal, BitSize::Size128, false)
+                }
+                "Loa/BigNatural" => {
+                    return self.generate_int(section, literal, BitSize::SizeBig, false)
+                }
+                "Loa/Float32" => return self.generate_float(section, literal, BitSize::Size32),
+                "Loa/Float64" => return self.generate_float(section, literal, BitSize::Size64),
+                "Loa/BigFloat" => return self.generate_float(section, literal, BitSize::SizeBig),
                 _ => (),
             }
         }
@@ -502,42 +548,56 @@ impl<'a> Generator<'a> {
         ))
     }
 
-    fn generate_int(&self, literal: &Node, size: BitSize, signed: bool) -> GenerationResult {
-        match (&literal.kind, signed) {
+    fn generate_int(
+        &self,
+        section: &mut Section,
+        literal: &Node,
+        size: BitSize,
+        signed: bool,
+    ) -> GenerationResult<()> {
+        section.add_instruction(match (&literal.kind, signed) {
             (IntegerExpression(_, ref int), true) => match size {
-                BitSize::Size8 => Ok(Instruction::LoadConstI8(int.to_i8().unwrap()).into()),
-                BitSize::Size16 => Ok(Instruction::LoadConstI16(int.to_i16().unwrap()).into()),
-                BitSize::Size32 => Ok(Instruction::LoadConstI32(int.to_i32().unwrap()).into()),
-                BitSize::Size64 => Ok(Instruction::LoadConstI64(int.to_i64().unwrap()).into()),
-                BitSize::Size128 => Ok(Instruction::LoadConstI128(int.to_i128().unwrap()).into()),
-                BitSize::SizeBig => Ok(Instruction::LoadConstIBig(int.clone()).into()),
+                BitSize::Size8 => InstructionKind::LoadConstI8(int.to_i8().unwrap()).into(),
+                BitSize::Size16 => InstructionKind::LoadConstI16(int.to_i16().unwrap()).into(),
+                BitSize::Size32 => InstructionKind::LoadConstI32(int.to_i32().unwrap()).into(),
+                BitSize::Size64 => InstructionKind::LoadConstI64(int.to_i64().unwrap()).into(),
+                BitSize::Size128 => InstructionKind::LoadConstI128(int.to_i128().unwrap()).into(),
+                BitSize::SizeBig => InstructionKind::LoadConstIBig(int.clone()).into(),
             },
             (IntegerExpression(_, ref int), false) => match size {
-                BitSize::Size8 => Ok(Instruction::LoadConstU8(int.to_u8().unwrap()).into()),
-                BitSize::Size16 => Ok(Instruction::LoadConstU16(int.to_u16().unwrap()).into()),
-                BitSize::Size32 => Ok(Instruction::LoadConstU32(int.to_u32().unwrap()).into()),
-                BitSize::Size64 => Ok(Instruction::LoadConstU64(int.to_u64().unwrap()).into()),
-                BitSize::Size128 => Ok(Instruction::LoadConstU128(int.to_u128().unwrap()).into()),
+                BitSize::Size8 => InstructionKind::LoadConstU8(int.to_u8().unwrap()).into(),
+                BitSize::Size16 => InstructionKind::LoadConstU16(int.to_u16().unwrap()).into(),
+                BitSize::Size32 => InstructionKind::LoadConstU32(int.to_u32().unwrap()).into(),
+                BitSize::Size64 => InstructionKind::LoadConstU64(int.to_u64().unwrap()).into(),
+                BitSize::Size128 => InstructionKind::LoadConstU128(int.to_u128().unwrap()).into(),
                 BitSize::SizeBig => {
-                    Ok(Instruction::LoadConstUBig(int.to_biguint().unwrap()).into())
+                    InstructionKind::LoadConstUBig(int.to_biguint().unwrap()).into()
                 }
             },
-            _ => Err(invalid_node(literal, "Expected integer expression.")),
-        }
+            _ => return Err(invalid_node(literal, "Expected integer expression.")),
+        });
+        Ok(())
     }
 
-    fn generate_float(&self, literal: &Node, size: BitSize) -> GenerationResult {
-        match literal.kind {
+    fn generate_float(
+        &self,
+        section: &mut Section,
+        literal: &Node,
+        size: BitSize,
+    ) -> GenerationResult<()> {
+        section.add_instruction(match literal.kind {
             FloatExpression(_, ref fraction) => match size {
-                BitSize::Size32 => Ok(Instruction::LoadConstF32(fraction.to_f32().unwrap()).into()),
-                BitSize::Size64 => Ok(Instruction::LoadConstF64(fraction.to_f64().unwrap()).into()),
-                BitSize::SizeBig => Ok(Instruction::LoadConstFBig(fraction.clone()).into()),
-                _ => Err(invalid_node(literal, "Invalid bit size of float.")),
+                BitSize::Size32 => InstructionKind::LoadConstF32(fraction.to_f32().unwrap()).into(),
+                BitSize::Size64 => InstructionKind::LoadConstF64(fraction.to_f64().unwrap()).into(),
+                BitSize::SizeBig => InstructionKind::LoadConstFBig(fraction.clone()).into(),
+                _ => return Err(invalid_node(literal, "Invalid bit size of float.")),
             },
-            _ => Err(invalid_node(literal, "Expected float expression.")),
-        }
+            _ => return Err(invalid_node(literal, "Expected float expression.")),
+        });
+        Ok(())
     }
 
+    /*
     fn generate_message(&mut self, message: &Node) -> GenerationResult {
         match message.kind {
             UnaryMessage { .. } => Ok(Instructions::new()),

@@ -51,14 +51,24 @@ impl VM {
         &self.stack
     }
 
-    /*
     #[inline]
-    fn raw_class_ptr(&self, id: Id) -> VMResult<*const Class> {
+    fn raw_class_ptr(&self, address: u64) -> VMResult<*const Class> {
         VMResult::Ok(
-            expect!(self, self.classes.get(&id), "unknown class {}", id).as_ref() as *const _,
+            expect!(
+                self,
+                self.classes.get(&(address as usize)),
+                "no class found at {:X}",
+                address
+            )
+            .as_ref() as *const _,
         )
     }
-    */
+
+    #[inline]
+    fn load_object(&mut self, object: Arc<Object>) {
+        self.stack.push(object);
+        self.pc += 1;
+    }
 
     fn do_eval<M: Runtime>(&mut self) -> VMResult<()> {
         loop {
@@ -155,102 +165,157 @@ impl VM {
                     self.pc = expect!(self, self.call_stack.ret(), "empty call stack");
                 }
 
+                Instruction::MarkClassString(id) => unsafe {
+                    STRING_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassCharacter(id) => unsafe {
+                    CHARACTER_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassSymbol(id) => unsafe {
+                    SYMBOL_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+
+                Instruction::MarkClassU8(id) => unsafe {
+                    U8_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassU16(id) => unsafe {
+                    U16_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassU32(id) => unsafe {
+                    U32_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassU64(id) => unsafe {
+                    U64_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassU128(id) => unsafe {
+                    U128_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassUBig(id) => unsafe {
+                    UBIG_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassI8(id) => unsafe {
+                    I8_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassI16(id) => unsafe {
+                    I16_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassI32(id) => unsafe {
+                    I32_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassI64(id) => unsafe {
+                    I64_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassI128(id) => unsafe {
+                    I128_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassIBig(id) => unsafe {
+                    IBIG_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassF32(id) => unsafe {
+                    F32_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassF64(id) => unsafe {
+                    F64_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+                Instruction::MarkClassFBig(id) => unsafe {
+                    FBIG_CLASS = unwrap!(self, self.raw_class_ptr(id));
+                    self.pc += 1;
+                },
+
                 Instruction::LoadConstString(ref value) => {
-                    self.stack.push(Object::box_string(value.clone()))
+                    let value = value.clone();
+                    self.load_object(Object::box_string(value))
+                }
+                Instruction::LoadConstCharacter(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_character(value))
+                }
+                Instruction::LoadConstSymbol(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_symbol(value))
+                }
+                Instruction::LoadConstU8(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_u8(value))
+                }
+                Instruction::LoadConstU16(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_u16(value))
+                }
+                Instruction::LoadConstU32(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_u32(value))
+                }
+                Instruction::LoadConstU64(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_u64(value))
+                }
+                Instruction::LoadConstU128(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_u128(value))
+                }
+                Instruction::LoadConstUBig(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_ubig(value))
+                }
+                Instruction::LoadConstI8(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_i8(value))
+                }
+                Instruction::LoadConstI16(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_i16(value))
+                }
+                Instruction::LoadConstI32(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_i32(value))
+                }
+                Instruction::LoadConstI64(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_i64(value))
+                }
+                Instruction::LoadConstI128(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_i128(value))
+                }
+                Instruction::LoadConstIBig(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_ibig(value))
+                }
+                Instruction::LoadConstF32(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_f32(value))
+                }
+                Instruction::LoadConstF64(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_f64(value))
+                }
+                Instruction::LoadConstFBig(ref value) => {
+                    let value = value.clone();
+                    self.load_object(Object::box_fbig(value))
                 }
             }
             /*
-                if let Some((_, ref mut m)) = self.declaring_method {
-                    match instruction {
-                        Instruction::LoadArgument(_)
-                        | Instruction::CallNative(_)
-                        | Instruction::Return(_)
-                        | Instruction::LoadLocal(_)
-                        | Instruction::ReferenceToClass(_)
-                        | Instruction::SendMessage(_, _)
-                        | Instruction::LoadGlobal(_)
-                        | Instruction::LoadConstString(_)
-                        | Instruction::LoadConstCharacter(_)
-                        | Instruction::LoadConstSymbol(_)
-                        | Instruction::LoadConstU8(_)
-                        | Instruction::LoadConstU16(_)
-                        | Instruction::LoadConstU32(_)
-                        | Instruction::LoadConstU64(_)
-                        | Instruction::LoadConstU128(_)
-                        | Instruction::LoadConstUBig(_)
-                        | Instruction::LoadConstI8(_)
-                        | Instruction::LoadConstI16(_)
-                        | Instruction::LoadConstI32(_)
-                        | Instruction::LoadConstI64(_)
-                        | Instruction::LoadConstI128(_)
-                        | Instruction::LoadConstIBig(_)
-                        | Instruction::LoadConstF32(_)
-                        | Instruction::LoadConstF64(_)
-                        | Instruction::LoadConstFBig(_) => {
-                            m.instructions.push(instruction);
-                            continue;
-                        }
-                        _ => {}
-                    }
-                }
 
                 unsafe {
                     match instruction {
-                        Instruction::MarkClassString(id) => {
-                            STRING_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassCharacter(id) => {
-                            CHARACTER_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassSymbol(id) => {
-                            SYMBOL_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-
-                        Instruction::MarkClassU8(id) => {
-                            U8_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassU16(id) => {
-                            U16_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassU32(id) => {
-                            U32_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassU64(id) => {
-                            U64_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassU128(id) => {
-                            U128_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassUBig(id) => {
-                            UBIG_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassI8(id) => {
-                            I8_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassI16(id) => {
-                            I16_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassI32(id) => {
-                            I32_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassI64(id) => {
-                            I64_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassI128(id) => {
-                            I128_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassIBig(id) => {
-                            IBIG_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassF32(id) => {
-                            F32_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassF64(id) => {
-                            F64_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
-                        Instruction::MarkClassFBig(id) => {
-                            FBIG_CLASS = unwrap!(self, self.raw_class_ptr(id));
-                        }
 
                         Instruction::LoadGlobal(id) => self
                             .stack
@@ -266,27 +331,6 @@ impl VM {
                         Instruction::LoadConstString(value) => {
                             self.stack.push(Object::box_string(value))
                         }
-                        Instruction::LoadConstCharacter(value) => {
-                            self.stack.push(Object::box_character(value))
-                        }
-                        Instruction::LoadConstSymbol(value) => {
-                            self.stack.push(Object::box_symbol(value))
-                        }
-                        Instruction::LoadConstU8(value) => self.stack.push(Object::box_u8(value)),
-                        Instruction::LoadConstU16(value) => self.stack.push(Object::box_u16(value)),
-                        Instruction::LoadConstU32(value) => self.stack.push(Object::box_u32(value)),
-                        Instruction::LoadConstU64(value) => self.stack.push(Object::box_u64(value)),
-                        Instruction::LoadConstU128(value) => self.stack.push(Object::box_u128(value)),
-                        Instruction::LoadConstUBig(value) => self.stack.push(Object::box_ubig(value)),
-                        Instruction::LoadConstI8(value) => self.stack.push(Object::box_i8(value)),
-                        Instruction::LoadConstI16(value) => self.stack.push(Object::box_i16(value)),
-                        Instruction::LoadConstI32(value) => self.stack.push(Object::box_i32(value)),
-                        Instruction::LoadConstI64(value) => self.stack.push(Object::box_i64(value)),
-                        Instruction::LoadConstI128(value) => self.stack.push(Object::box_i128(value)),
-                        Instruction::LoadConstIBig(value) => self.stack.push(Object::box_ibig(value)),
-                        Instruction::LoadConstF32(value) => self.stack.push(Object::box_f32(value)),
-                        Instruction::LoadConstF64(value) => self.stack.push(Object::box_f64(value)),
-                        Instruction::LoadConstFBig(value) => self.stack.push(Object::box_fbig(value)),
                         Instruction::DeclareClass(id, name) => {
                             self.classes.insert(
                                 id,
@@ -530,5 +574,73 @@ mod tests {
             "#,
             "a B",
         );
+    }
+
+    #[test]
+    fn all_consts() {
+        assert_evaluates_to(
+            r#"
+            @String
+                DeclareClass "String"
+                MarkClassString @String
+            LoadConstString "Hello"
+            Halt
+            "#,
+            "Hello",
+        );
+        assert_evaluates_to(
+            r#"
+            @Character
+                DeclareClass "Character"
+                MarkClassCharacter @Character
+            LoadConstCharacter 'x'
+            Halt
+            "#,
+            "x",
+        );
+        assert_evaluates_to(
+            r#"
+            @Symbol
+                DeclareClass "Symbol"
+                MarkClassSymbol @Symbol
+            LoadConstSymbol #hello
+            Halt
+            "#,
+            "#hello",
+        );
+        fn assert_number_evaluates(name: &str, literal: &str) {
+            assert_evaluates_to(
+                format!(
+                    r#"
+                    @Class
+                        DeclareClass "Class"
+                        MarkClass{} @Class
+                    LoadConst{} {}
+                    Halt
+                    "#,
+                    name, name, literal
+                )
+                .as_ref(),
+                literal,
+            );
+        }
+        assert_number_evaluates("U8", "255");
+        assert_number_evaluates("U16", "1024");
+        assert_number_evaluates("U32", "1024");
+        assert_number_evaluates("U64", "1024");
+        assert_number_evaluates("U128", "1024");
+        assert_number_evaluates("UBig", "1024");
+        assert_number_evaluates("I8", "25");
+        assert_number_evaluates("I16", "1024");
+        assert_number_evaluates("I32", "1024");
+        assert_number_evaluates("I64", "1024");
+        assert_number_evaluates("I128", "1024");
+        assert_number_evaluates("IBig", "1024");
+        assert_number_evaluates("I8", "-25");
+        assert_number_evaluates("I16", "-1024");
+        assert_number_evaluates("I32", "-1024");
+        assert_number_evaluates("I64", "-1024");
+        assert_number_evaluates("I128", "-1024");
+        assert_number_evaluates("IBig", "-1024");
     }
 }
