@@ -1244,6 +1244,17 @@ impl Navigator {
         }
     }
 
+    pub fn method_is_native(&self, method: &Node) -> bool {
+        if let Method {
+            ref native_keyword, ..
+        } = method.kind
+        {
+            native_keyword.is_some()
+        } else {
+            false
+        }
+    }
+
     pub fn method_is_visible_from(&self, method: &Node, source_node: &Node) -> Option<bool> {
         if self.visibility_of_method(method)?.kind != TokenKind::PrivateKeyword {
             return Some(true);

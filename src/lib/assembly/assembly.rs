@@ -1,4 +1,5 @@
 use crate::bytecode::Instruction as BytecodeInstruction;
+use crate::vm::NativeMethod;
 use crate::HashMap;
 use crate::*;
 use std::fmt;
@@ -204,6 +205,7 @@ impl fmt::Debug for Instruction {
             CallMethod(ref label, ref uri, line, character) => {
                 write!(f, "CallMethod @{} {:?} {} {}", label, uri, line, character)
             }
+            CallNative(ref native_method) => write!(f, "CallNative {:?}", native_method),
             LoadLocal(index) => write!(f, "LoadLocal {}", index),
             DropLocal(index) => write!(f, "DropLocal {}", index),
             StoreGlobal(ref label) => write!(f, "StoreGlobal {}", label),
@@ -262,6 +264,7 @@ pub enum InstructionKind {
     DeclareMethod(String, Label),
     LoadObject(Label),
     CallMethod(Label, String, u64, u64),
+    CallNative(NativeMethod),
     LoadLocal(u16),
     DropLocal(u16),
     StoreGlobal(Label),
@@ -344,6 +347,7 @@ impl Instruction {
             InstructionKind::CallMethod(ref l, ref uri, line, character) => {
                 BytecodeInstruction::CallMethod(label!(l, "method"), uri.clone(), line, character)
             }
+            InstructionKind::CallNative(ref m) => BytecodeInstruction::CallNative(m.clone()),
             InstructionKind::LoadLocal(i) => BytecodeInstruction::LoadLocal(i),
             InstructionKind::DropLocal(i) => BytecodeInstruction::DropLocal(i),
             InstructionKind::StoreGlobal(ref l) => {

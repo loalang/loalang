@@ -1,4 +1,5 @@
 use crate::assembly::*;
+use crate::vm::NativeMethod;
 use std::num::{ParseFloatError, ParseIntError};
 
 pub struct Parser {
@@ -135,6 +136,15 @@ impl Parser {
                 section.instructions.push(Instruction {
                     leading_comment,
                     kind: InstructionKind::CallMethod(label, uri, line, character),
+                });
+            }
+            // CallNative <native method>
+            else if code.starts_with("CallNative") {
+                code.drain(.."CallNative".len());
+                let method = self.parse_native_method(code)?;
+                section.instructions.push(Instruction {
+                    leading_comment,
+                    kind: InstructionKind::CallNative(method),
                 });
             }
             // LoadLocal <u16>
@@ -548,6 +558,16 @@ impl Parser {
         Ok(result)
     }
 
+    fn parse_native_method(&mut self, code: &mut String) -> ParseResult<NativeMethod> {
+        self.skip_leading_whitespace(code);
+        if code.starts_with("Number_plus") {
+            code.drain(.."Number_plus".len());
+            Ok(NativeMethod::Number_plus)
+        } else {
+            Err(ParseError::ExpectedNativeMethod(code.clone()))
+        }
+    }
+
     fn parse_character(&mut self, code: &mut String) -> ParseResult<u16> {
         self.skip_leading_whitespace(code);
         if !code.starts_with("'") {
@@ -623,6 +643,7 @@ pub enum ParseError {
     ExpectedConstTag(String),
     ExpectedString(String),
     ExpectedLabel(String),
+    ExpectedNativeMethod(String),
     InvalidInteger(ParseIntError),
     InvalidFloat(ParseFloatError),
 }

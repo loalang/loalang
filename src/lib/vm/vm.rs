@@ -146,6 +146,12 @@ impl VM {
                     );
                 }
 
+                Instruction::CallNative(ref method) => {
+                    let method = method.clone();
+                    M::call(self, method);
+                    self.pc += 1;
+                }
+
                 Instruction::LoadLocal(index) => {
                     let local = expect!(
                         self,
@@ -675,6 +681,24 @@ mod tests {
             Halt
             "#,
             "global value",
+        );
+    }
+
+    #[test]
+    fn native_method() {
+        assert_evaluates_to(
+            r#"
+            @UInt8
+                DeclareClass "UInt8"
+                MarkClassU8 @UInt8
+
+            LoadConstU8 12
+            LoadConstU8 13
+            CallNative Number_plus
+
+            Halt
+            "#,
+            "25",
         );
     }
 }

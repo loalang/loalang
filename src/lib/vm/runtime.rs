@@ -1,7 +1,6 @@
 use crate::vm::*;
 use fraction::{BigFraction, BigUint};
 use num_bigint::BigInt;
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 pub trait Runtime
@@ -458,12 +457,12 @@ fn add_fbig(lhs: &BigFraction, rhs: &BigFraction) -> Arc<Object> {
 
 impl Runtime for () {
     fn print_panic(message: String, call_stack: CallStack) {
-        panic!("{}\n{:?}", message, call_stack)
+        eprintln!("{}\n{:#?}", message, call_stack)
     }
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NativeMethod {
     Number_plus,
 }

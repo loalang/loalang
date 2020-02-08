@@ -1,3 +1,4 @@
+use crate::vm::NativeMethod;
 use crate::*;
 use std::io::{self, Read, Write};
 
@@ -9,6 +10,7 @@ pub enum Instruction {
     DeclareMethod(String, u64),
     LoadObject(u64),
     CallMethod(u64, String, u64, u64),
+    CallNative(NativeMethod),
     LoadLocal(u16),
     DropLocal(u16),
     StoreGlobal(u64),
@@ -61,11 +63,12 @@ const DECLARE_CLASS: u8 = 0xa3;
 const DECLARE_METHOD: u8 = 0xa4;
 const LOAD_OBJECT: u8 = 0xa5;
 const CALL_METHOD: u8 = 0xa6;
-const LOAD_LOCAL: u8 = 0xa7;
-const DROP_LOCAL: u8 = 0xa8;
-const STORE_GLOBAL: u8 = 0xa9;
-const LOAD_GLOBAL: u8 = 0xaa;
-const RETURN: u8 = 0xab;
+const CALL_NATIVE: u8 = 0xa7;
+const LOAD_LOCAL: u8 = 0xa8;
+const DROP_LOCAL: u8 = 0xa9;
+const STORE_GLOBAL: u8 = 0xaa;
+const LOAD_GLOBAL: u8 = 0xab;
+const RETURN: u8 = 0xac;
 
 const MARK_CLASS_STRING: u8 = 0xb0;
 const MARK_CLASS_CHARACTER: u8 = 0xb1;
@@ -124,6 +127,9 @@ impl BytecodeEncoding for Instruction {
                 + uri.serialize(&mut w)?
                 + line.serialize(&mut w)?
                 + character.serialize(w)?),
+            Instruction::CallNative(ref method) => {
+                Ok(CALL_NATIVE.serialize(&mut w)? + method.serialize(w)?)
+            }
             Instruction::LoadLocal(index) => {
                 Ok(LOAD_LOCAL.serialize(&mut w)? + index.serialize(w)?)
             }
@@ -271,6 +277,7 @@ impl BytecodeEncoding for Instruction {
                 r.deserialize()?,
                 r.deserialize()?,
             )),
+            [CALL_NATIVE] => Ok(Instruction::CallNative(r.deserialize()?)),
             [LOAD_LOCAL] => Ok(Instruction::LoadLocal(r.deserialize()?)),
             [DROP_LOCAL] => Ok(Instruction::DropLocal(r.deserialize()?)),
             [STORE_GLOBAL] => Ok(Instruction::StoreGlobal(r.deserialize()?)),
@@ -609,6 +616,25 @@ impl BytecodeEncoding for Vec<Instruction> {
             }
         }
         Ok(instructions)
+    }
+}
+
+const NATIVE_NUMBER_PLUS: u8 = 0x1a;
+
+impl BytecodeEncoding for NativeMethod {
+    fn serialize<W: Write>(&self, w: W) -> io::Result<usize> {
+        match self {
+            NativeMethod::Number_plus => NATIVE_NUMBER_PLUS,
+        }
+        .serialize(w)
+    }
+
+    fn deserialize<R: Read>(mut r: R) -> io::Result<Self> {
+        let code: u8 = r.deserialize()?;
+        match code {
+            NATIVE_NUMBER_PLUS => Ok(NativeMethod::Number_plus),
+            _ => Err(io::ErrorKind::InvalidInput.into()),
+        }
     }
 }
 

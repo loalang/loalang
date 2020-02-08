@@ -1,8 +1,7 @@
+use crate::assembly::*;
 use crate::generation::*;
 use crate::semantics::*;
 use crate::syntax::*;
-// use crate::vm::NativeMethod;
-use crate::assembly::*;
 use crate::*;
 use num_traits::ToPrimitive;
 
@@ -220,8 +219,10 @@ impl<'a> Generator<'a> {
         let selector = self.analysis.navigator.method_selector(method)?;
         let label = format!("{}#{}", class_name, selector);
         let mut method_section = Section::named(label.as_str());
-
-        if let Some(body) = self.analysis.navigator.method_body(method) {
+        if self.analysis.navigator.method_is_native(method) {
+            method_section.add_instruction(InstructionKind::CallNative(label.as_str().into()));
+            method_section.add_instruction(InstructionKind::Return(0));
+        } else if let Some(body) = self.analysis.navigator.method_body(method) {
             for param in self.analysis.navigator.method_parameters(method) {
                 self.parameters.push(param.id);
             }
@@ -751,13 +752,6 @@ impl<'a> Generator<'a> {
         Ok(instructions)
     }
 
-    fn get_native_method(&self, class: &Node, method: &Node) -> Option<NativeMethod> {
-        let (class, _, _) = self.analysis.navigator.qualified_name_of(class)?;
-        let selector = self.analysis.navigator.method_selector(method)?;
-
-        Some(format!("{}#{}", class, selector).as_str().into())
-    }
-
     fn generate_method(&mut self, class: &Node, method: &Node) -> GenerationResult {
         self.local_count = 0;
         self.local_ids.clear();
@@ -1138,6 +1132,31 @@ mod tests {
                     DropLocal 1
                     DropLocal 1
                     Return 1
+            "#,
+        );
+    }
+
+    #[test]
+    fn native_method() {
+        assert_generates(
+            Source::test(
+                r#"
+                    namespace Loa.
+
+                    class Number {
+                        public native + Number -> Number.
+                    }
+                "#,
+            ),
+            r#"
+                @Loa/Number
+                    DeclareClass "Loa/Number"
+                    DeclareMethod "+" @Loa/Number#+
+                    Halt
+
+                @Loa/Number#+
+                    CallNative Number_plus
+                    Return 0
             "#,
         );
     }
