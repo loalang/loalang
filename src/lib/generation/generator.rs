@@ -5,8 +5,6 @@ use crate::syntax::*;
 use crate::assembly::*;
 use crate::*;
 use num_traits::ToPrimitive;
-// use std::collections::hash_map::DefaultHasher;
-// use std::hash::{Hash, Hasher};
 
 pub type GenerationResult<T> = Result<T, GenerationError>;
 
@@ -23,6 +21,7 @@ impl REPLDirectives for () {
 pub struct Generator<'a> {
     analysis: &'a mut Analysis,
     locals: Vec<Id>,
+    parameters: Vec<Id>,
 }
 
 impl<'a> Generator<'a> {
@@ -30,17 +29,9 @@ impl<'a> Generator<'a> {
         Generator {
             analysis,
             locals: vec![],
+            parameters: vec![],
         }
     }
-
-    /*
-    fn behaviour_id(&self, method: &Node) -> Option<u64> {
-        let mut hasher = DefaultHasher::new();
-        let selector = self.analysis.navigator.method_selector(&method)?;
-        selector.hash(&mut hasher);
-        Some(hasher.finish())
-    }
-    */
 
     pub fn generate_all(&mut self) -> GenerationResult<Assembly> {
         let mut assembly = Assembly::new();
@@ -112,42 +103,52 @@ impl<'a> Generator<'a> {
         declarations: &Vec<Node>,
     ) -> GenerationResult<()> {
         for declaration in declarations.iter() {
-            if let Class { .. } = declaration.kind {
-                self.declare_class(assembly, declaration)?;
+            match declaration.kind {
+                Class { .. } => self.declare_class(assembly, declaration)?,
+                LetBinding { .. } => {
+                    self.declare_global_let_binding(assembly, declaration)?;
+                }
+                _ => return Err(invalid_node(&declaration, "Expected declaration.")),
             }
         }
 
         Ok(())
-        /*
-        let mut instructions = Instructions::new();
-        for declaration in declarations.iter() {
-            if let Class { .. } = declaration.kind {
-                instructions.extend(self.declare_class(declaration)?);
+    }
+
+    fn declare_global_let_binding(
+        &mut self,
+        assembly: &mut Assembly,
+        binding: &Node,
+    ) -> GenerationResult<()> {
+        match binding.kind {
+            LetBinding { expression, .. } => {
+                let label = self.analysis.navigator.symbol_of(binding)?.0;
+                let mut section = Section::named(label.clone());
+                let expression = self.analysis.navigator.find_child(binding, expression)?;
+                self.generate_expression(assembly, &mut section, &expression)?;
+                section.add_instruction(InstructionKind::StoreGlobal(label.clone()));
+                assembly.add_leading_section(section);
+                Ok(())
             }
+            _ => Err(invalid_node(binding, "Expected let binding.")),
         }
-        for declaration in declarations.iter() {
-            match declaration.kind {
-                Class { .. } => {
-                    instructions.extend(self.generate_class(declaration)?);
-                }
-                LetBinding { .. } => {
-                    instructions.extend(self.generate_let_binding(declaration)?);
-                    instructions.push(Instruction::StoreGlobal(declaration.id));
-                    instructions.push(Instruction::DropLocal(self.index_of_local(&declaration)?));
-                    self.local_ids
-                        .retain(|existing_local| *existing_local != declaration.id);
-                    self.local_count -= 1;
-                }
-                _ => return Err(invalid_node(declaration, "Expected declaration.")),
+    }
+
+    fn declare_let_binding(
+        &mut self,
+        assembly: &mut Assembly,
+        section: &mut Section,
+        binding: &Node,
+    ) -> GenerationResult<()> {
+        match binding.kind {
+            LetBinding { expression, .. } => {
+                let expression = self.analysis.navigator.find_child(binding, expression)?;
+                self.generate_expression(assembly, section, &expression)?;
+                self.locals.insert(0, binding.id);
+                Ok(())
             }
+            _ => Err(invalid_node(binding, "Expected let binding.")),
         }
-        for declaration in declarations.iter() {
-            if let Class { .. } = declaration.kind {
-                instructions.extend(self.resolve_inherits(declaration)?);
-            }
-        }
-        Ok(instructions)
-        */
     }
 
     fn declare_class(&mut self, assembly: &mut Assembly, class: &Node) -> GenerationResult<()> {
@@ -221,15 +222,39 @@ impl<'a> Generator<'a> {
         let mut method_section = Section::named(label.as_str());
 
         if let Some(body) = self.analysis.navigator.method_body(method) {
+            for param in self.analysis.navigator.method_parameters(method) {
+                self.parameters.push(param.id);
+            }
+
             self.generate_expression(assembly, &mut method_section, &body)?;
 
             method_section.add_instruction(InstructionKind::Return(
                 self.analysis.navigator.method_arity(method)? as u16,
             ));
+
+            self.parameters.clear();
         }
 
         assembly.add_section(method_section);
         Ok((selector, label))
+    }
+
+    fn index_of_parameter(&self, parameter: Id) -> GenerationResult<u16> {
+        for (i, p) in self.parameters.iter().enumerate() {
+            if *p == parameter {
+                return Ok((i + 1 + self.locals.len()) as u16);
+            }
+        }
+        Err(GenerationError::OutOfScope(parameter))
+    }
+
+    fn index_of_local(&self, local: Id) -> GenerationResult<u16> {
+        for (i, l) in self.locals.iter().enumerate() {
+            if *l == local {
+                return Ok(i as u16);
+            }
+        }
+        Err(GenerationError::OutOfScope(local))
     }
 
     fn generate_expression(
@@ -254,6 +279,22 @@ impl<'a> Generator<'a> {
             IntegerExpression(_, _) | FloatExpression(_, _) => {
                 self.generate_number(section, expression)?;
             }
+            LetExpression {
+                let_binding,
+                expression: e,
+                ..
+            } => {
+                let let_binding = self
+                    .analysis
+                    .navigator
+                    .find_child(expression, let_binding)?;
+                let expression = self.analysis.navigator.find_child(expression, e)?;
+                self.declare_let_binding(assembly, section, &let_binding)?;
+                self.generate_expression(assembly, section, &expression)?;
+                let index = self.index_of_local(let_binding.id)?;
+                section.add_instruction(InstructionKind::DropLocal(index + 1));
+                self.locals.remove(index as usize);
+            }
             ReferenceExpression { .. } => {
                 let declaration = self
                     .analysis
@@ -264,6 +305,16 @@ impl<'a> Generator<'a> {
                         let (qn, _, _) = self.analysis.navigator.qualified_name_of(&declaration)?;
                         section.add_instruction(InstructionKind::LoadObject(qn));
                     }
+                    ParameterPattern { .. } => section.add_instruction(InstructionKind::LoadLocal(
+                        self.index_of_parameter(declaration.id)?,
+                    )),
+                    LetBinding { .. } => match self.index_of_local(declaration.id) {
+                        Ok(index) => section.add_instruction(InstructionKind::LoadLocal(index)),
+                        _ => section.add_instruction(InstructionKind::LoadGlobal(
+                            self.analysis.navigator.symbol_of(&declaration)?.0,
+                        )),
+                    },
+
                     _ => return Err(invalid_node(&declaration, "Expected value declaration.")),
                 }
             }
@@ -876,6 +927,7 @@ mod tests {
             r#"
                 @N/C
                     DeclareClass "N/C"
+                    Halt
             "#,
         );
     }
@@ -896,6 +948,7 @@ mod tests {
                 @N/C
                     DeclareClass "N/C"
                     DeclareMethod "x" @N/C#x
+                    Halt
 
                 @N/C#x
                     LoadLocal 0
@@ -928,6 +981,7 @@ mod tests {
                 @N/B
                     DeclareClass "N/B"
                     DeclareMethod "x" @N/A#x
+                    Halt
 
                 @N/A#x
                     LoadLocal 0
@@ -997,6 +1051,7 @@ mod tests {
                     DeclareClass "N/A"
                     DeclareMethod "x" @N/A#x
                     DeclareMethod "y" @N/A#y
+                    Halt
 
                 @N/A#x
                     LoadLocal 0
@@ -1005,6 +1060,83 @@ mod tests {
 
                 @N/A#y
                     LoadLocal 0
+                    Return 1
+            "#,
+        );
+    }
+
+    #[test]
+    fn binary_method() {
+        assert_generates(
+            Source::test(
+                r#"
+                    namespace N.
+
+                    class A {
+                        public + A other => other.
+                    }
+                "#,
+            ),
+            r#"
+                @N/A
+                    DeclareClass "N/A"
+                    DeclareMethod "+" @N/A#+
+                    Halt
+
+                @N/A#+
+                    LoadLocal 1
+                    Return 2
+            "#,
+        );
+    }
+
+    #[test]
+    fn local_binding() {
+        assert_generates(
+            Source::test_repl(
+                r#"
+                    let x = "string".
+                    x
+                "#,
+            ),
+            r#"
+                @x
+                    LoadConstString "string"
+                    StoreGlobal @x
+
+                LoadGlobal @x
+                Halt
+            "#,
+        );
+    }
+
+    #[test]
+    fn local_binding_in_method() {
+        assert_generates(
+            Source::test(
+                r#"
+                    namespace N.
+
+                    class X {
+                        public y =>
+                            let la = "one".
+                            let lb = "two".
+                            la.
+                    }
+                "#,
+            ),
+            r#"
+                @N/X
+                    DeclareClass "N/X"
+                    DeclareMethod "y" @N/X#y
+                    Halt
+
+                @N/X#y
+                    LoadConstString "one"
+                    LoadConstString "two"
+                    LoadLocal 1
+                    DropLocal 1
+                    DropLocal 1
                     Return 1
             "#,
         );

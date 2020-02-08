@@ -97,7 +97,15 @@ impl Into<Vec<BytecodeInstruction>> for Assembly {
 
 impl fmt::Debug for Assembly {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for section in self.iter() {
+        for (i, section) in self.iter().enumerate() {
+            if i > 0 {
+                write!(f, "\n")?;
+            }
+
+            if let Some(ref comment) = section.leading_comment {
+                write!(f, "; {}\n", comment)?;
+            }
+
             let indent = if let Some(ref label) = section.label {
                 write!(f, "@{}\n", label)?;
                 true
@@ -181,6 +189,9 @@ pub struct Instruction {
 impl fmt::Debug for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use InstructionKind::*;
+        if let Some(ref comment) = self.leading_comment {
+            write!(f, "; {}\n", comment)?;
+        }
         match self.kind {
             Noop => write!(f, "Noop"),
             Halt => write!(f, "Halt"),
@@ -194,6 +205,9 @@ impl fmt::Debug for Instruction {
                 write!(f, "CallMethod @{} {:?} {} {}", label, uri, line, character)
             }
             LoadLocal(index) => write!(f, "LoadLocal {}", index),
+            DropLocal(index) => write!(f, "DropLocal {}", index),
+            StoreGlobal(ref label) => write!(f, "StoreGlobal {}", label),
+            LoadGlobal(ref label) => write!(f, "LoadGlobal {}", label),
             Return(arity) => write!(f, "Return {}", arity),
 
             MarkClassString(ref label) => write!(f, "MarkClassString @{}", label),
@@ -249,6 +263,9 @@ pub enum InstructionKind {
     LoadObject(Label),
     CallMethod(Label, String, u64, u64),
     LoadLocal(u16),
+    DropLocal(u16),
+    StoreGlobal(Label),
+    LoadGlobal(Label),
     Return(u16),
 
     MarkClassString(Label),
@@ -328,6 +345,13 @@ impl Instruction {
                 BytecodeInstruction::CallMethod(label!(l, "method"), uri.clone(), line, character)
             }
             InstructionKind::LoadLocal(i) => BytecodeInstruction::LoadLocal(i),
+            InstructionKind::DropLocal(i) => BytecodeInstruction::DropLocal(i),
+            InstructionKind::StoreGlobal(ref l) => {
+                BytecodeInstruction::StoreGlobal(label!(l, "global"))
+            }
+            InstructionKind::LoadGlobal(ref l) => {
+                BytecodeInstruction::LoadGlobal(label!(l, "global"))
+            }
             InstructionKind::Return(a) => BytecodeInstruction::Return(a),
 
             InstructionKind::MarkClassString(ref l) => {

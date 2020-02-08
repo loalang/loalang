@@ -10,6 +10,9 @@ pub enum Instruction {
     LoadObject(u64),
     CallMethod(u64, String, u64, u64),
     LoadLocal(u16),
+    DropLocal(u16),
+    StoreGlobal(u64),
+    LoadGlobal(u64),
     Return(u16),
 
     MarkClassString(u64),
@@ -59,7 +62,10 @@ const DECLARE_METHOD: u8 = 0xa4;
 const LOAD_OBJECT: u8 = 0xa5;
 const CALL_METHOD: u8 = 0xa6;
 const LOAD_LOCAL: u8 = 0xa7;
-const RETURN: u8 = 0xa8;
+const DROP_LOCAL: u8 = 0xa8;
+const STORE_GLOBAL: u8 = 0xa9;
+const LOAD_GLOBAL: u8 = 0xaa;
+const RETURN: u8 = 0xab;
 
 const MARK_CLASS_STRING: u8 = 0xb0;
 const MARK_CLASS_CHARACTER: u8 = 0xb1;
@@ -120,6 +126,15 @@ impl BytecodeEncoding for Instruction {
                 + character.serialize(w)?),
             Instruction::LoadLocal(index) => {
                 Ok(LOAD_LOCAL.serialize(&mut w)? + index.serialize(w)?)
+            }
+            Instruction::DropLocal(index) => {
+                Ok(DROP_LOCAL.serialize(&mut w)? + index.serialize(w)?)
+            }
+            Instruction::StoreGlobal(label) => {
+                Ok(STORE_GLOBAL.serialize(&mut w)? + label.serialize(w)?)
+            }
+            Instruction::LoadGlobal(label) => {
+                Ok(LOAD_GLOBAL.serialize(&mut w)? + label.serialize(w)?)
             }
             Instruction::Return(index) => Ok(RETURN.serialize(&mut w)? + index.serialize(w)?),
 
@@ -257,6 +272,9 @@ impl BytecodeEncoding for Instruction {
                 r.deserialize()?,
             )),
             [LOAD_LOCAL] => Ok(Instruction::LoadLocal(r.deserialize()?)),
+            [DROP_LOCAL] => Ok(Instruction::DropLocal(r.deserialize()?)),
+            [STORE_GLOBAL] => Ok(Instruction::StoreGlobal(r.deserialize()?)),
+            [LOAD_GLOBAL] => Ok(Instruction::LoadGlobal(r.deserialize()?)),
             [RETURN] => Ok(Instruction::Return(r.deserialize()?)),
 
             [MARK_CLASS_STRING] => Ok(Instruction::MarkClassString(r.deserialize()?)),

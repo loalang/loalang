@@ -13,6 +13,7 @@ pub struct VM {
     pc: usize,
 
     classes: HashMap<usize, Arc<Class>>,
+    globals: HashMap<usize, Arc<Object>>,
     declaring_class: usize,
 }
 
@@ -28,6 +29,7 @@ impl VM {
             pc: 0,
 
             classes: HashMap::new(),
+            globals: HashMap::new(),
             declaring_class: 0,
         }
     }
@@ -151,6 +153,27 @@ impl VM {
                     )
                     .clone();
                     self.push(local);
+                    self.pc += 1;
+                }
+
+                Instruction::DropLocal(index) => {
+                    self.stack.remove(index as usize);
+                    self.pc += 1;
+                }
+
+                Instruction::StoreGlobal(offset) => {
+                    let offset = offset as usize;
+                    self.globals.insert(
+                        offset,
+                        expect!(self, self.stack.pop(), "nothing on stack to store"),
+                    );
+                    self.pc += 1;
+                }
+
+                Instruction::LoadGlobal(offset) => {
+                    let offset = offset as usize;
+                    self.stack
+                        .push(expect!(self, self.globals.get(&offset), "global not found").clone());
                     self.pc += 1;
                 }
 
@@ -317,16 +340,6 @@ impl VM {
                 unsafe {
                     match instruction {
 
-                        Instruction::LoadGlobal(id) => self
-                            .stack
-                            .push(expect!(self, self.globals.get(&id), "global not found").clone()),
-
-                        Instruction::StoreGlobal(id) => {
-                            self.globals.insert(
-                                id,
-                                expect!(self, self.stack.pop(), "nothing on stack to store"),
-                            );
-                        }
 
                         Instruction::LoadConstString(value) => {
                             self.stack.push(Object::box_string(value))
@@ -642,5 +655,25 @@ mod tests {
         assert_number_evaluates("I64", "-1024");
         assert_number_evaluates("I128", "-1024");
         assert_number_evaluates("IBig", "-1024");
+    }
+
+    #[test]
+    fn globals() {
+        assert_evaluates_to(
+            r#"
+            @String
+                DeclareClass "String"
+                MarkClassString @String
+
+            @global
+                LoadConstString "global value"
+                StoreGlobal @global
+
+            LoadGlobal @global
+
+            Halt
+            "#,
+            "global value",
+        );
     }
 }

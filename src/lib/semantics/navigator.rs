@@ -1319,4 +1319,65 @@ impl Navigator {
         }
         None
     }
+
+    pub fn keyword_pair(&self, keyword_pair: &Node) -> Option<(Node, Node)> {
+        if let KeywordPair { keyword, value, .. } = keyword_pair.kind {
+            if let Some(keyword) = self.find_child(keyword_pair, keyword) {
+                if let Some(value) = self.find_child(keyword_pair, value) {
+                    return Some((keyword, value));
+                }
+            }
+        }
+        None
+    }
+
+    pub fn keyword_pairs(&self, parent: &Node, keyword_pair_ids: &Vec<Id>) -> Vec<(Node, Node)> {
+        keyword_pair_ids
+            .iter()
+            .filter_map(|i| self.find_child(parent, *i))
+            .filter_map(|pair| self.keyword_pair(&pair))
+            .collect()
+    }
+
+    pub fn message_pattern_parameters(&self, message_pattern: &Node) -> Vec<Node> {
+        match message_pattern.kind {
+            BinaryMessagePattern {
+                parameter_pattern, ..
+            } => self
+                .find_child(message_pattern, parameter_pattern)
+                .into_iter()
+                .collect(),
+            KeywordMessagePattern {
+                ref keyword_pairs, ..
+            } => self
+                .keyword_pairs(message_pattern, keyword_pairs)
+                .into_iter()
+                .map(|(_, v)| v)
+                .collect(),
+            _ => vec![],
+        }
+    }
+
+    pub fn signature_parameters(&self, signature: &Node) -> Vec<Node> {
+        if let Signature {
+            message_pattern, ..
+        } = signature.kind
+        {
+            if let Some(message_pattern) = self.find_child(signature, message_pattern) {
+                return self.message_pattern_parameters(&message_pattern);
+            }
+        }
+
+        vec![]
+    }
+
+    pub fn method_parameters(&self, method: &Node) -> Vec<Node> {
+        if let Method { signature, .. } = method.kind {
+            if let Some(signature) = self.find_child(method, signature) {
+                return self.signature_parameters(&signature);
+            }
+        }
+
+        vec![]
+    }
 }

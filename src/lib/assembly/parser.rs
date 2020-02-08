@@ -146,6 +146,33 @@ impl Parser {
                     kind: InstructionKind::LoadLocal(index),
                 });
             }
+            // DropLocal <u16>
+            else if code.starts_with("DropLocal") {
+                code.drain(.."DropLocal".len());
+                let index = self.parse_from_str(code)?;
+                section.instructions.push(Instruction {
+                    leading_comment,
+                    kind: InstructionKind::DropLocal(index),
+                });
+            }
+            // StoreGlobal <label>
+            else if code.starts_with("StoreGlobal") {
+                code.drain(.."StoreGlobal".len());
+                let label = self.parse_label(code)?;
+                section.instructions.push(Instruction {
+                    leading_comment,
+                    kind: InstructionKind::StoreGlobal(label),
+                });
+            }
+            // LoadGlobal <label>
+            else if code.starts_with("LoadGlobal") {
+                code.drain(.."LoadGlobal".len());
+                let label = self.parse_label(code)?;
+                section.instructions.push(Instruction {
+                    leading_comment,
+                    kind: InstructionKind::LoadGlobal(label),
+                });
+            }
             // Return <u16>
             else if code.starts_with("Return") {
                 code.drain(.."Return".len());
