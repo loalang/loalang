@@ -1,4 +1,5 @@
-use crate::vm::Object;
+use crate::vm::CallStack;
+use crate::vm::Runtime;
 use crate::*;
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -37,6 +38,11 @@ fn fixtures() {
 
     for entry in glob::glob("src/__fixtures__/*").unwrap() {
         let entry = entry.unwrap();
+
+        let fixture_name = entry.file_name().and_then(std::ffi::OsStr::to_str).unwrap();
+        if fixture_name.starts_with("_") {
+            continue;
+        }
 
         let mut fixture_config_path = entry.clone();
         fixture_config_path.push("fixture.yml");
@@ -101,16 +107,8 @@ fn fixtures() {
             let mut generator = generation::Generator::new(&mut analysis);
             let assembly = generator.generate_all().unwrap();
 
-            let result = match std::panic::catch_unwind::<_, Arc<Object>>(|| {
-                let mut vm = vm::VM::new();
-                vm.eval_pop::<()>(assembly.clone().into()).unwrap()
-            }) {
-                Ok(r) => r,
-                Err(_) => {
-                    eprintln!("{:#?}", assembly);
-                    panic!("VM panicked")
-                }
-            };
+            let mut vm = vm::VM::new();
+            let result = vm.eval_pop::<TestRuntime>(assembly.clone().into()).unwrap();
 
             let actual_stdout = format!("{}\n", result);
             let expected_stdout: String = fixture_config
@@ -123,9 +121,7 @@ fn fixtures() {
             if actual_stdout != expected_stdout {
                 failures.push(format!(
                     "{}:\nExpected output: {}\n  Actual output: {}",
-                    entry.to_str().unwrap(),
-                    expected_stdout,
-                    actual_stdout
+                    fixture_name, expected_stdout, actual_stdout
                 ));
             }
         }
@@ -133,7 +129,7 @@ fn fixtures() {
         if fixture_config.expected.success != actual_success {
             failures.push(format!(
                 "Expected {} to {}",
-                entry.to_str().unwrap(),
+                fixture_name,
                 if fixture_config.expected.success {
                     "be successful"
                 } else {
@@ -157,4 +153,12 @@ fn matches(comment: &syntax::Token, diagnostic: &Diagnostic) -> bool {
         d_span.start.uri.clone(),
         diagnostic.to_string().as_str(),
     )
+}
+
+struct TestRuntime;
+
+impl Runtime for TestRuntime {
+    fn print_panic(message: String, call_stack: CallStack) {
+        eprintln!("{}: {:#?}", message, call_stack);
+    }
 }

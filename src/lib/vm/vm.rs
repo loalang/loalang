@@ -127,12 +127,13 @@ impl VM {
                     self.pc += 1;
                 }
 
-                Instruction::CallMethod(offset, ref uri, line, character) => {
+                Instruction::CallMethod(ref offset, ref uri, line, character) => {
                     let receiver = unwrap!(self, self.top());
                     let method = expect!(
                         self,
-                        receiver.class.methods.get(&offset),
-                        "message not understood by {}",
+                        receiver.class.methods.get(offset),
+                        "message #{:X} not understood by {}",
+                        offset,
                         receiver
                     )
                     .clone();
