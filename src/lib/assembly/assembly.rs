@@ -197,6 +197,7 @@ impl fmt::Debug for Instruction {
             Noop => write!(f, "Noop"),
             Halt => write!(f, "Halt"),
             Panic => write!(f, "Panic"),
+            DumpStack => write!(f, "DumpStack"),
             DeclareClass(ref name) => write!(f, "DeclareClass {:?}", name),
             DeclareMethod(ref selector, ref label) => {
                 write!(f, "DeclareMethod {:?} @{}", selector, label)
@@ -260,6 +261,7 @@ pub enum InstructionKind {
     Noop,
     Halt,
     Panic,
+    DumpStack,
     DeclareClass(String),
     DeclareMethod(String, Label),
     LoadObject(Label),
@@ -337,6 +339,7 @@ impl Instruction {
             InstructionKind::Noop => BytecodeInstruction::Noop,
             InstructionKind::Halt => BytecodeInstruction::Halt,
             InstructionKind::Panic => BytecodeInstruction::Panic,
+            InstructionKind::DumpStack => BytecodeInstruction::DumpStack,
             InstructionKind::DeclareClass(ref s) => BytecodeInstruction::DeclareClass(s.clone()),
             InstructionKind::DeclareMethod(ref s, ref l) => {
                 BytecodeInstruction::DeclareMethod(s.clone(), label!(l, "method"))

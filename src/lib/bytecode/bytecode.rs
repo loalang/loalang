@@ -6,6 +6,7 @@ pub enum Instruction {
     Noop,
     Halt,
     Panic,
+    DumpStack,
     DeclareClass(String),
     DeclareMethod(String, u64),
     LoadObject(u64),
@@ -59,16 +60,17 @@ pub enum Instruction {
 const NOOP: u8 = 0xa0;
 const HALT: u8 = 0xa1;
 const PANIC: u8 = 0xa2;
-const DECLARE_CLASS: u8 = 0xa3;
-const DECLARE_METHOD: u8 = 0xa4;
-const LOAD_OBJECT: u8 = 0xa5;
-const CALL_METHOD: u8 = 0xa6;
-const CALL_NATIVE: u8 = 0xa7;
-const LOAD_LOCAL: u8 = 0xa8;
-const DROP_LOCAL: u8 = 0xa9;
-const STORE_GLOBAL: u8 = 0xaa;
-const LOAD_GLOBAL: u8 = 0xab;
-const RETURN: u8 = 0xac;
+const DUMP_STACK: u8 = 0xa3;
+const DECLARE_CLASS: u8 = 0xa4;
+const DECLARE_METHOD: u8 = 0xa5;
+const LOAD_OBJECT: u8 = 0xa6;
+const CALL_METHOD: u8 = 0xa7;
+const CALL_NATIVE: u8 = 0xa8;
+const LOAD_LOCAL: u8 = 0xa9;
+const DROP_LOCAL: u8 = 0xaa;
+const STORE_GLOBAL: u8 = 0xab;
+const LOAD_GLOBAL: u8 = 0xac;
+const RETURN: u8 = 0xad;
 
 const MARK_CLASS_STRING: u8 = 0xb0;
 const MARK_CLASS_CHARACTER: u8 = 0xb1;
@@ -114,6 +116,7 @@ impl BytecodeEncoding for Instruction {
             Instruction::Noop => NOOP.serialize(w),
             Instruction::Halt => HALT.serialize(w),
             Instruction::Panic => PANIC.serialize(w),
+            Instruction::DumpStack => DUMP_STACK.serialize(w),
             Instruction::DeclareClass(ref name) => {
                 Ok(DECLARE_CLASS.serialize(&mut w)? + name.serialize(w)?)
             }
@@ -265,6 +268,7 @@ impl BytecodeEncoding for Instruction {
             [NOOP] => Ok(Instruction::Noop),
             [HALT] => Ok(Instruction::Halt),
             [PANIC] => Ok(Instruction::Panic),
+            [DUMP_STACK] => Ok(Instruction::DumpStack),
             [DECLARE_CLASS] => Ok(Instruction::DeclareClass(r.deserialize()?)),
             [DECLARE_METHOD] => Ok(Instruction::DeclareMethod(
                 r.deserialize()?,

@@ -158,6 +158,22 @@ impl Navigator {
         }
     }
 
+    pub fn message_arguments(&self, message: &Node) -> Vec<Node> {
+        match message.kind {
+            KeywordMessage {
+                ref keyword_pairs, ..
+            } => self
+                .keyword_pairs(message, keyword_pairs)
+                .into_iter()
+                .map(|(_, v)| v)
+                .collect(),
+            BinaryMessage { expression, .. } => {
+                self.find_child(message, expression).into_iter().collect()
+            }
+            UnaryMessage { .. } | _ => vec![],
+        }
+    }
+
     pub fn symbol_of(&self, node: &Node) -> Option<(String, Node)> {
         match node.kind {
             Symbol(ref t) => Some((t.lexeme(), node.clone())),

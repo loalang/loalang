@@ -98,6 +98,14 @@ impl Parser {
                     kind: InstructionKind::Panic,
                 });
             }
+            // DumpStack
+            else if code.starts_with("DumpStack") {
+                code.drain(.."DumpStack".len());
+                section.instructions.push(Instruction {
+                    leading_comment,
+                    kind: InstructionKind::DumpStack,
+                });
+            }
             // DeclareClass <string>
             else if code.starts_with("DeclareClass") {
                 code.drain(.."DeclareClass".len());

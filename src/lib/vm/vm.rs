@@ -5,7 +5,7 @@ use crate::*;
 
 pub struct VM {
     // declaring_method: Option<(u64, Method)>,
-    stack: Vec<Arc<Object>>,
+    stack: Stack,
     // globals: HashMap<Id, Arc<Object>>,
     call_stack: CallStack,
     // behaviour_names: HashMap<u64, String>,
@@ -20,7 +20,7 @@ pub struct VM {
 impl VM {
     pub fn new() -> VM {
         VM {
-            stack: Vec::new(),
+            stack: Stack::new(),
             // declaring_method: None,
             // globals: HashMap::new(),
             call_stack: CallStack::new(),
@@ -41,15 +41,10 @@ impl VM {
     #[inline]
     fn log_stack(&self) {
         #[cfg(debug_assertions)]
-        {
-            log::info!("Stack ({})", self.stack.len());
-            for (i, o) in self.stack.iter().rev().enumerate() {
-                log::info!("{:0>2}  {}", i, o);
-            }
-        }
+        log::info!("{:?}", self.stack);
     }
 
-    pub fn stack(&self) -> &Vec<Arc<Object>> {
+    pub fn stack(&self) -> &Stack {
         &self.stack
     }
 
@@ -68,7 +63,7 @@ impl VM {
 
     #[inline]
     fn load_object(&mut self, object: Arc<Object>) {
-        self.stack.push(object);
+        self.push(object);
         self.pc += 1;
     }
 
@@ -95,6 +90,11 @@ impl VM {
                         ),
                         self.call_stack.clone(),
                     )
+                }
+
+                Instruction::DumpStack => {
+                    println!("{:?}", self.stack);
+                    self.pc += 1;
                 }
 
                 Instruction::DeclareClass(ref name) => {
@@ -155,7 +155,7 @@ impl VM {
                 Instruction::LoadLocal(index) => {
                     let local = expect!(
                         self,
-                        self.stack.get(index as usize),
+                        self.stack.at(index as usize),
                         "not enough locals on the stack"
                     )
                     .clone();
@@ -164,7 +164,7 @@ impl VM {
                 }
 
                 Instruction::DropLocal(index) => {
-                    self.stack.remove(index as usize);
+                    self.stack.drop(index as usize);
                     self.pc += 1;
                 }
 
@@ -179,8 +179,7 @@ impl VM {
 
                 Instruction::LoadGlobal(offset) => {
                     let offset = offset as usize;
-                    self.stack
-                        .push(expect!(self, self.globals.get(&offset), "global not found").clone());
+                    self.push(expect!(self, self.globals.get(&offset), "global not found").clone());
                     self.pc += 1;
                 }
 
@@ -494,7 +493,7 @@ impl VM {
             None
         } else {
             let result = self.stack.pop();
-            if self.stack.len() > 0 {
+            if self.stack.size() > 0 {
                 self.log_stack()
             }
             result
@@ -508,7 +507,7 @@ impl VM {
     pub fn top(&self) -> VMResult<&Arc<Object>> {
         VMResult::Ok(expect!(
             self,
-            self.stack.last(),
+            self.stack.top(),
             "tried to peek at top of empty stack"
         ))
     }
@@ -538,7 +537,7 @@ mod tests {
         let result = vm.eval_pop::<()>(instructions.rotate().unwrap()).unwrap();
 
         assert_eq!(result.to_string(), expected);
-        assert_eq!(vm.stack().len(), 0, "stack should be empty");
+        assert_eq!(vm.stack().size(), 0, "stack should be empty");
     }
 
     #[test]
@@ -699,6 +698,37 @@ mod tests {
             Halt
             "#,
             "25",
+        );
+    }
+
+    #[test]
+    fn binary_call() {
+        assert_evaluates_to(
+            r#"
+            @A
+                DeclareClass "A"
+                DeclareMethod "+" @A#+
+
+            @B
+                DeclareClass "B"
+
+            ; Right-hand operand
+            LoadObject @B
+
+            ; Left-hand operand (receiver)
+            LoadObject @A
+
+            CallMethod @A#+ "call site" 42 42
+                DumpStack
+            Halt
+
+            @A#+
+                DumpStack
+                LoadLocal 1
+                DumpStack
+                Return 2
+            "#,
+            "a B",
         );
     }
 }

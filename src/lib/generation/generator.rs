@@ -321,13 +321,20 @@ impl<'a> Generator<'a> {
             }
             MessageSendExpression {
                 expression: r,
-                message: _,
+                message,
             } => {
                 let behaviour = self
                     .analysis
                     .types
                     .get_behaviour_from_message_send(expression)?;
 
+                // Arguments
+                let message = self.analysis.navigator.find_child(expression, message)?;
+                for argument in self.analysis.navigator.message_arguments(&message) {
+                    self.generate_expression(assembly, section, &argument)?;
+                }
+
+                // Receiver
                 let expression = self.analysis.navigator.find_child(expression, r)?;
                 self.generate_expression(assembly, section, &expression)?;
 
@@ -1157,6 +1164,39 @@ mod tests {
                 @Loa/Number#+
                     CallNative Number_plus
                     Return 0
+            "#,
+        );
+    }
+
+    #[test]
+    fn binary_call() {
+        assert_generates(
+            Source::test_repl(
+                r#"
+                    class A {
+                        public + A other => other.
+                    }
+
+                    A + A.
+                "#,
+            ),
+            r#"
+                @A
+                    DeclareClass "A"
+                    DeclareMethod "+" @A#+
+
+                ; Right-hand operand
+                LoadObject @A
+
+                ; Left-hand operand (receiver)
+                LoadObject @A
+
+                CallMethod @A#+ "test:" 6 21
+                Halt
+
+                @A#+
+                    LoadLocal 1
+                    Return 2
             "#,
         );
     }

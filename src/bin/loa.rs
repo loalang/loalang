@@ -278,8 +278,16 @@ fn main() -> Result<(), clap::Error> {
             }
             Some(file) => {
                 log_to_stderr();
-                let instructions = std::fs::read(file)
-                    .map(|bytes| Vec::<_>::deserialize(bytes.as_slice()).unwrap())?;
+                let instructions = if file.ends_with(".loaasm") {
+                    let assembly_code = std::fs::read_to_string(file).unwrap();
+                    let assembly = loa::assembly::Parser::new()
+                        .parse(assembly_code.as_ref())
+                        .unwrap();
+                    assembly.into()
+                } else {
+                    std::fs::read(file)
+                        .map(|bytes| Vec::<_>::deserialize(bytes.as_slice()).unwrap())?
+                };
 
                 let mut vm = VM::new();
                 if let Some(result) = vm.eval_pop::<ServerRuntime>(instructions) {
