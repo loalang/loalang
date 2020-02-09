@@ -339,7 +339,7 @@ impl<'a> Generator<'a> {
                 // Arguments
                 let message = self.analysis.navigator.find_child(expression, message)?;
                 let arguments = self.analysis.navigator.message_arguments(&message);
-                for argument in arguments.iter() {
+                for argument in arguments.iter().rev() {
                     self.generate_expression(assembly, section, argument)?;
                     self.locals.push(argument.id);
                 }
@@ -1254,6 +1254,46 @@ mod tests {
                 @N/A#+
                     LoadLocal 1
                     Return 2
+            "#,
+        );
+    }
+
+    #[test]
+    fn keyword_arguments() {
+        assert_generates(
+            Source::test_repl(
+                r#"
+                    class A {
+                        public one: A one two: A two => two.
+                    }
+                    class B {
+                        is A.
+                    }
+
+                    A one: A two: B.
+                "#,
+            ),
+            r#"
+                @A
+                    DeclareClass "A"
+                    DeclareMethod "one:two:" @A#one:two:
+
+                @B
+                    DeclareClass "B"
+                    DeclareMethod "one:two:" @A#one:two:
+
+                ; two:
+                LoadObject @B
+                ; one:
+                LoadObject @A
+                ; self
+                LoadObject @A
+                CallMethod @A#one:two: "test:" 9 21
+                Halt
+
+                @A#one:two:
+                    LoadLocal 2
+                    Return 3
             "#,
         );
     }
