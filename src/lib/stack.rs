@@ -1,41 +1,44 @@
-use crate::vm::*;
 use crate::*;
 
-pub struct Stack {
-    vec: Vec<Arc<Object>>,
+pub struct Stack<T> {
+    vec: Vec<T>,
 }
 
-impl Stack {
-    pub fn new() -> Stack {
+impl<T> Stack<T> {
+    pub fn new() -> Stack<T> {
         Stack { vec: vec![] }
     }
 
-    pub fn push(&mut self, item: Arc<Object>) {
+    pub fn push(&mut self, item: T) {
         self.vec.push(item);
     }
 
-    pub fn pop(&mut self) -> Option<Arc<Object>> {
+    pub fn pop(&mut self) -> Option<T> {
         self.vec.pop()
     }
 
     pub fn drop(&mut self, index: usize) {
-        self.vec.remove(index);
+        self.vec.remove(self.vec.len() - 1 - index);
     }
 
-    pub fn at(&self, index: usize) -> Option<&Arc<Object>> {
+    pub fn at(&self, index: usize) -> Option<&T> {
         self.vec.get(self.vec.len() - 1 - index)
     }
 
-    pub fn top(&self) -> Option<&Arc<Object>> {
+    pub fn top(&self) -> Option<&T> {
         self.at(0)
     }
 
     pub fn size(&self) -> usize {
         self.vec.len()
     }
+
+    pub fn iter(&self) -> std::iter::Rev<std::slice::Iter<T>> {
+        self.vec.iter().rev()
+    }
 }
 
-impl fmt::Debug for Stack {
+impl<T: fmt::Display> fmt::Debug for Stack<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "STACK ------------------------")?;
         for (i, o) in self.vec.iter().enumerate() {

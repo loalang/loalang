@@ -100,15 +100,15 @@ impl fmt::Debug for Assembly {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (i, section) in self.iter().enumerate() {
             if i > 0 {
-                write!(f, "\n")?;
+                writeln!(f)?;
             }
 
             if let Some(ref comment) = section.leading_comment {
-                write!(f, "; {}\n", comment)?;
+                writeln!(f, "; {}", comment)?;
             }
 
             let indent = if let Some(ref label) = section.label {
-                write!(f, "@{}\n", label)?;
+                writeln!(f, "@{}", label)?;
                 true
             } else {
                 false
@@ -118,7 +118,13 @@ impl fmt::Debug for Assembly {
                 if indent {
                     write!(f, "  ")?;
                 }
-                write!(f, "{:?}\n", instruction)?;
+                if let Some(ref comment) = instruction.leading_comment {
+                    writeln!(f, ";{}", comment)?;
+                    if indent {
+                        write!(f, "  ")?;
+                    }
+                }
+                writeln!(f, "{:?}", instruction)?;
             }
         }
         Ok(())
@@ -190,9 +196,6 @@ pub struct Instruction {
 impl fmt::Debug for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use InstructionKind::*;
-        if let Some(ref comment) = self.leading_comment {
-            write!(f, "; {}\n", comment)?;
-        }
         match self.kind {
             Noop => write!(f, "Noop"),
             Halt => write!(f, "Halt"),

@@ -5,7 +5,7 @@ use crate::*;
 
 pub struct VM {
     // declaring_method: Option<(u64, Method)>,
-    stack: Stack,
+    stack: Stack<Arc<Object>>,
     // globals: HashMap<Id, Arc<Object>>,
     call_stack: CallStack,
     // behaviour_names: HashMap<u64, String>,
@@ -44,7 +44,7 @@ impl VM {
         log::info!("{:?}", self.stack);
     }
 
-    pub fn stack(&self) -> &Stack {
+    pub fn stack(&self) -> &Stack<Arc<Object>> {
         &self.stack
     }
 

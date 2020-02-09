@@ -2,9 +2,6 @@
 mod vm_result;
 pub use self::vm_result::*;
 
-mod stack;
-pub use self::stack::*;
-
 mod vm;
 pub use self::vm::*;
 

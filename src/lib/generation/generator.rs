@@ -19,7 +19,7 @@ impl REPLDirectives for () {
 
 pub struct Generator<'a> {
     analysis: &'a mut Analysis,
-    locals: Vec<Id>,
+    locals: Stack<Id>,
     parameters: Vec<Id>,
 }
 
@@ -27,7 +27,7 @@ impl<'a> Generator<'a> {
     pub fn new(analysis: &'a mut Analysis) -> Generator<'a> {
         Generator {
             analysis,
-            locals: vec![],
+            locals: Stack::new(),
             parameters: vec![],
         }
     }
@@ -143,7 +143,7 @@ impl<'a> Generator<'a> {
             LetBinding { expression, .. } => {
                 let expression = self.analysis.navigator.find_child(binding, expression)?;
                 self.generate_expression(assembly, section, &expression)?;
-                self.locals.insert(0, binding.id);
+                self.locals.push(binding.id);
                 Ok(())
             }
             _ => Err(invalid_node(binding, "Expected let binding.")),
@@ -243,7 +243,7 @@ impl<'a> Generator<'a> {
     fn index_of_parameter(&self, parameter: Id) -> GenerationResult<u16> {
         for (i, p) in self.parameters.iter().enumerate() {
             if *p == parameter {
-                return Ok((i + 1 + self.locals.len()) as u16);
+                return Ok((i + 1 + self.locals.size()) as u16);
             }
         }
         Err(GenerationError::OutOfScope(parameter))
@@ -266,7 +266,7 @@ impl<'a> Generator<'a> {
     ) -> GenerationResult<()> {
         match expression.kind {
             SelfExpression(_) => {
-                section.add_instruction(InstructionKind::LoadLocal(self.locals.len() as u16));
+                section.add_instruction(InstructionKind::LoadLocal(self.locals.size() as u16));
             }
             StringExpression(_, ref v) => {
                 section.add_instruction(InstructionKind::LoadConstString(v.clone()));
@@ -294,7 +294,7 @@ impl<'a> Generator<'a> {
                 self.generate_expression(assembly, section, &expression)?;
                 let index = self.index_of_local(let_binding.id)?;
                 section.add_instruction(InstructionKind::DropLocal(index + 1));
-                self.locals.remove(index as usize);
+                self.locals.drop(index as usize);
             }
             ReferenceExpression { .. } => {
                 let declaration = self
@@ -330,8 +330,10 @@ impl<'a> Generator<'a> {
 
                 // Arguments
                 let message = self.analysis.navigator.find_child(expression, message)?;
-                for argument in self.analysis.navigator.message_arguments(&message) {
-                    self.generate_expression(assembly, section, &argument)?;
+                let arguments = self.analysis.navigator.message_arguments(&message);
+                for argument in arguments.iter() {
+                    self.generate_expression(assembly, section, argument)?;
+                    self.locals.push(argument.id);
                 }
 
                 // Receiver
@@ -360,6 +362,9 @@ impl<'a> Generator<'a> {
                     line as u64,
                     character as u64,
                 ));
+                for _ in arguments {
+                    self.locals.pop();
+                }
             }
             _ => return Err(invalid_node(expression, "Expected expression.")),
         }
@@ -1195,6 +1200,50 @@ mod tests {
                 Halt
 
                 @A#+
+                    LoadLocal 1
+                    Return 2
+            "#,
+        );
+    }
+
+    #[test]
+    fn local_as_argument() {
+        assert_generates(
+            Source::test(
+                r#"
+                    namespace N.
+
+                    class A {
+                        public go =>
+                          let a = A.
+                          a + a.
+
+                        public + A other => other.
+                    }
+                "#,
+            ),
+            r#"
+                @N/A
+                    DeclareClass "N/A"
+                    DeclareMethod "go" @N/A#go
+                    DeclareMethod "+" @N/A#+
+                    Halt
+
+                @N/A#go
+                    ; let a = A.
+                    LoadObject @N/A
+
+                    ; RHS
+                    LoadLocal 0
+
+                    ; LHS – because the stack grew with last instruction
+                    LoadLocal 1
+
+                    CallMethod @N/A#+ "test:" 7 27
+                    DropLocal 1
+                    Return 1
+
+                @N/A#+
                     LoadLocal 1
                     Return 2
             "#,

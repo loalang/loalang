@@ -45,6 +45,9 @@ pub use self::id::*;
 mod cache;
 pub use self::cache::*;
 
+mod stack;
+pub use self::stack::*;
+
 mod bit_size;
 pub use self::bit_size::*;
 
