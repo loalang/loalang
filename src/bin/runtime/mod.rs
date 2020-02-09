@@ -12,13 +12,15 @@ impl Runtime for ServerRuntime {
             eprint!("{} ", " PANIC ".bold().white().on_red());
             eprintln!("{}", message.red());
             for StackFrame {
+                receiver,
                 method,
                 callsite: SourceCodeLocation(uri, line, character),
                 ..
             } in call_stack
             {
                 eprintln!(
-                    "{}\n  {}",
+                    "{} {}\n  {}",
+                    receiver.class.name.yellow(),
                     method.name.yellow(),
                     format!("({}:{}:{})", uri, line, character).bright_black(),
                 );

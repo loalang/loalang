@@ -128,7 +128,7 @@ impl VM {
                 }
 
                 Instruction::CallMethod(ref offset, ref uri, line, character) => {
-                    let receiver = unwrap!(self, self.top());
+                    let receiver = unwrap!(self, self.top()).clone();
                     let method = expect!(
                         self,
                         receiver.class.methods.get(offset),
@@ -140,6 +140,7 @@ impl VM {
                     let return_address = self.pc + 1;
                     self.pc = method.offset;
                     self.call_stack.push(
+                        receiver,
                         method,
                         return_address,
                         SourceCodeLocation(uri.clone(), line, character),

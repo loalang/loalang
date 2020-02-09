@@ -6,6 +6,7 @@ pub struct CallStack(Vec<StackFrame>);
 
 #[derive(Clone, Debug)]
 pub struct StackFrame {
+    pub receiver: Arc<Object>,
     pub method: Arc<Method>,
 
     pub return_address: usize,
@@ -22,11 +23,13 @@ impl CallStack {
 
     pub fn push(
         &mut self,
+        receiver: Arc<Object>,
         method: Arc<Method>,
         return_address: usize,
         callsite: SourceCodeLocation,
     ) {
         self.0.push(StackFrame {
+            receiver,
             method,
             return_address,
             callsite,

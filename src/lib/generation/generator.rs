@@ -234,6 +234,9 @@ impl<'a> Generator<'a> {
             ));
 
             self.parameters.clear();
+        } else {
+            method_section.add_instruction(InstructionKind::LoadConstString(format!("{} is not implemented.", label)));
+            method_section.add_instruction(InstructionKind::Panic);
         }
 
         assembly.add_section(method_section);
@@ -267,6 +270,11 @@ impl<'a> Generator<'a> {
         match expression.kind {
             SelfExpression(_) => {
                 section.add_instruction(InstructionKind::LoadLocal(self.locals.size() as u16));
+            }
+            PanicExpression{expression: e, ..} => {
+                let e = self.analysis.navigator.find_child(expression, e)?;
+                self.generate_expression(assembly, section, &e)?;
+                section.add_instruction(InstructionKind::Panic);
             }
             StringExpression(_, ref v) => {
                 section.add_instruction(InstructionKind::LoadConstString(v.clone()));
