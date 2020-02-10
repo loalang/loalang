@@ -577,30 +577,6 @@ impl<'a> Generator<'a> {
         });
         Ok(())
     }
-
-    /*
-    fn resolve_inherits(&mut self, class: &Node) -> GenerationResult {
-        let mut instructions = Instructions::new();
-        let class_type = self.analysis.types.get_type_of_declaration(&class);
-        let behaviours = self.analysis.types.get_behaviours(&class_type);
-
-        for behaviour in behaviours {
-            let method = self.analysis.navigator.find_node(behaviour.method_id)?;
-
-            if behaviour.receiver_type == class_type {
-                // Noop
-            } else if let Type::Class(_, class_id, _) = behaviour.receiver_type {
-                instructions.push(Instruction::InheritMethod(
-                    class_id,
-                    class.id,
-                    self.behaviour_id(&method)?,
-                ));
-            }
-        }
-
-        Ok(instructions)
-    }
-    */
 }
 
 fn invalid_node(node: &Node, message: &str) -> GenerationError {

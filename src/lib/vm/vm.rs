@@ -1,7 +1,6 @@
 use crate::bytecode::Instruction;
 use crate::vm::*;
 use crate::*;
-// use std::mem::replace;
 
 pub struct VM {
     stack: Stack<Arc<Object>>,
@@ -19,10 +18,7 @@ impl VM {
     pub fn new() -> VM {
         VM {
             stack: Stack::new(),
-            // declaring_method: None,
-            // globals: HashMap::new(),
             call_stack: CallStack::new(),
-            // behaviour_names: HashMap::new(),
             program: Vec::new(),
             pc: 0,
 
@@ -362,133 +358,6 @@ impl VM {
                     self.load_object(Object::box_fbig(value))
                 }
             }
-            /*
-
-                unsafe {
-                    match instruction {
-
-
-                        Instruction::LoadConstString(value) => {
-                            self.stack.push(Object::box_string(value))
-                        }
-                        Instruction::DeclareClass(id, name) => {
-                            self.classes.insert(
-                                id,
-                                Arc::new(Class {
-                                    name: name.clone(),
-                                    methods: HashMap::new(),
-                                }),
-                            );
-                        }
-                        Instruction::BeginMethod(id, name) => {
-                            self.behaviour_names.insert(id, name.clone());
-                            self.declaring_method = Some((
-                                id,
-                                Method {
-                                    name,
-                                    instructions: vec![],
-                                },
-                            ));
-                        }
-                        Instruction::EndMethod(class_id) => {
-                            let class = expect!(
-                                self,
-                                self.classes.get_mut(&class_id),
-                                "method declared on unknown class"
-                            );
-                            let class = expect!(
-                                self,
-                                Arc::get_mut(class),
-                                "cannot declare method on class that has objects"
-                            );
-                            let (id, method) = expect!(
-                                self,
-                                replace(&mut self.declaring_method, None),
-                                "cannot end method when not started"
-                            );
-                            class.methods.insert(id, Arc::new(method));
-                        }
-
-                        Instruction::LoadArgument(arity) => {
-                            self.stack
-                                .push(self.stack[self.stack.len() - (arity as usize)].clone());
-                        }
-                        Instruction::Return(arity) => {
-                            log::info!("Stack after method (before return) (arity {}):", arity);
-                            self.log_stack();
-                            let result = expect!(self, self.stack.pop(), "method didn't return");
-                            for _ in 0..arity {
-                                expect!(self, self.stack.pop(), "arguments were not loaded properly");
-                            }
-                            self.stack.push(result);
-                            log::info!("Stack after method (arity {}):", arity);
-                            self.log_stack();
-                        }
-                        Instruction::LoadLocal(index) => {
-                            let local = self.stack[self.stack.len() - (index as usize) - 1].clone();
-                            self.stack.push(local);
-                        }
-                        Instruction::DropLocal(index) => {
-                            self.stack.remove(self.stack.len() - (index as usize));
-                        }
-                        Instruction::ReferenceToClass(id) => {
-                            let class = expect!(self, self.classes.get(&id), "deref unknown class");
-                            self.stack.push(Arc::new(Object {
-                                class: class.clone(),
-                                const_value: ConstValue::Nothing,
-                            }));
-                        }
-                        Instruction::SendMessage(location, id) => {
-                            log::info!("Stack before message {}:", location);
-                            self.log_stack();
-                            let receiver = expect!(self, self.stack.last(), "empty stack");
-                            let method = expect!(
-                                self,
-                                receiver.class.methods.get(&id),
-                                "{} doesn't understand message {}",
-                                receiver.class.name,
-                                self.behaviour_names.get(&id).cloned().unwrap_or("".into()),
-                            )
-                            .clone();
-                            self.call_stack
-                                .push((location, receiver.class.clone(), method.clone()));
-                            unwrap!(self, self.do_eval::<M>(method.instructions.clone()));
-                            self.call_stack.pop();
-                        }
-                        Instruction::InheritMethod(superclass_id, subclass_id, behaviour_id) => {
-                            let method = {
-                                let super_class = expect!(
-                                    self,
-                                    self.classes.get(&superclass_id),
-                                    "inheriting from unknown class"
-                                );
-
-                                expect!(
-                                    self,
-                                    super_class.methods.get(&behaviour_id),
-                                    "inheriting unknown method"
-                                )
-                                .clone()
-                            };
-                            let sub_class = expect!(
-                                self,
-                                self.classes.get_mut(&subclass_id),
-                                "unknown class cannot inherit method"
-                            );
-                            let sub_class = expect!(
-                                self,
-                                Arc::get_mut(sub_class),
-                                "cannot inherit method onto class that has objects"
-                            );
-
-                            sub_class.methods.insert(behaviour_id, method);
-                        }
-                        Instruction::CallNative(method) => {
-                            M::call(self, method);
-                        }
-                    }
-                }
-            */
         }
         VMResult::Ok(())
     }
