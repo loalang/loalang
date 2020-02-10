@@ -4,17 +4,15 @@ use crate::*;
 // use std::mem::replace;
 
 pub struct VM {
-    // declaring_method: Option<(u64, Method)>,
     stack: Stack<Arc<Object>>,
-    // globals: HashMap<Id, Arc<Object>>,
     call_stack: CallStack,
-    // behaviour_names: HashMap<u64, String>,
     program: Vec<Instruction>,
     pc: usize,
 
-    classes: HashMap<usize, Arc<Class>>,
-    globals: HashMap<usize, Arc<Object>>,
-    declaring_class: usize,
+    classes: HashMap<u64, Arc<Class>>,
+    methods: HashMap<u64, Arc<Method>>,
+    globals: HashMap<u64, Arc<Object>>,
+    declaring_class: u64,
 }
 
 impl VM {
@@ -29,6 +27,7 @@ impl VM {
             pc: 0,
 
             classes: HashMap::new(),
+            methods: HashMap::new(),
             globals: HashMap::new(),
             declaring_class: 0,
         }
@@ -53,7 +52,7 @@ impl VM {
         VMResult::Ok(
             expect!(
                 self,
-                self.classes.get(&(address as usize)),
+                self.classes.get(&address),
                 "no class found at {:X}",
                 address
             )
@@ -99,8 +98,9 @@ impl VM {
 
                 Instruction::DeclareClass(ref name) => {
                     let class = Class::new(name.clone(), self.pc);
-                    self.classes.insert(self.pc, class);
-                    self.declaring_class = self.pc;
+                    let class_id = self.pc as u64;
+                    self.classes.insert(class_id, class);
+                    self.declaring_class = class_id;
                     self.pc += 1;
                 }
 
@@ -109,18 +109,40 @@ impl VM {
                         name: name.clone(),
                         offset: offset as usize,
                     });
+                    self.methods.insert(offset, method);
+                    self.pc += 1;
+                }
+
+                Instruction::UseMethod(offset) => {
+                    let method =
+                        expect!(self, self.methods.get(&offset), "cannot use unknown method");
                     let class = expect!(
                         self,
                         self.classes.get_mut(&self.declaring_class),
                         "method outside class"
                     );
                     let class = expect!(self, Arc::get_mut(class), "class in use");
-                    class.methods.insert(offset, method);
+                    class.methods.insert(offset, method.clone());
+                    self.pc += 1;
+                }
+
+                Instruction::OverrideMethod(source_offset, target_offset) => {
+                    let method = expect!(
+                        self,
+                        self.methods.get(&target_offset),
+                        "cannot use unknown method"
+                    );
+                    let class = expect!(
+                        self,
+                        self.classes.get_mut(&self.declaring_class),
+                        "method outside class"
+                    );
+                    let class = expect!(self, Arc::get_mut(class), "class in use");
+                    class.methods.insert(source_offset, method.clone());
                     self.pc += 1;
                 }
 
                 Instruction::LoadObject(offset) => {
-                    let offset = offset as usize;
                     let class = expect!(self, self.classes.get(&offset), "unknown class");
                     let object = Object::new(class);
                     self.push(object);
@@ -170,7 +192,6 @@ impl VM {
                 }
 
                 Instruction::StoreGlobal(offset) => {
-                    let offset = offset as usize;
                     self.globals.insert(
                         offset,
                         expect!(self, self.stack.pop(), "nothing on stack to store"),
@@ -179,7 +200,6 @@ impl VM {
                 }
 
                 Instruction::LoadGlobal(offset) => {
-                    let offset = offset as usize;
                     self.push(expect!(self, self.globals.get(&offset), "global not found").clone());
                     self.pc += 1;
                 }
@@ -556,9 +576,12 @@ mod tests {
     fn declare_and_instantiate_class() {
         assert_evaluates_to(
             r#"
+            @SomeClass$methods
+                DeclareMethod "someMethod" @SomeClass#someMethod
+
             @SomeClass
                 DeclareClass "SomeClass"
-                DeclareMethod "someMethod" @SomeClass#someMethod
+                UseMethod @SomeClass#someMethod
 
             LoadObject @SomeClass
             CallMethod @SomeClass#someMethod "call site" 1 1
@@ -576,13 +599,19 @@ mod tests {
     fn inherited_method() {
         assert_evaluates_to(
             r#"
+            @B$methods
+                DeclareMethod "a" @A#a
+
+            @A$methods
+                DeclareMethod "a" @A#a
+
             @B
                 DeclareClass "B"
-                DeclareMethod "a" @A#a
+                UseMethod @A#a
 
             @A
                 DeclareClass "A"
-                DeclareMethod "a" @A#a
+                UseMethod @A#a
 
             LoadObject @B
             CallMethod @A#a "call site" 1 1
@@ -706,9 +735,12 @@ mod tests {
     fn binary_call() {
         assert_evaluates_to(
             r#"
+            @A$methods
+                DeclareMethod "+" @A#+
+
             @A
                 DeclareClass "A"
-                DeclareMethod "+" @A#+
+                UseMethod @A#+
 
             @B
                 DeclareClass "B"

@@ -2,8 +2,6 @@ use crate::vm::CallStack;
 use crate::vm::Runtime;
 use crate::*;
 use serde::Deserialize;
-use std::path::PathBuf;
-use std::str::FromStr;
 
 extern crate serde_yaml;
 extern crate simple_logging;
@@ -20,19 +18,9 @@ struct FixtureExpectations {
     stdout: Vec<String>,
 }
 
-fn log_to_file() {
-    log_panics::init();
-    let log_file = std::fs::OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(PathBuf::from_str("/usr/local/var/log/loa.log").unwrap())
-        .unwrap();
-    simple_logging::log_to(log_file, log::LevelFilter::Info);
-}
-
 #[test]
 fn fixtures() {
-    log_to_file();
+    simple_logging::log_to_stderr(LevelFilter::Debug);
 
     let mut failures = vec![];
 

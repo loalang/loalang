@@ -377,6 +377,15 @@ impl Navigator {
         }
     }
 
+    pub fn qualified_name_of_method(&self, method: &Node) -> Option<String> {
+        let selector = self.method_selector(method)?;
+        let class = self.closest_class_upwards(method)?;
+
+        let (qn, _, _) = self.qualified_name_of(&class)?;
+
+        Some(format!("{}#{}", qn, selector))
+    }
+
     pub fn usage_target_from_symbol(&self, symbol: &Node) -> Option<Node> {
         let parent = self.parent(symbol)?;
         if parent.is_qualified_symbol() {
@@ -1406,5 +1415,32 @@ impl Navigator {
         }
 
         vec![]
+    }
+
+    pub fn methods_overridden_by(&self, method: &Node) -> Vec<Node> {
+        self.methods_overridden_by_impl(method).unwrap_or(vec![])
+    }
+
+    fn methods_overridden_by_impl(&self, method: &Node) -> Option<Vec<Node>> {
+        let selector = self.method_selector(method)?;
+        let class = self.closest_class_upwards(method)?;
+
+        let mut methods = vec![];
+
+        for super_type in self.super_type_expressions(&class) {
+            if let Some(super_class) = self.find_declaration(&super_type, DeclarationKind::Type) {
+                for super_method in self.methods_of_class(&super_class) {
+                    if let Some(super_method_selector) = self.method_selector(&super_method) {
+                        if super_method_selector == selector {
+                            methods.extend(self.methods_overridden_by(&super_method));
+
+                            methods.push(super_method);
+                        }
+                    }
+                }
+            }
+        }
+
+        Some(methods)
     }
 }

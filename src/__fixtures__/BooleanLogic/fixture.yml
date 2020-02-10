@@ -1,0 +1,6 @@
+description: Using the Loa standard library to test some boolean logic.
+main_class: BooleanLogic/Main
+expected:
+  success: true
+  stdout:
+    - 100

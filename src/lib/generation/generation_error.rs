@@ -10,7 +10,8 @@ pub enum GenerationError {
 }
 
 impl From<NoneError> for GenerationError {
-    fn from(_: NoneError) -> Self {
-        GenerationError::TraversalFailure
+    fn from(e: NoneError) -> Self {
+        panic!(e)
+        // GenerationError::TraversalFailure
     }
 }

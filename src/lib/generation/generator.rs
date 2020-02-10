@@ -45,7 +45,7 @@ impl<'a> Generator<'a> {
             }
         }
         assembly
-            .last_leading_mut()
+            .last_main_section_mut()
             .add_instruction(InstructionKind::Halt);
 
         Ok(assembly)
@@ -60,7 +60,7 @@ impl<'a> Generator<'a> {
         self.generate_source(directives, assembly, uri)?;
 
         assembly
-            .last_leading_mut()
+            .last_main_section_mut()
             .add_instruction(InstructionKind::Halt);
 
         Ok(())
@@ -126,7 +126,7 @@ impl<'a> Generator<'a> {
                 let expression = self.analysis.navigator.find_child(binding, expression)?;
                 self.generate_expression(assembly, &mut section, &expression)?;
                 section.add_instruction(InstructionKind::StoreGlobal(label.clone()));
-                assembly.add_leading_section(section);
+                assembly.add_main_section(section);
                 Ok(())
             }
             _ => Err(invalid_node(binding, "Expected let binding.")),
@@ -181,11 +181,26 @@ impl<'a> Generator<'a> {
             }
         }
 
+        let mut methods_section = Section::named(format!("{}$methods", qn));
+
         for method in self.analysis.navigator.methods_of_class(class) {
             let (method_name, method_label) =
                 self.declare_method(assembly, qn.as_ref(), &method)?;
 
-            section.add_instruction(InstructionKind::DeclareMethod(method_name, method_label));
+            methods_section.add_instruction(InstructionKind::DeclareMethod(
+                method_name,
+                method_label.clone(),
+            ));
+
+            for overridden_method in self.analysis.navigator.methods_overridden_by(&method) {
+                let label = self
+                    .analysis
+                    .navigator
+                    .qualified_name_of_method(&overridden_method)?;
+                section.add_instruction(InstructionKind::OverrideMethod(label, method_label.clone()));
+            }
+
+            section.add_instruction(InstructionKind::UseMethod(method_label));
         }
 
         for behaviour in self
@@ -202,11 +217,15 @@ impl<'a> Generator<'a> {
                 let selector = self.analysis.navigator.method_selector(&method)?;
                 let label = format!("{}#{}", owning_class_qn, selector);
 
-                section.add_instruction(InstructionKind::DeclareMethod(selector, label));
+                section.add_instruction(InstructionKind::UseMethod(label));
             }
         }
 
-        assembly.add_leading_section(section);
+        if !methods_section.is_empty() {
+            assembly.add_method_declaration_section(methods_section);
+        }
+
+        assembly.add_class_declaration_section(section);
         Ok(())
     }
 
@@ -235,7 +254,10 @@ impl<'a> Generator<'a> {
 
             self.parameters.clear();
         } else {
-            method_section.add_instruction(InstructionKind::LoadConstString(format!("{} is not implemented.", label)));
+            method_section.add_instruction(InstructionKind::LoadConstString(format!(
+                "{} is not implemented.",
+                label
+            )));
             method_section.add_instruction(InstructionKind::Panic);
         }
 
@@ -271,7 +293,7 @@ impl<'a> Generator<'a> {
             SelfExpression(_) => {
                 section.add_instruction(InstructionKind::LoadLocal(self.locals.size() as u16));
             }
-            PanicExpression{expression: e, ..} => {
+            PanicExpression { expression: e, .. } => {
                 let e = self.analysis.navigator.find_child(expression, e)?;
                 self.generate_expression(assembly, section, &e)?;
                 section.add_instruction(InstructionKind::Panic);
@@ -411,7 +433,7 @@ impl<'a> Generator<'a> {
                     .find_child(&repl_statement, expression)?;
                 let mut section = Section::unnamed();
                 self.generate_expression(assembly, &mut section, &expression)?;
-                assembly.add_leading_section(section);
+                assembly.add_main_section(section);
                 Ok(())
             }
             REPLDirective {
@@ -445,120 +467,7 @@ impl<'a> Generator<'a> {
             _ => self.generate_declarations(assembly, &vec![repl_statement.clone()]),
         }
     }
-    /*
 
-    fn index_of_local(&self, declaration: &Node) -> Option<u16> {
-        self.local_ids
-            .iter()
-            .position(|id| *id == declaration.id)
-            .map(|i| i as u16)
-    }
-
-    fn generate_expression(&mut self, expression: &Node) -> GenerationResult {
-        let result = match expression.kind {
-            ReferenceExpression { .. } => {
-                let declaration = self
-                    .analysis
-                    .navigator
-                    .find_declaration(expression, DeclarationKind::Value)?;
-
-                match declaration.kind {
-                    Class { .. } => Ok(Instruction::ReferenceToClass(declaration.id).into()),
-                    ParameterPattern { .. } => Ok(Instruction::LoadLocal(
-                        (self.analysis.navigator.index_of_parameter(&declaration)?) as u16
-                            + 1 // self
-                            + self.local_count,
-                    )
-                    .into()),
-                    LetBinding { .. } => Ok(match self.index_of_local(&declaration) {
-                        Some(idx) => Instruction::LoadLocal(idx),
-                        None => Instruction::LoadGlobal(declaration.id),
-                    }
-                    .into()),
-                    _ => Err(invalid_node(&declaration, "Expected declaration.")),
-                }
-            }
-
-            StringExpression(_, _) => self.generate_string(expression),
-
-            CharacterExpression(_, _) => self.generate_character(expression),
-
-            IntegerExpression(_, _) | FloatExpression(_, _) => self.generate_number(expression),
-
-            SymbolExpression(_, ref s) => Ok(Instruction::LoadConstSymbol(s.clone()).into()),
-
-            SelfExpression(_) => Ok(Instruction::LoadLocal(self.local_count).into()),
-
-            LetExpression {
-                let_binding,
-                expression: eid,
-                ..
-            } => {
-                let let_binding = self
-                    .analysis
-                    .navigator
-                    .find_child(expression, let_binding)?;
-                let expression = self.analysis.navigator.find_child(expression, eid)?;
-
-                let mut instructions = Instructions::new();
-                instructions.extend(self.generate_let_binding(&let_binding)?);
-                instructions.extend(self.generate_expression(&expression)?);
-                Ok(instructions)
-            }
-
-            MessageSendExpression {
-                expression: receiver,
-                message,
-                ..
-            } => {
-                let receiver = self.analysis.navigator.find_child(expression, receiver)?;
-                let message = self.analysis.navigator.find_child(expression, message)?;
-                let method = self
-                    .analysis
-                    .navigator
-                    .method_from_message(&message, &self.analysis.types)?;
-
-                let mut instructions = Instructions::new();
-
-                instructions.extend(self.generate_message(&message)?);
-                instructions.extend(self.generate_expression(&receiver)?);
-                instructions.push(Instruction::SendMessage(
-                    format!("{}", expression.span.start),
-                    self.behaviour_id(&method)?,
-                ));
-
-                self.local_count -= self.analysis.navigator.message_arity(&message)? as u16;
-
-                Ok(instructions)
-            }
-
-            _ => Err(invalid_node(expression, "Expected expression.")),
-        };
-
-        // This expression will be pushed to the stack,
-        // which increases the number of locals.
-        self.local_count += 1;
-
-        result
-    }
-
-    fn generate_string(&mut self, string: &Node) -> GenerationResult {
-        match string.kind {
-            StringExpression(_, ref s) => Ok(Instruction::LoadConstString(s.clone()).into()),
-            _ => Err(invalid_node(string, "Expected string.")),
-        }
-    }
-
-    fn generate_character(&mut self, character: &Node) -> GenerationResult {
-        match character.kind {
-            CharacterExpression(_, Some(ref s)) => {
-                Ok(Instruction::LoadConstCharacter(s.clone()).into())
-            }
-            _ => Err(invalid_node(character, "Expected string.")),
-        }
-    }
-
-    */
     fn generate_number(&mut self, section: &mut Section, literal: &Node) -> GenerationResult<()> {
         let type_ = self.analysis.types.get_type_of_expression(&literal);
 
@@ -670,36 +579,6 @@ impl<'a> Generator<'a> {
     }
 
     /*
-    fn generate_message(&mut self, message: &Node) -> GenerationResult {
-        match message.kind {
-            UnaryMessage { .. } => Ok(Instructions::new()),
-            BinaryMessage { expression, .. } => {
-                let expression = self.analysis.navigator.find_child(message, expression)?;
-
-                self.generate_expression(&expression)
-            }
-            KeywordMessage { ref keyword_pairs } => {
-                let mut instructions = Instructions::new();
-
-                for pair in keyword_pairs.iter().rev() {
-                    let pair = self.analysis.navigator.find_child(message, *pair)?;
-
-                    match pair.kind {
-                        KeywordPair { value, .. } => {
-                            let expression = self.analysis.navigator.find_child(&pair, value)?;
-
-                            instructions.extend(self.generate_expression(&expression)?);
-                        }
-                        _ => return Err(invalid_node(&pair, "Expected keyword pair.")),
-                    }
-                }
-
-                Ok(instructions)
-            }
-            _ => Err(invalid_node(message, "Expected expression.")),
-        }
-    }
-
     fn resolve_inherits(&mut self, class: &Node) -> GenerationResult {
         let mut instructions = Instructions::new();
         let class_type = self.analysis.types.get_type_of_declaration(&class);
@@ -720,184 +599,6 @@ impl<'a> Generator<'a> {
         }
 
         Ok(instructions)
-    }
-
-    fn declare_class(&mut self, class: &Node) -> GenerationResult {
-        let (name, _, _) = self.analysis.navigator.qualified_name_of(class)?;
-        let mut instructions = Instructions::new();
-
-        instructions.push(Instruction::DeclareClass(class.id, name.clone()));
-
-        if class.span.start.uri.is_stdlib() {
-            match name.as_str() {
-                "Loa/String" => instructions.push(Instruction::MarkClassString(class.id)),
-                "Loa/Character" => instructions.push(Instruction::MarkClassCharacter(class.id)),
-                "Loa/Symbol" => instructions.push(Instruction::MarkClassSymbol(class.id)),
-
-                "Loa/UInt8" => instructions.push(Instruction::MarkClassU8(class.id)),
-                "Loa/UInt16" => instructions.push(Instruction::MarkClassU16(class.id)),
-                "Loa/UInt32" => instructions.push(Instruction::MarkClassU32(class.id)),
-                "Loa/UInt64" => instructions.push(Instruction::MarkClassU64(class.id)),
-                "Loa/UInt128" => instructions.push(Instruction::MarkClassU128(class.id)),
-                "Loa/BigNatural" => instructions.push(Instruction::MarkClassUBig(class.id)),
-                "Loa/Int8" => instructions.push(Instruction::MarkClassI8(class.id)),
-                "Loa/Int16" => instructions.push(Instruction::MarkClassI16(class.id)),
-                "Loa/Int32" => instructions.push(Instruction::MarkClassI32(class.id)),
-                "Loa/Int64" => instructions.push(Instruction::MarkClassI64(class.id)),
-                "Loa/Int128" => instructions.push(Instruction::MarkClassI128(class.id)),
-                "Loa/BigInteger" => instructions.push(Instruction::MarkClassIBig(class.id)),
-                "Loa/Float32" => instructions.push(Instruction::MarkClassF32(class.id)),
-                "Loa/Float64" => instructions.push(Instruction::MarkClassF64(class.id)),
-                "Loa/BigFloat" => instructions.push(Instruction::MarkClassFBig(class.id)),
-                _ => {}
-            }
-        }
-
-        Ok(instructions)
-    }
-
-    fn generate_class(&mut self, class: &Node) -> GenerationResult {
-        let mut instructions = Instructions::new();
-        let class_type = self.analysis.types.get_type_of_declaration(&class);
-        let behaviours = self.analysis.types.get_behaviours(&class_type);
-
-        for behaviour in behaviours {
-            let method = self.analysis.navigator.find_node(behaviour.method_id)?;
-
-            if behaviour.receiver_type == class_type {
-                instructions.extend(self.generate_method(class, &method)?);
-            }
-        }
-
-        Ok(instructions)
-    }
-
-    fn generate_method(&mut self, class: &Node, method: &Node) -> GenerationResult {
-        self.local_count = 0;
-        self.local_ids.clear();
-
-        let mut instructions = Instructions::new();
-        match method.kind {
-            Method {
-                ref native_keyword,
-                signature,
-                method_body,
-                ..
-            } => {
-                if native_keyword.is_none() && method_body == Id::NULL {
-                    return Ok(vec![].into());
-                }
-
-                let signature = self.analysis.navigator.find_child(method, signature)?;
-                match signature.kind {
-                    Signature {
-                        message_pattern, ..
-                    } => {
-                        let message_pattern = self
-                            .analysis
-                            .navigator
-                            .find_child(&signature, message_pattern)?;
-                        let selector = self
-                            .analysis
-                            .navigator
-                            .message_pattern_selector(&message_pattern)?;
-                        instructions.push(Instruction::BeginMethod(
-                            self.behaviour_id(method)?,
-                            selector,
-                        ));
-                        instructions.extend(self.generate_message_pattern(&message_pattern)?);
-                    }
-                    _ => return Err(invalid_node(&signature, "Expected signature.")),
-                }
-
-                if native_keyword.is_some() {
-                    instructions.push(Instruction::CallNative(
-                        self.get_native_method(class, method)?,
-                    ));
-                } else if let Some(method_body) =
-                    self.analysis.navigator.find_child(method, method_body)
-                {
-                    match method_body.kind {
-                        MethodBody { expression, .. } => {
-                            let expression = self
-                                .analysis
-                                .navigator
-                                .find_child(&method_body, expression)?;
-                            instructions.extend(self.generate_expression(&expression)?);
-                        }
-                        _ => return Err(invalid_node(&method_body, "Expected method body.")),
-                    }
-                    instructions.push(Instruction::Return(
-                        self.analysis.navigator.method_arity(method)? as u16 + self.local_count,
-                    ));
-                }
-                instructions.push(Instruction::EndMethod(class.id));
-            }
-            _ => return Err(invalid_node(method, "Expected method.")),
-        }
-
-        Ok(instructions)
-    }
-
-    fn generate_message_pattern(&mut self, message_pattern: &Node) -> GenerationResult {
-        let mut instructions = Instructions::new();
-        match message_pattern.kind {
-            UnaryMessagePattern { .. } => {}
-            BinaryMessagePattern {
-                parameter_pattern, ..
-            } => {
-                let parameter_pattern = self
-                    .analysis
-                    .navigator
-                    .find_child(message_pattern, parameter_pattern)?;
-
-                instructions.extend(self.generate_parameter_pattern(&parameter_pattern, 2)?);
-            }
-            KeywordMessagePattern {
-                ref keyword_pairs, ..
-            } => {
-                let mut pairs = keyword_pairs.clone();
-                pairs.reverse();
-                let arity = pairs.len() + 1;
-                for pair in pairs {
-                    let pair = self.analysis.navigator.find_child(message_pattern, pair)?;
-                    match pair.kind {
-                        KeywordPair { value, .. } => {
-                            let parameter_pattern =
-                                self.analysis.navigator.find_child(&pair, value)?;
-
-                            instructions.extend(
-                                self.generate_parameter_pattern(&parameter_pattern, arity)?,
-                            );
-                        }
-                        _ => return Err(invalid_node(&pair, "Expected keyword pair.")),
-                    }
-                }
-            }
-            _ => return Err(invalid_node(message_pattern, "Expected message pattern.")),
-        }
-
-        Ok(instructions)
-    }
-
-    fn generate_parameter_pattern(
-        &mut self,
-        _parameter_pattern: &Node,
-        _arity: usize,
-    ) -> GenerationResult {
-        Ok(Instructions::new())
-        // Ok(Instruction::LoadArgument(arity).into())
-    }
-
-    fn generate_let_binding(&mut self, binding: &Node) -> GenerationResult {
-        match binding.kind {
-            LetBinding { expression, .. } => {
-                let expression = self.analysis.navigator.find_child(binding, expression)?;
-                self.local_ids.insert(0, binding.id);
-                self.generate_expression(&expression)
-            }
-            _ => Err(invalid_node(binding, "Expected let binding.")),
-        }
     }
     */
 }
@@ -941,7 +642,8 @@ mod tests {
             r#"
                 @N/C
                     DeclareClass "N/C"
-                    Halt
+                    
+                Halt
             "#,
         );
     }
@@ -959,10 +661,14 @@ mod tests {
                 "#,
             ),
             r#"
+                @N/C$methods
+                    DeclareMethod "x" @N/C#x
+
                 @N/C
                     DeclareClass "N/C"
-                    DeclareMethod "x" @N/C#x
-                    Halt
+                    UseMethod @N/C#x
+                
+                Halt
 
                 @N/C#x
                     LoadLocal 0
@@ -988,14 +694,18 @@ mod tests {
                 "#,
             ),
             r#"
+                @N/A$methods
+                    DeclareMethod "x" @N/A#x
+
                 @N/A
                     DeclareClass "N/A"
-                    DeclareMethod "x" @N/A#x
+                    UseMethod @N/A#x
 
                 @N/B
                     DeclareClass "N/B"
-                    DeclareMethod "x" @N/A#x
-                    Halt
+                    UseMethod @N/A#x
+                
+                Halt
 
                 @N/A#x
                     LoadLocal 0
@@ -1032,9 +742,12 @@ mod tests {
                 "#,
             ),
             r#"
+                @A$methods
+                    DeclareMethod "x" @A#x
+
                 @A
                     DeclareClass "A"
-                    DeclareMethod "x" @A#x
+                    UseMethod @A#x
 
                 LoadObject @A
                 CallMethod @A#x "test:" 6 21
@@ -1061,12 +774,16 @@ mod tests {
                 "#,
             ),
             r#"
-                @N/A
-                    DeclareClass "N/A"
+                @N/A$methods
                     DeclareMethod "x" @N/A#x
                     DeclareMethod "y" @N/A#y
-                    Halt
 
+                @N/A
+                    DeclareClass "N/A"
+                    UseMethod @N/A#x
+                    UseMethod @N/A#y
+
+                Halt
                 @N/A#x
                     LoadLocal 0
                     CallMethod @N/A#y "test:" 5 37
@@ -1092,10 +809,14 @@ mod tests {
                 "#,
             ),
             r#"
+                @N/A$methods
+                    DeclareMethod "+" @N/A#+
+
                 @N/A
                     DeclareClass "N/A"
-                    DeclareMethod "+" @N/A#+
-                    Halt
+                    UseMethod @N/A#+
+
+                Halt
 
                 @N/A#+
                     LoadLocal 1
@@ -1140,10 +861,14 @@ mod tests {
                 "#,
             ),
             r#"
+                @N/X$methods
+                    DeclareMethod "y" @N/X#y
+
                 @N/X
                     DeclareClass "N/X"
-                    DeclareMethod "y" @N/X#y
-                    Halt
+                    UseMethod @N/X#y
+
+                Halt
 
                 @N/X#y
                     LoadConstString "one"
@@ -1169,10 +894,14 @@ mod tests {
                 "#,
             ),
             r#"
+                @Loa/Number$methods
+                    DeclareMethod "+" @Loa/Number#+
+
                 @Loa/Number
                     DeclareClass "Loa/Number"
-                    DeclareMethod "+" @Loa/Number#+
-                    Halt
+                    UseMethod @Loa/Number#+
+
+                Halt
 
                 @Loa/Number#+
                     CallNative Number_plus
@@ -1194,9 +923,12 @@ mod tests {
                 "#,
             ),
             r#"
+                @A$methods
+                    DeclareMethod "+" @A#+
+
                 @A
                     DeclareClass "A"
-                    DeclareMethod "+" @A#+
+                    UseMethod @A#+
 
                 ; Right-hand operand
                 LoadObject @A
@@ -1231,11 +963,16 @@ mod tests {
                 "#,
             ),
             r#"
-                @N/A
-                    DeclareClass "N/A"
+                @N/A$methods
                     DeclareMethod "go" @N/A#go
                     DeclareMethod "+" @N/A#+
-                    Halt
+
+                @N/A
+                    DeclareClass "N/A"
+                    UseMethod @N/A#go
+                    UseMethod @N/A#+
+
+                Halt
 
                 @N/A#go
                     ; let a = A.
@@ -1274,13 +1011,16 @@ mod tests {
                 "#,
             ),
             r#"
+                @A$methods
+                    DeclareMethod "one:two:" @A#one:two:
+
                 @A
                     DeclareClass "A"
-                    DeclareMethod "one:two:" @A#one:two:
+                    UseMethod @A#one:two:
 
                 @B
                     DeclareClass "B"
-                    DeclareMethod "one:two:" @A#one:two:
+                    UseMethod @A#one:two:
 
                 ; two:
                 LoadObject @B
@@ -1294,6 +1034,60 @@ mod tests {
                 @A#one:two:
                     LoadLocal 2
                     Return 3
+            "#,
+        );
+    }
+
+    #[test]
+    fn overridden_method() {
+        assert_generates(
+            Source::test(
+                r#"
+                    namespace N.
+
+                    class A {
+                      public x => A.
+                    }
+
+                    class B {
+                      is A.
+                      public x => B.
+                    }
+
+                    class C {
+                      is A.
+                    }
+                "#,
+            ),
+            r#"
+                @N/A$methods
+                    DeclareMethod "x" @N/A#x
+
+                @N/B$methods
+                    DeclareMethod "x" @N/B#x
+
+                @N/A
+                    DeclareClass "N/A"
+                    UseMethod @N/A#x
+
+                @N/B
+                    DeclareClass "N/B"
+                    OverrideMethod @N/A#x @N/B#x
+                    UseMethod @N/B#x
+
+                @N/C
+                    DeclareClass "N/C"
+                    UseMethod @N/A#x
+
+                Halt
+
+                @N/A#x
+                    LoadObject @N/A
+                    Return 1
+
+                @N/B#x
+                    LoadObject @N/B
+                    Return 1
             "#,
         );
     }

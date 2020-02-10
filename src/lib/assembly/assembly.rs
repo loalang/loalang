@@ -20,20 +20,32 @@ impl Cursor {
 
 #[derive(Clone)]
 pub struct Assembly {
-    pub leading_sections: Vec<Section>,
+    method_declaration_sections: Vec<Section>,
+    class_declaration_sections: Vec<Section>,
+    main_sections: Vec<Section>,
     sections: Vec<Section>,
 }
 
 impl Assembly {
     pub fn new() -> Assembly {
         Assembly {
+            method_declaration_sections: vec![],
+            class_declaration_sections: vec![],
+            main_sections: vec![],
             sections: vec![],
-            leading_sections: vec![],
         }
     }
 
-    pub fn add_leading_section(&mut self, section: Section) {
-        self.leading_sections.push(section);
+    pub fn add_method_declaration_section(&mut self, section: Section) {
+        self.method_declaration_sections.push(section);
+    }
+
+    pub fn add_class_declaration_section(&mut self, section: Section) {
+        self.class_declaration_sections.push(section);
+    }
+
+    pub fn add_main_section(&mut self, section: Section) {
+        self.main_sections.push(section);
     }
 
     pub fn add_section(&mut self, section: Section) {
@@ -45,24 +57,42 @@ impl Assembly {
         self
     }
 
-    pub fn last_leading_mut(&mut self) -> &mut Section {
-        if self.leading_sections.is_empty() {
-            self.leading_sections.push(Section::unnamed());
+    pub fn last_main_section_mut(&mut self) -> &mut Section {
+        if self.main_sections.is_empty() {
+            self.main_sections.push(Section::unnamed());
         }
-        self.leading_sections.last_mut().unwrap()
+        self.main_sections.last_mut().unwrap()
     }
 
     pub fn iter(
         &self,
-    ) -> std::iter::Chain<std::slice::Iter<'_, Section>, std::slice::Iter<'_, Section>> {
-        self.leading_sections.iter().chain(self.sections.iter())
+    ) -> std::iter::Chain<
+        std::iter::Chain<
+            std::iter::Chain<std::slice::Iter<'_, Section>, std::slice::Iter<'_, Section>>,
+            std::slice::Iter<'_, Section>,
+        >,
+        std::slice::Iter<'_, Section>,
+    > {
+        self.method_declaration_sections
+            .iter()
+            .chain(self.class_declaration_sections.iter())
+            .chain(self.main_sections.iter())
+            .chain(self.sections.iter())
     }
 
     pub fn into_iter(
         self,
-    ) -> std::iter::Chain<std::vec::IntoIter<Section>, std::vec::IntoIter<Section>> {
-        self.leading_sections
+    ) -> std::iter::Chain<
+        std::iter::Chain<
+            std::iter::Chain<std::vec::IntoIter<Section>, std::vec::IntoIter<Section>>,
+            std::vec::IntoIter<Section>,
+        >,
+        std::vec::IntoIter<Section>,
+    > {
+        self.method_declaration_sections
             .into_iter()
+            .chain(self.class_declaration_sections.into_iter())
+            .chain(self.main_sections.into_iter())
             .chain(self.sections.into_iter())
     }
 
@@ -155,6 +185,10 @@ impl Section {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.instructions.is_empty()
+    }
+
     pub fn with_comment<S: Into<String>>(mut self, comment: S) -> Self {
         self.leading_comment = Some(comment.into());
         self
@@ -204,6 +238,10 @@ impl fmt::Debug for Instruction {
             DeclareClass(ref name) => write!(f, "DeclareClass {:?}", name),
             DeclareMethod(ref selector, ref label) => {
                 write!(f, "DeclareMethod {:?} @{}", selector, label)
+            }
+            UseMethod(ref label) => write!(f, "UseMethod @{}", label),
+            OverrideMethod(ref source, ref target) => {
+                write!(f, "OverrideMethod @{} @{}", source, target)
             }
             LoadObject(ref label) => write!(f, "LoadObject @{}", label),
             CallMethod(ref label, ref uri, line, character) => {
@@ -267,6 +305,8 @@ pub enum InstructionKind {
     DumpStack,
     DeclareClass(String),
     DeclareMethod(String, Label),
+    UseMethod(Label),
+    OverrideMethod(Label, Label),
     LoadObject(Label),
     CallMethod(Label, String, u64, u64),
     CallNative(NativeMethod),
@@ -346,6 +386,12 @@ impl Instruction {
             InstructionKind::DeclareClass(ref s) => BytecodeInstruction::DeclareClass(s.clone()),
             InstructionKind::DeclareMethod(ref s, ref l) => {
                 BytecodeInstruction::DeclareMethod(s.clone(), label!(l, "method"))
+            }
+            InstructionKind::UseMethod(ref l) => {
+                BytecodeInstruction::UseMethod(label!(l, "method"))
+            }
+            InstructionKind::OverrideMethod(ref s, ref t) => {
+                BytecodeInstruction::OverrideMethod(label!(s, "method"), label!(t, "method"))
             }
             InstructionKind::LoadObject(ref l) => {
                 BytecodeInstruction::LoadObject(label!(l, "class"))

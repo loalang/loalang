@@ -1,0 +1,26 @@
+namespace BooleanLogic.
+
+export class Main {
+  public run =>
+    let Boolean true = True.
+    let false = true not.
+    
+    let true' = true or: false.
+    let true'' = true' or: true.
+    let false' = false or: false.
+    let true''' = false' or: true''.
+    
+    let false'' = true''' and: false'.
+    let true'''' = true''' and: true.
+    let false''' = false'' and: false'.
+    let false'''' = false''' and: true''''.
+
+    let Int32 fortyTwo = 42.
+    let Int32 fiftyEight = 58.
+    let Int32 noop = 999.
+
+    let fortyTwo' = true'''' ifTrue: fortyTwo ifFalse: noop.
+    let fiftyEight' = false'''' ifTrue: noop ifFalse: fiftyEight.
+
+    fortyTwo' + fiftyEight'.
+}

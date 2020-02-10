@@ -125,6 +125,25 @@ impl Parser {
                     kind: InstructionKind::DeclareMethod(name, label),
                 });
             }
+            // UseMethod <label>
+            else if code.starts_with("UseMethod") {
+                code.drain(.."UseMethod".len());
+                let label = self.parse_label(code)?;
+                section.instructions.push(Instruction {
+                    leading_comment,
+                    kind: InstructionKind::UseMethod(label),
+                });
+            }
+            // OverrideMethod <label> <label>
+            else if code.starts_with("OverrideMethod") {
+                code.drain(.."OverrideMethod".len());
+                let source_label = self.parse_label(code)?;
+                let target_label = self.parse_label(code)?;
+                section.instructions.push(Instruction {
+                    leading_comment,
+                    kind: InstructionKind::OverrideMethod(source_label, target_label),
+                });
+            }
             // LoadObject <label>
             else if code.starts_with("LoadObject") {
                 code.drain(.."LoadObject".len());
