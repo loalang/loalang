@@ -1,3 +1,5 @@
+use crate::vm::*;
+use crate::*;
 use fraction::BigFraction;
 use num_bigint::{BigInt, BigUint};
 
@@ -5,6 +7,7 @@ use num_bigint::{BigInt, BigUint};
 pub enum ConstValue {
     Nothing,
     String(String),
+    Lazy(u64, Vec<Arc<Object>>),
     Character(u16),
     Symbol(String),
     U8(u8),

@@ -18,7 +18,9 @@ pub enum Instruction {
     DropLocal(u16),
     StoreGlobal(u64),
     LoadGlobal(u64),
+    LoadLazy(u16, u64),
     Return(u16),
+    ReturnLazy(u16),
 
     MarkClassString(u64),
     MarkClassCharacter(u64),
@@ -59,22 +61,24 @@ pub enum Instruction {
     LoadConstFBig(BigFraction),
 }
 
-const NOOP: u8 = 0xa0;
-const HALT: u8 = 0xa1;
-const PANIC: u8 = 0xa2;
-const DUMP_STACK: u8 = 0xa3;
-const DECLARE_CLASS: u8 = 0xa4;
-const DECLARE_METHOD: u8 = 0xa5;
-const USE_METHOD: u8 = 0xa6;
-const OVERRIDE_METHOD: u8 = 0xa7;
-const LOAD_OBJECT: u8 = 0xa8;
-const CALL_METHOD: u8 = 0xa9;
-const CALL_NATIVE: u8 = 0xaa;
-const LOAD_LOCAL: u8 = 0xab;
-const DROP_LOCAL: u8 = 0xac;
-const STORE_GLOBAL: u8 = 0xad;
-const LOAD_GLOBAL: u8 = 0xae;
-const RETURN: u8 = 0xaf;
+const NOOP: u8 = 0x80;
+const HALT: u8 = 0x81;
+const PANIC: u8 = 0x82;
+const DUMP_STACK: u8 = 0x83;
+const DECLARE_CLASS: u8 = 0x84;
+const DECLARE_METHOD: u8 = 0x85;
+const USE_METHOD: u8 = 0x86;
+const OVERRIDE_METHOD: u8 = 0x87;
+const LOAD_OBJECT: u8 = 0x88;
+const CALL_METHOD: u8 = 0x89;
+const CALL_NATIVE: u8 = 0x8a;
+const LOAD_LOCAL: u8 = 0x8b;
+const DROP_LOCAL: u8 = 0x8c;
+const STORE_GLOBAL: u8 = 0x8d;
+const LOAD_GLOBAL: u8 = 0x8e;
+const LOAD_LAZY: u8 = 0x8f;
+const RETURN: u8 = 0x90;
+const RETURN_LAZY: u8 = 0x91;
 
 const MARK_CLASS_STRING: u8 = 0xb0;
 const MARK_CLASS_CHARACTER: u8 = 0xb1;
@@ -153,7 +157,13 @@ impl BytecodeEncoding for Instruction {
             Instruction::LoadGlobal(label) => {
                 Ok(LOAD_GLOBAL.serialize(&mut w)? + label.serialize(w)?)
             }
+            Instruction::LoadLazy(arity, label) => {
+                Ok(LOAD_LAZY.serialize(&mut w)? + arity.serialize(&mut w)? + label.serialize(w)?)
+            }
             Instruction::Return(index) => Ok(RETURN.serialize(&mut w)? + index.serialize(w)?),
+            Instruction::ReturnLazy(index) => {
+                Ok(RETURN_LAZY.serialize(&mut w)? + index.serialize(w)?)
+            }
 
             Instruction::MarkClassString(label) => {
                 Ok(MARK_CLASS_STRING.serialize(&mut w)? + label.serialize(w)?)
@@ -299,7 +309,9 @@ impl BytecodeEncoding for Instruction {
             [DROP_LOCAL] => Ok(Instruction::DropLocal(r.deserialize()?)),
             [STORE_GLOBAL] => Ok(Instruction::StoreGlobal(r.deserialize()?)),
             [LOAD_GLOBAL] => Ok(Instruction::LoadGlobal(r.deserialize()?)),
+            [LOAD_LAZY] => Ok(Instruction::LoadLazy(r.deserialize()?, r.deserialize()?)),
             [RETURN] => Ok(Instruction::Return(r.deserialize()?)),
+            [RETURN_LAZY] => Ok(Instruction::ReturnLazy(r.deserialize()?)),
 
             [MARK_CLASS_STRING] => Ok(Instruction::MarkClassString(r.deserialize()?)),
             [MARK_CLASS_CHARACTER] => Ok(Instruction::MarkClassCharacter(r.deserialize()?)),

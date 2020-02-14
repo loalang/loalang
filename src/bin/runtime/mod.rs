@@ -1,6 +1,6 @@
 extern crate atty;
 use colored::*;
-use loa::vm::{CallStack, Runtime, SourceCodeLocation, StackFrame};
+use loa::vm::{CallStack, Frame, Runtime, SourceCodeLocation, StackFrame};
 
 pub struct ServerRuntime;
 
@@ -11,29 +11,54 @@ impl Runtime for ServerRuntime {
         if atty::is(atty::Stream::Stdout) {
             eprint!("{} ", " PANIC ".bold().white().on_red());
             eprintln!("{}", message.red());
-            for StackFrame {
-                receiver,
-                method,
-                callsite: SourceCodeLocation(uri, line, character),
-                ..
-            } in call_stack
-            {
-                eprintln!(
-                    "{} {}\n  {}",
-                    receiver.class.name.yellow(),
-                    method.name.yellow(),
-                    format!("({}:{}:{})", uri, line, character).bright_black(),
-                );
+            for frame in call_stack {
+                match frame {
+                    Frame::Stack(StackFrame {
+                        receiver,
+                        method,
+                        callsite: SourceCodeLocation(uri, line, character),
+                        ..
+                    }) => {
+                        eprintln!(
+                            "{} {}\n  {}",
+                            receiver
+                                .class
+                                .as_ref()
+                                .map(|c| c.name.as_ref())
+                                .unwrap_or("?")
+                                .yellow(),
+                            method.name.yellow(),
+                            format!("({}:{}:{})", uri, line, character).bright_black(),
+                        );
+                    }
+                    _ => {}
+                }
             }
         } else {
             eprintln!("PANIC: {}", message);
-            for StackFrame {
-                method,
-                callsite: SourceCodeLocation(uri, line, character),
-                ..
-            } in call_stack
-            {
-                eprintln!("{}\n  ({}:{}:{})", method.name, uri, line, character);
+            for frame in call_stack {
+                match frame {
+                    Frame::Stack(StackFrame {
+                        receiver,
+                        method,
+                        callsite: SourceCodeLocation(uri, line, character),
+                        ..
+                    }) => {
+                        eprintln!(
+                            "{} {}\n  ({}:{}:{})",
+                            receiver
+                                .class
+                                .as_ref()
+                                .map(|c| c.name.as_ref())
+                                .unwrap_or("?"),
+                            method.name,
+                            uri,
+                            line,
+                            character
+                        );
+                    }
+                    _ => {}
+                }
             }
         }
     }

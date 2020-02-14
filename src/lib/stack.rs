@@ -13,6 +13,10 @@ impl<T> Stack<T> {
         self.vec.push(item);
     }
 
+    pub fn extend<I: IntoIterator<Item = T>>(&mut self, items: I) {
+        self.vec.extend(items);
+    }
+
     pub fn pop(&mut self) -> Option<T> {
         self.vec.pop()
     }
@@ -41,7 +45,7 @@ impl<T> Stack<T> {
 impl<T: fmt::Display> fmt::Debug for Stack<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "STACK ------------------------")?;
-        for (i, o) in self.vec.iter().enumerate() {
+        for (i, o) in self.vec.iter().rev().enumerate() {
             writeln!(f, "{}: {}", i, o)?;
         }
         write!(f, "------------------------------")

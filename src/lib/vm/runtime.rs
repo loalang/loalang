@@ -21,6 +21,10 @@ where
         let operand = unwrap!(vm, vm.pop());
 
         match (&receiver.const_value, &operand.const_value) {
+            (ConstValue::Lazy(_, _), _) | (_, ConstValue::Lazy(_, _)) => {
+                return vm.panic("adding lazy".into())
+            }
+
             (ConstValue::Nothing, _)
             | (_, ConstValue::Nothing)
             | (ConstValue::String(_), _)

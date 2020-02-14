@@ -210,6 +210,25 @@ impl Parser {
                     kind: InstructionKind::LoadGlobal(label),
                 });
             }
+            // LoadLazy <u16> <label>
+            else if code.starts_with("LoadLazy") {
+                code.drain(.."LoadLazy".len());
+                let arity = self.parse_from_str(code)?;
+                let label = self.parse_label(code)?;
+                section.instructions.push(Instruction {
+                    leading_comment,
+                    kind: InstructionKind::LoadLazy(arity, label),
+                });
+            }
+            // ReturnLazy <u16>
+            else if code.starts_with("ReturnLazy") {
+                code.drain(.."ReturnLazy".len());
+                let arity = self.parse_from_str(code)?;
+                section.instructions.push(Instruction {
+                    leading_comment,
+                    kind: InstructionKind::ReturnLazy(arity),
+                });
+            }
             // Return <u16>
             else if code.starts_with("Return") {
                 code.drain(.."Return".len());

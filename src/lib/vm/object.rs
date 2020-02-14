@@ -26,14 +26,14 @@ pub static mut FBIG_CLASS: *const Class = null();
 
 #[derive(Debug)]
 pub struct Object {
-    pub class: Arc<Class>,
+    pub class: Option<Arc<Class>>,
     pub const_value: ConstValue,
 }
 
 impl Object {
     pub fn new(class: &Arc<Class>) -> Arc<Object> {
         Arc::new(Object {
-            class: class.clone(),
+            class: Some(class.clone()),
             const_value: ConstValue::Nothing,
         })
     }
@@ -42,8 +42,15 @@ impl Object {
         let class = unsafe { Arc::from_raw(*class_ptr) };
         *class_ptr = Arc::into_raw(class.clone());
         Arc::new(Object {
-            class: class.clone(),
+            class: Some(class.clone()),
             const_value,
+        })
+    }
+
+    pub fn lazy(offset: u64, dependencies: Vec<Arc<Object>>) -> Arc<Object> {
+        Arc::new(Object {
+            class: None,
+            const_value: ConstValue::Lazy(offset, dependencies),
         })
     }
 
@@ -125,8 +132,13 @@ impl Object {
 impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.const_value {
-            ConstValue::Nothing => write!(f, "a {}", self.class.name),
+            ConstValue::Nothing => write!(
+                f,
+                "a {}",
+                self.class.as_ref().map(|c| c.name.as_ref()).unwrap_or("")
+            ),
             ConstValue::String(s) => write!(f, "{}", s),
+            ConstValue::Lazy(_, _) => write!(f, "$lazy"),
             ConstValue::Character(c) => write!(f, "{}", characters_to_string([*c].iter().cloned())),
             ConstValue::Symbol(s) => write!(f, "#{}", s),
             ConstValue::U8(n) => write!(f, "{}", n),

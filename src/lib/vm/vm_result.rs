@@ -4,7 +4,7 @@ macro_rules! expect {
     ($vm:expr, $opt:expr, $($arg:tt)*) => {
         match $opt {
             Some(t) => t,
-            None => return VMResult::Panic(format!($($arg)*), $vm.call_stack.clone()),
+            None => return VMResult::Panic(format!($($arg)*), $vm.call_stack.detach()),
         }
     };
 }

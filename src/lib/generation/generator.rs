@@ -21,6 +21,7 @@ pub struct Generator<'a> {
     analysis: &'a mut Analysis,
     locals: Stack<Id>,
     parameters: Vec<Id>,
+    lazies: usize,
 }
 
 impl<'a> Generator<'a> {
@@ -29,7 +30,14 @@ impl<'a> Generator<'a> {
             analysis,
             locals: Stack::new(),
             parameters: vec![],
+            lazies: 0,
         }
+    }
+
+    fn sub(&mut self) -> Generator {
+        let mut sub = Generator::new(self.analysis);
+        sub.lazies = self.lazies;
+        sub
     }
 
     pub fn generate_all(&mut self) -> GenerationResult<Assembly> {
@@ -197,7 +205,8 @@ impl<'a> Generator<'a> {
                     .analysis
                     .navigator
                     .qualified_name_of_method(&overridden_method)?;
-                section.add_instruction(InstructionKind::OverrideMethod(label, method_label.clone()));
+                section
+                    .add_instruction(InstructionKind::OverrideMethod(label, method_label.clone()));
             }
 
             section.add_instruction(InstructionKind::UseMethod(method_label));
@@ -283,6 +292,31 @@ impl<'a> Generator<'a> {
         Err(GenerationError::OutOfScope(local))
     }
 
+    fn generate_reference_to(
+        &mut self,
+        section: &mut Section,
+        declaration: &Node,
+    ) -> GenerationResult<()> {
+        match declaration.kind {
+            Class { .. } => {
+                let (qn, _, _) = self.analysis.navigator.qualified_name_of(declaration)?;
+                section.add_instruction(InstructionKind::LoadObject(qn));
+            }
+            ParameterPattern { .. } => section.add_instruction(InstructionKind::LoadLocal(
+                self.index_of_parameter(declaration.id)?,
+            )),
+            LetBinding { .. } => match self.index_of_local(declaration.id) {
+                Ok(index) => section.add_instruction(InstructionKind::LoadLocal(index)),
+                _ => section.add_instruction(InstructionKind::LoadGlobal(
+                    self.analysis.navigator.symbol_of(declaration)?.0,
+                )),
+            },
+
+            _ => return Err(invalid_node(declaration, "Expected value declaration.")),
+        }
+        Ok(())
+    }
+
     fn generate_expression(
         &mut self,
         assembly: &mut Assembly,
@@ -331,23 +365,7 @@ impl<'a> Generator<'a> {
                     .analysis
                     .navigator
                     .find_declaration(expression, DeclarationKind::Value)?;
-                match declaration.kind {
-                    Class { .. } => {
-                        let (qn, _, _) = self.analysis.navigator.qualified_name_of(&declaration)?;
-                        section.add_instruction(InstructionKind::LoadObject(qn));
-                    }
-                    ParameterPattern { .. } => section.add_instruction(InstructionKind::LoadLocal(
-                        self.index_of_parameter(declaration.id)?,
-                    )),
-                    LetBinding { .. } => match self.index_of_local(declaration.id) {
-                        Ok(index) => section.add_instruction(InstructionKind::LoadLocal(index)),
-                        _ => section.add_instruction(InstructionKind::LoadGlobal(
-                            self.analysis.navigator.symbol_of(&declaration)?.0,
-                        )),
-                    },
-
-                    _ => return Err(invalid_node(&declaration, "Expected value declaration.")),
-                }
+                self.generate_reference_to(section, &declaration)?;
             }
             MessageSendExpression {
                 expression: r,
@@ -362,7 +380,11 @@ impl<'a> Generator<'a> {
                 let message = self.analysis.navigator.find_child(expression, message)?;
                 let arguments = self.analysis.navigator.message_arguments(&message);
                 for argument in arguments.iter().rev() {
-                    self.generate_expression(assembly, section, argument)?;
+                    if let MessageSendExpression { .. } = argument.kind {
+                        self.generate_lazy(assembly, section, argument)?;
+                    } else {
+                        self.generate_expression(assembly, section, argument)?;
+                    }
                     self.locals.push(argument.id);
                 }
 
@@ -398,6 +420,40 @@ impl<'a> Generator<'a> {
             }
             _ => return Err(invalid_node(expression, "Expected expression.")),
         }
+        Ok(())
+    }
+
+    fn generate_lazy(
+        &mut self,
+        assembly: &mut Assembly,
+        section: &mut Section,
+        expression: &Node,
+    ) -> GenerationResult<()> {
+        self.lazies += 1;
+        let label = format!(
+            "{}$lazy{}",
+            section.label.as_ref().map(AsRef::as_ref).unwrap_or(""),
+            self.lazies
+        );
+
+        let arguments = self.analysis.navigator.locals_crossing_into(expression);
+        let arity = arguments.len() as u16;
+        let mut arg_ids = Stack::new();
+        for argument in arguments {
+            self.generate_reference_to(section, &argument)?;
+
+            arg_ids.push(argument.id);
+        }
+        section.add_instruction(InstructionKind::LoadLazy(arity, label.clone()));
+
+        let mut sub_generator = self.sub();
+        sub_generator.locals = arg_ids;
+        let mut lazy_section = Section::named(label);
+        sub_generator.generate_expression(assembly, &mut lazy_section, expression)?;
+        lazy_section.add_instruction(InstructionKind::ReturnLazy(arity));
+        assembly.add_section(lazy_section);
+        self.lazies = sub_generator.lazies;
+
         Ok(())
     }
 
@@ -1063,6 +1119,116 @@ mod tests {
 
                 @N/B#x
                     LoadObject @N/B
+                    Return 1
+            "#,
+        );
+    }
+
+    #[test]
+    fn lazy_message_argument() {
+        assert_generates(
+            Source::test(
+                r#"
+                    namespace N.
+
+                    class A {
+                        public yourself => self.
+
+                        public return: A o => o.
+
+                        public main =>
+                            self return: A yourself.
+                    }
+                "#,
+            ),
+            r#"
+                @N/A$methods
+                    DeclareMethod "yourself" @N/A#yourself
+                    DeclareMethod "return:" @N/A#return:
+                    DeclareMethod "main" @N/A#main
+
+                @N/A
+                    DeclareClass "N/A"
+                    UseMethod @N/A#yourself
+                    UseMethod @N/A#return:
+                    UseMethod @N/A#main
+
+                Halt
+
+                @N/A#yourself
+                    LoadLocal 0
+                    Return 1
+
+                @N/A#return:
+                    LoadLocal 1
+                    Return 2
+
+                @N/A#main$lazy1
+                    LoadObject @N/A
+                    CallMethod @N/A#yourself "test:" 10 42
+                    ReturnLazy 0
+
+                @N/A#main
+                    LoadLazy 0 @N/A#main$lazy1
+                    LoadLocal 1
+                    CallMethod @N/A#return: "test:" 10 29
+                    Return 1
+            "#,
+        );
+    }
+
+    #[test]
+    fn lazy_with_arguments() {
+        assert_generates(
+            Source::test(
+                r#"
+                    namespace N.
+
+                    class A {
+                        public yourself => self.
+
+                        public return: A o => o.
+
+                        public main =>
+                          let a = A.
+                          self return: a yourself.
+                    }
+                "#,
+            ),
+            r#"
+                @N/A$methods
+                    DeclareMethod "yourself" @N/A#yourself
+                    DeclareMethod "return:" @N/A#return:
+                    DeclareMethod "main" @N/A#main
+
+                @N/A
+                    DeclareClass "N/A"
+                    UseMethod @N/A#yourself
+                    UseMethod @N/A#return:
+                    UseMethod @N/A#main
+
+                Halt
+
+                @N/A#yourself
+                    LoadLocal 0
+                    Return 1
+
+                @N/A#return:
+                    LoadLocal 1
+                    Return 2
+
+                @N/A#main$lazy1
+                    LoadLocal 0
+                    CallMethod @N/A#yourself "test:" 11 40
+                    ReturnLazy 1
+
+                @N/A#main
+                    LoadObject @N/A
+                    LoadLocal 0
+                    LoadLazy 1 @N/A#main$lazy1
+                    LoadLocal 2
+                    CallMethod @N/A#return: "test:" 11 27
+                    DropLocal 1
                     Return 1
             "#,
         );

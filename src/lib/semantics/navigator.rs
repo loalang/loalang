@@ -839,6 +839,20 @@ impl Navigator {
         nodes
     }
 
+    pub fn any_downwards<F: Fn(&Node) -> bool>(&self, from: &Node, f: &F) -> bool {
+        if f(from) {
+            return true;
+        }
+
+        for child in self.child_nodes(from) {
+            if self.any_downwards(&child, f) {
+                return true;
+            }
+        }
+
+        false
+    }
+
     pub fn closest_expression_upwards(&self, from: &Node) -> Option<Node> {
         self.closest_upwards(from, |n| n.is_expression())
     }
@@ -1442,5 +1456,18 @@ impl Navigator {
         }
 
         Some(methods)
+    }
+
+    pub fn locals_crossing_into(&self, expression: &Node) -> Vec<Node> {
+        self.all_references_downwards(expression, DeclarationKind::Value)
+            .into_iter()
+            .filter_map(|r| self.find_declaration(&r, DeclarationKind::Value))
+            .filter(|d| !matches!(d.kind, Class{..}))
+            .filter(|d| !self.is_within(&d, expression))
+            .collect()
+    }
+
+    pub fn is_within(&self, needle: &Node, haystack: &Node) -> bool {
+        self.any_downwards(haystack, &|n| n.id == needle.id)
     }
 }

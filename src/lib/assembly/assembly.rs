@@ -252,7 +252,9 @@ impl fmt::Debug for Instruction {
             DropLocal(index) => write!(f, "DropLocal {}", index),
             StoreGlobal(ref label) => write!(f, "StoreGlobal {}", label),
             LoadGlobal(ref label) => write!(f, "LoadGlobal {}", label),
+            LoadLazy(arity, ref label) => write!(f, "LoadLazy {} @{}", arity, label),
             Return(arity) => write!(f, "Return {}", arity),
+            ReturnLazy(arity) => write!(f, "ReturnLazy {}", arity),
 
             MarkClassString(ref label) => write!(f, "MarkClassString @{}", label),
             MarkClassCharacter(ref label) => write!(f, "MarkClassCharacter @{}", label),
@@ -314,7 +316,9 @@ pub enum InstructionKind {
     DropLocal(u16),
     StoreGlobal(Label),
     LoadGlobal(Label),
+    LoadLazy(u16, Label),
     Return(u16),
+    ReturnLazy(u16),
 
     MarkClassString(Label),
     MarkClassCharacter(Label),
@@ -408,7 +412,11 @@ impl Instruction {
             InstructionKind::LoadGlobal(ref l) => {
                 BytecodeInstruction::LoadGlobal(label!(l, "global"))
             }
+            InstructionKind::LoadLazy(a, ref l) => {
+                BytecodeInstruction::LoadLazy(a, label!(l, "lazy"))
+            }
             InstructionKind::Return(a) => BytecodeInstruction::Return(a),
+            InstructionKind::ReturnLazy(a) => BytecodeInstruction::ReturnLazy(a),
 
             InstructionKind::MarkClassString(ref l) => {
                 BytecodeInstruction::MarkClassString(label!(l, "class"))

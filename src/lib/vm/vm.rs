@@ -29,8 +29,8 @@ impl VM {
         }
     }
 
-    pub fn panic<T>(&self, message: String) -> VMResult<T> {
-        VMResult::Panic(message, self.call_stack.clone())
+    pub fn panic<T>(&mut self, message: String) -> VMResult<T> {
+        VMResult::Panic(message, self.call_stack.detach())
     }
 
     #[inline]
@@ -44,7 +44,7 @@ impl VM {
     }
 
     #[inline]
-    fn raw_class_ptr(&self, address: u64) -> VMResult<*const Class> {
+    fn raw_class_ptr(&mut self, address: u64) -> VMResult<*const Class> {
         VMResult::Ok(
             expect!(
                 self,
@@ -70,6 +70,20 @@ impl VM {
                 }
 
                 Instruction::Halt => {
+                    if self.stack.size() > 0 {
+                        let top = unwrap!(self, self.pop());
+                        match top.const_value {
+                            ConstValue::Lazy(offset, ref dependencies) => {
+                                self.stack.extend(dependencies.iter().cloned());
+                                self.call_stack.push_lazy(self.pc);
+                                self.pc = offset as usize;
+                                continue;
+                            }
+                            _ => {
+                                self.push(top);
+                            }
+                        }
+                    }
                     break;
                 }
 
@@ -83,7 +97,7 @@ impl VM {
                                 .map(ToString::to_string)
                                 .unwrap_or(String::new())
                         ),
-                        self.call_stack.clone(),
+                        self.call_stack.detach(),
                     )
                 }
 
@@ -146,10 +160,24 @@ impl VM {
                 }
 
                 Instruction::CallMethod(ref offset, ref uri, line, character) => {
-                    let receiver = unwrap!(self, self.top()).clone();
+                    let receiver = expect!(self, self.stack.top(), "empty stack").clone();
+                    match receiver.const_value {
+                        ConstValue::Lazy(offset, ref dependencies) => {
+                            self.stack.extend(dependencies.iter().cloned());
+                            self.call_stack.push_lazy(self.pc);
+                            self.pc = offset as usize;
+                            continue;
+                        }
+                        _ => {}
+                    }
+                    let class = expect!(
+                        self,
+                        &receiver.class,
+                        "cannot call method on object without class"
+                    );
                     let method = expect!(
                         self,
-                        receiver.class.methods.get(offset),
+                        class.methods.get(offset),
                         "message #{:X} not understood by {}",
                         offset,
                         receiver
@@ -167,7 +195,7 @@ impl VM {
 
                 Instruction::CallNative(ref method) => {
                     let method = method.clone();
-                    M::call(self, method);
+                    unwrap!(self, M::call(self, method));
                     self.pc += 1;
                 }
 
@@ -200,7 +228,27 @@ impl VM {
                     self.pc += 1;
                 }
 
+                Instruction::LoadLazy(arity, offset) => {
+                    let mut dependencies = vec![];
+                    for _ in 0..arity {
+                        dependencies.push(unwrap!(self, self.pop()));
+                    }
+                    self.push(Object::lazy(offset, dependencies));
+                    self.pc += 1;
+                }
+
                 Instruction::Return(arity) => {
+                    let result = unwrap!(self, self.pop());
+
+                    for _ in 0..arity {
+                        unwrap!(self, self.pop());
+                    }
+
+                    self.push(result);
+                    self.pc = expect!(self, self.call_stack.ret(), "empty call stack");
+                }
+
+                Instruction::ReturnLazy(arity) => {
                     let result = unwrap!(self, self.pop());
 
                     for _ in 0..arity {
@@ -394,7 +442,8 @@ impl VM {
         VMResult::Ok(expect!(self, self.stack.pop(), "tried to pop empty stack"))
     }
 
-    pub fn top(&self) -> VMResult<&Arc<Object>> {
+    #[inline]
+    pub fn top(&mut self) -> VMResult<&Arc<Object>> {
         VMResult::Ok(expect!(
             self,
             self.stack.top(),
@@ -621,16 +670,54 @@ mod tests {
             LoadObject @A
 
             CallMethod @A#+ "call site" 42 42
-                DumpStack
             Halt
 
             @A#+
-                DumpStack
                 LoadLocal 1
-                DumpStack
                 Return 2
             "#,
             "a B",
+        );
+    }
+
+    #[test]
+    fn lazy_object_with_no_dependencies() {
+        assert_evaluates_to(
+            r#"
+            @SomeClass
+                DeclareClass "SomeClass"
+
+            LoadLazy 0 @lazy
+            Halt
+
+            @lazy
+                LoadObject @SomeClass
+                ReturnLazy 0
+            "#,
+            "a SomeClass",
+        );
+    }
+
+    #[test]
+    fn lazy_object_with_dependencies() {
+        assert_evaluates_to(
+            r#"
+            @UInt8
+                DeclareClass "UInt8"
+                MarkClassU8 @UInt8
+
+            LoadConstU8 1
+            LoadConstU8 2
+            LoadLazy 2 @lazy
+            Halt
+
+            @lazy
+                LoadLocal 1
+                LoadLocal 1
+                CallNative Number_plus
+                ReturnLazy 2
+            "#,
+            "3",
         );
     }
 }
