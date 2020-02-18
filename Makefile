@@ -5,10 +5,10 @@
 VERSION ?= $(shell toml get Cargo.toml 'package.version' | jq -r)
 
 build:
-	cargo build --release --features build-bin-loa
+	cargo build --release --features build-bin-loa,build-bin-vm
 
 debug:
-	cargo build --features build-bin-loa
+	cargo build --features build-bin-loa,build-bin-vm
 
 version:
 	echo $(VERSION)
