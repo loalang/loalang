@@ -17,11 +17,11 @@ where
     }
 
     fn number_plus(vm: &mut VM) -> VMResult<()> {
-        let receiver = unwrap!(vm, vm.pop());
-        let operand = unwrap!(vm, vm.pop());
+        let receiver = unwrap!(vm, vm.pop_eval::<Self>());
+        let operand = unwrap!(vm, vm.pop_eval::<Self>());
 
         match (&receiver.const_value, &operand.const_value) {
-            (ConstValue::Lazy(_, _), _) | (_, ConstValue::Lazy(_, _)) => {
+            (ConstValue::Lazy(_, _, _), _) | (_, ConstValue::Lazy(_, _, _)) => {
                 return vm.panic("adding lazy".into())
             }
 
@@ -461,7 +461,7 @@ fn add_fbig(lhs: &BigFraction, rhs: &BigFraction) -> Arc<Object> {
 
 impl Runtime for () {
     fn print_panic(message: String, call_stack: CallStack) {
-        eprintln!("{}\n{:#?}", message, call_stack)
+        panic!("{}\n{:#?}", message, call_stack)
     }
 }
 

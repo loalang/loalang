@@ -1,27 +1,12 @@
 use crate::vm::*;
 use crate::*;
 
-pub struct CallStack(Vec<Frame>);
+#[derive(Clone)]
+pub struct CallStack(Option<Arc<StackFrame>>);
 
-pub enum Frame {
-    Lazy(LazyFrame),
-    Stack(StackFrame),
-}
-
-impl Frame {
-    pub fn return_address(&self) -> usize {
-        match self {
-            Frame::Lazy(f) => f.return_address,
-            Frame::Stack(f) => f.return_address,
-        }
-    }
-}
-
-pub struct LazyFrame {
-    pub return_address: usize,
-}
-
+#[derive(Clone)]
 pub struct StackFrame {
+    pub parent: Option<Arc<StackFrame>>,
     pub receiver: Arc<Object>,
     pub method: Arc<Method>,
 
@@ -29,15 +14,12 @@ pub struct StackFrame {
     pub callsite: SourceCodeLocation,
 }
 
+#[derive(Clone)]
 pub struct SourceCodeLocation(pub String, pub u64, pub u64);
 
 impl CallStack {
     pub fn new() -> CallStack {
-        CallStack(Vec::new())
-    }
-
-    pub fn push_lazy(&mut self, return_address: usize) {
-        self.0.push(Frame::Lazy(LazyFrame { return_address }));
+        CallStack(None)
     }
 
     pub fn push(
@@ -47,16 +29,25 @@ impl CallStack {
         return_address: usize,
         callsite: SourceCodeLocation,
     ) {
-        self.0.push(Frame::Stack(StackFrame {
-            receiver,
-            method,
-            return_address,
-            callsite,
-        }));
+        let parent = self.0.clone();
+        std::mem::replace(
+            self,
+            CallStack(Some(Arc::new(StackFrame {
+                parent,
+                receiver,
+                method,
+                return_address,
+                callsite,
+            }))),
+        );
     }
 
     pub fn ret(&mut self) -> Option<usize> {
-        Some(self.0.pop()?.return_address())
+        let frame = self.0.as_ref()?;
+        let return_address = frame.return_address;
+        let parent = frame.parent.clone();
+        std::mem::replace(self, CallStack(parent));
+        Some(return_address)
     }
 
     pub fn detach(&mut self) -> CallStack {
@@ -64,38 +55,41 @@ impl CallStack {
     }
 }
 
-impl Into<Vec<Frame>> for CallStack {
-    fn into(self) -> Vec<Frame> {
-        self.0
+impl Into<Vec<Arc<StackFrame>>> for CallStack {
+    fn into(self) -> Vec<Arc<StackFrame>> {
+        let mut frame = self.0;
+        let mut frames = vec![];
+        while let Some(f) = frame {
+            frame = f.parent.clone();
+            frames.push(f);
+        }
+        frames
     }
 }
 
 impl fmt::Debug for CallStack {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for frame in self.0.iter() {
-            match frame {
-                Frame::Stack(StackFrame {
-                    receiver,
-                    method,
-                    callsite: SourceCodeLocation(uri, line, character),
-                    ..
-                }) => {
-                    writeln!(
-                        f,
-                        "{} {}\n  ({}:{}:{})",
-                        receiver
-                            .class
-                            .as_ref()
-                            .map(|c| c.name.as_ref())
-                            .unwrap_or("?"),
-                        method.name,
-                        uri,
-                        line,
-                        character
-                    )?;
-                }
-                _ => {}
-            }
+            let StackFrame {
+                receiver,
+                method,
+                callsite: SourceCodeLocation(uri, line, character),
+                ..
+            } = frame.as_ref();
+
+            writeln!(
+                f,
+                "{} {}\n  ({}:{}:{})",
+                receiver
+                    .class
+                    .as_ref()
+                    .map(|c| c.name.as_ref())
+                    .unwrap_or("?"),
+                method.name,
+                uri,
+                line,
+                character
+            )?;
         }
         Ok(())
     }

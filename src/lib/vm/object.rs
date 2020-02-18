@@ -47,10 +47,10 @@ impl Object {
         })
     }
 
-    pub fn lazy(offset: u64, dependencies: Vec<Arc<Object>>) -> Arc<Object> {
+    pub fn lazy(offset: u64, call_stack: CallStack, dependencies: Vec<Arc<Object>>) -> Arc<Object> {
         Arc::new(Object {
             class: None,
-            const_value: ConstValue::Lazy(offset, dependencies),
+            const_value: ConstValue::Lazy(offset, call_stack, dependencies),
         })
     }
 
@@ -138,7 +138,7 @@ impl fmt::Display for Object {
                 self.class.as_ref().map(|c| c.name.as_ref()).unwrap_or("")
             ),
             ConstValue::String(s) => write!(f, "{}", s),
-            ConstValue::Lazy(_, _) => write!(f, "$lazy"),
+            ConstValue::Lazy(_, _, _) => write!(f, "$lazy"),
             ConstValue::Character(c) => write!(f, "{}", characters_to_string([*c].iter().cloned())),
             ConstValue::Symbol(s) => write!(f, "#{}", s),
             ConstValue::U8(n) => write!(f, "{}", n),

@@ -43,6 +43,10 @@ impl VM {
         &self.stack
     }
 
+    pub fn print_stack(&self) {
+        println!("{:?}", self.stack);
+    }
+
     #[inline]
     fn raw_class_ptr(&mut self, address: u64) -> VMResult<*const Class> {
         VMResult::Ok(
@@ -70,20 +74,6 @@ impl VM {
                 }
 
                 Instruction::Halt => {
-                    if self.stack.size() > 0 {
-                        let top = unwrap!(self, self.pop());
-                        match top.const_value {
-                            ConstValue::Lazy(offset, ref dependencies) => {
-                                self.stack.extend(dependencies.iter().cloned());
-                                self.call_stack.push_lazy(self.pc);
-                                self.pc = offset as usize;
-                                continue;
-                            }
-                            _ => {
-                                self.push(top);
-                            }
-                        }
-                    }
                     break;
                 }
 
@@ -102,7 +92,7 @@ impl VM {
                 }
 
                 Instruction::DumpStack => {
-                    println!("{:?}", self.stack);
+                    self.print_stack();
                     self.pc += 1;
                 }
 
@@ -159,38 +149,37 @@ impl VM {
                     self.pc += 1;
                 }
 
-                Instruction::CallMethod(ref offset, ref uri, line, character) => {
-                    let receiver = expect!(self, self.stack.top(), "empty stack").clone();
-                    match receiver.const_value {
-                        ConstValue::Lazy(offset, ref dependencies) => {
-                            self.stack.extend(dependencies.iter().cloned());
-                            self.call_stack.push_lazy(self.pc);
-                            self.pc = offset as usize;
-                            continue;
-                        }
-                        _ => {}
+                // TODO: Optimize this so Instruction doesn't have to be cloned
+                ref i @ Instruction::CallMethod(_, _, _, _) => {
+                    if let Instruction::CallMethod(ref offset, ref uri, line, character) = i.clone() {
+                        let top = expect!(self, self.stack.top(), "empty stack").clone();
+                        let receiver = match self.eval_lazy::<M>(top) {
+                            None => continue,
+                            Some(r) => r,
+                        };
+                        
+                        let class = expect!(
+                            self,
+                            &receiver.class,
+                            "cannot call method on object without class"
+                        );
+                        let method = expect!(
+                            self,
+                            class.methods.get(offset),
+                            "message #{:X} not understood by {}",
+                            offset,
+                            receiver
+                        )
+                        .clone();
+                        let return_address = self.pc + 1;
+                        self.pc = method.offset;
+                        self.call_stack.push(
+                            receiver,
+                            method,
+                            return_address,
+                            SourceCodeLocation(uri.clone(), line, character),
+                        );
                     }
-                    let class = expect!(
-                        self,
-                        &receiver.class,
-                        "cannot call method on object without class"
-                    );
-                    let method = expect!(
-                        self,
-                        class.methods.get(offset),
-                        "message #{:X} not understood by {}",
-                        offset,
-                        receiver
-                    )
-                    .clone();
-                    let return_address = self.pc + 1;
-                    self.pc = method.offset;
-                    self.call_stack.push(
-                        receiver,
-                        method,
-                        return_address,
-                        SourceCodeLocation(uri.clone(), line, character),
-                    );
                 }
 
                 Instruction::CallNative(ref method) => {
@@ -233,7 +222,7 @@ impl VM {
                     for _ in 0..arity {
                         dependencies.push(unwrap!(self, self.pop()));
                     }
-                    self.push(Object::lazy(offset, dependencies));
+                    self.push(Object::lazy(offset, self.call_stack.clone(), dependencies));
                     self.pc += 1;
                 }
 
@@ -256,7 +245,7 @@ impl VM {
                     }
 
                     self.push(result);
-                    self.pc = expect!(self, self.call_stack.ret(), "empty call stack");
+                    break;
                 }
 
                 Instruction::MarkClassString(id) => unsafe {
@@ -410,16 +399,33 @@ impl VM {
         VMResult::Ok(())
     }
 
+    #[inline]
+    fn eval_lazy<M: Runtime>(&mut self, object: Arc<Object>) -> Option<Arc<Object>> {
+        match object.const_value {
+            ConstValue::Lazy(offset, ref call_stack, ref dependencies) => {
+                for dep in dependencies.iter().cloned() {
+                    self.push(dep);
+                }
+                let return_offset = self.pc;
+                let call_stack = std::mem::replace(&mut self.call_stack, call_stack.clone());
+
+                self.pc = offset as usize;
+                self.do_eval::<M>().report::<M>()?;
+                let result = self.pop().report::<M>()?;
+
+                self.pc = return_offset;
+                self.call_stack = call_stack;
+
+                self.eval_lazy::<M>(result)
+            }
+            _ => Some(object),
+        }
+    }
+
     fn eval_catch<M: Runtime>(&mut self, instructions: Vec<Instruction>) -> bool {
         self.pc = self.program.len();
         self.program.extend(instructions);
-        match self.do_eval::<M>() {
-            VMResult::Ok(()) => false,
-            VMResult::Panic(message, call_stack) => {
-                M::print_panic(message, call_stack);
-                true
-            }
-        }
+        self.do_eval::<M>().report::<M>().is_none()
     }
 
     pub fn eval<M: Runtime>(&mut self, instructions: Vec<Instruction>) {
@@ -434,12 +440,18 @@ impl VM {
             if self.stack.size() > 0 {
                 self.log_stack()
             }
-            result
+            self.eval_lazy::<M>(result?)
         }
     }
 
     pub fn pop(&mut self) -> VMResult<Arc<Object>> {
         VMResult::Ok(expect!(self, self.stack.pop(), "tried to pop empty stack"))
+    }
+
+    pub fn pop_eval<M: Runtime>(&mut self) -> VMResult<Arc<Object>> {
+        let o = unwrap!(self, self.pop());
+        let o = expect!(self, self.eval_lazy::<M>(o), "failed to eval lazy");
+        VMResult::Ok(o)
     }
 
     #[inline]

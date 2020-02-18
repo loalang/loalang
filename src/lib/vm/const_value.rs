@@ -7,7 +7,7 @@ use num_bigint::{BigInt, BigUint};
 pub enum ConstValue {
     Nothing,
     String(String),
-    Lazy(u64, Vec<Arc<Object>>),
+    Lazy(u64, CallStack, Vec<Arc<Object>>),
     Character(u16),
     Symbol(String),
     U8(u8),

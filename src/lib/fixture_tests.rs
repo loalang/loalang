@@ -1,5 +1,3 @@
-use crate::vm::CallStack;
-use crate::vm::Runtime;
 use crate::*;
 use serde::Deserialize;
 
@@ -96,7 +94,7 @@ fn fixtures() {
             let assembly = generator.generate_all().unwrap();
 
             let mut vm = vm::VM::new();
-            let result = vm.eval_pop::<TestRuntime>(assembly.clone().into()).unwrap();
+            let result = vm.eval_pop::<()>(assembly.clone().into()).unwrap();
 
             let actual_stdout = format!("{}\n", result);
             let expected_stdout: String = fixture_config
@@ -141,12 +139,4 @@ fn matches(comment: &syntax::Token, diagnostic: &Diagnostic) -> bool {
         d_span.start.uri.clone(),
         diagnostic.to_string().as_str(),
     )
-}
-
-struct TestRuntime;
-
-impl Runtime for TestRuntime {
-    fn print_panic(message: String, call_stack: CallStack) {
-        eprintln!("{}: {:#?}", message, call_stack);
-    }
 }

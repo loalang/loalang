@@ -22,3 +22,15 @@ pub enum VMResult<T> {
     Ok(T),
     Panic(String, CallStack),
 }
+
+impl<T> VMResult<T> {
+    pub fn report<M: Runtime>(self) -> Option<T> {
+        match self {
+            VMResult::Ok(t) => Some(t),
+            VMResult::Panic(s, cs) => {
+                M::print_panic(s, cs);
+                None
+            }
+        }
+    }
+}

@@ -2,6 +2,7 @@ use crate::vm::NativeMethod;
 use crate::*;
 use std::io::{self, Read, Write};
 
+#[derive(Clone)]
 pub enum Instruction {
     Noop,
     Halt,
