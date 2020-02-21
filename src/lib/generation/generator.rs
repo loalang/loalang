@@ -158,8 +158,45 @@ impl<'a> Generator<'a> {
         }
     }
 
+    fn declare_class_object(
+        &mut self,
+        name: &str,
+        assembly: &mut Assembly,
+        class: &Node,
+    ) -> GenerationResult<()> {
+        let mut section = Section::named(format!("{}$class", name));
+        section.add_instruction(InstructionKind::DeclareClass(format!("{} class", name)));
+
+        let mut methods_section = Section::named(format!("{}$class$methods", name));
+
+        for initializer in self.analysis.navigator.initializers_of(class) {
+            if let Some(selector) = self.analysis.navigator.initializer_selector(&initializer) {
+                let label = format!("{}$class#{}", name, selector);
+                methods_section
+                    .add_instruction(InstructionKind::DeclareMethod(selector, label.clone()));
+                section.add_instruction(InstructionKind::UseMethod(label.clone()));
+                let mut init_section = Section::named(label);
+                init_section.add_instruction(InstructionKind::LoadObject(name.into()));
+                init_section.add_instruction(InstructionKind::Return(1));
+                assembly.add_section(init_section);
+            }
+        }
+
+        if !methods_section.is_empty() {
+            assembly.add_method_declaration_section(methods_section);
+        }
+
+        assembly.add_class_declaration_section(section);
+        Ok(())
+    }
+
     fn declare_class(&mut self, assembly: &mut Assembly, class: &Node) -> GenerationResult<()> {
         let (qn, _, _) = self.analysis.navigator.qualified_name_of(class)?;
+
+        if self.analysis.navigator.has_class_object(class) {
+            self.declare_class_object(qn.as_ref(), assembly, class)?;
+        }
+
         let mut section = Section::named(qn.as_str());
         section.add_instruction(InstructionKind::DeclareClass(qn.clone()));
 
@@ -300,7 +337,12 @@ impl<'a> Generator<'a> {
         match declaration.kind {
             Class { .. } => {
                 let (qn, _, _) = self.analysis.navigator.qualified_name_of(declaration)?;
-                section.add_instruction(InstructionKind::LoadObject(qn));
+                if self.analysis.navigator.has_class_object(declaration) {
+                    let qn = format!("{}$class", qn);
+                    section.add_instruction(InstructionKind::LoadObject(qn));
+                } else {
+                    section.add_instruction(InstructionKind::LoadObject(qn));
+                }
             }
             ParameterPattern { .. } => section.add_instruction(InstructionKind::LoadLocal(
                 self.index_of_parameter(declaration.id)?,
@@ -315,6 +357,26 @@ impl<'a> Generator<'a> {
             _ => return Err(invalid_node(declaration, "Expected value declaration.")),
         }
         Ok(())
+    }
+
+    fn qualified_type_name(&self, type_: &Type) -> Option<String> {
+        match type_ {
+            Type::Class(_, class, _) => {
+                let class = self.analysis.navigator.find_node(*class)?;
+                let (qn, _, _) = self.analysis.navigator.qualified_name_of(&class)?;
+                Some(qn)
+            }
+
+            Type::ClassObject(ref t) => self
+                .qualified_type_name(t)
+                .map(|qn| format!("{}$class", qn)),
+
+            ref t => Some(t.to_string()),
+        }
+    }
+
+    fn qualified_behaviour_name(&self, behaviour: &Behaviour) -> Option<String> {
+        self.qualified_type_name(&behaviour.receiver_type)
     }
 
     fn generate_expression(
@@ -392,14 +454,7 @@ impl<'a> Generator<'a> {
                 let expression = self.analysis.navigator.find_child(expression, r)?;
                 self.generate_expression(assembly, section, &expression)?;
 
-                let qualified_name = match behaviour.receiver_type {
-                    Type::Class(_, class, _) => {
-                        let class = self.analysis.navigator.find_node(class)?;
-                        let (qn, _, _) = self.analysis.navigator.qualified_name_of(&class)?;
-                        qn
-                    }
-                    ref t => t.to_string(),
-                };
+                let qualified_name = self.qualified_behaviour_name(&behaviour)?;
 
                 let label = format!("{}#{}", qualified_name, behaviour.selector());
                 let Location {
@@ -1229,6 +1284,40 @@ mod tests {
                     LoadLocal 2
                     CallMethod @N/A#return: "test:" 11 27
                     DropLocal 1
+                    Return 1
+            "#,
+        );
+    }
+
+    #[test]
+    fn unary_initializer() {
+        assert_generates(
+            Source::test_repl(
+                r#"
+                    class A {
+                        public init new.
+                    }
+
+                    A new.
+                "#,
+            ),
+            r#"
+                @A$class$methods
+                    DeclareMethod "new" @A$class#new
+
+                @A$class
+                    DeclareClass "A class"
+                    UseMethod @A$class#new
+
+                @A
+                    DeclareClass "A"
+
+                LoadObject @A$class
+                CallMethod @A$class#new "test:" 6 21
+                Halt
+
+                @A$class#new
+                    LoadObject @A
                     Return 1
             "#,
         );

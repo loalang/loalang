@@ -151,13 +151,14 @@ impl VM {
 
                 // TODO: Optimize this so Instruction doesn't have to be cloned
                 ref i @ Instruction::CallMethod(_, _, _, _) => {
-                    if let Instruction::CallMethod(ref offset, ref uri, line, character) = i.clone() {
+                    if let Instruction::CallMethod(ref offset, ref uri, line, character) = i.clone()
+                    {
                         let top = expect!(self, self.stack.top(), "empty stack").clone();
                         let receiver = match self.eval_lazy::<M>(top) {
                             None => continue,
                             Some(r) => r,
                         };
-                        
+
                         let class = expect!(
                             self,
                             &receiver.class,
@@ -730,6 +731,32 @@ mod tests {
                 ReturnLazy 2
             "#,
             "3",
+        );
+    }
+
+    #[test]
+    fn initializer() {
+        assert_evaluates_to(
+            r#"
+            @A$class$methods
+                DeclareMethod "new" @A$class#new
+
+            @A$class
+                DeclareClass "A class"
+                UseMethod @A$class#new
+
+            @A
+                DeclareClass "A"
+
+            LoadObject @A$class
+            CallMethod @A$class#new "test:" 0 0
+            Halt
+
+            @A$class#new
+                LoadObject @A
+                Return 1
+            "#,
+            "a A",
         );
     }
 }

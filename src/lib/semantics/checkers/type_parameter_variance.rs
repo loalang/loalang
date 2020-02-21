@@ -17,7 +17,8 @@ impl TypeParameterVariance {
             | Type::Unknown
             | Type::Symbol(_)
             | Type::UnresolvedInteger(_, _)
-            | Type::UnresolvedFloat(_, _) => false,
+            | Type::UnresolvedFloat(_, _)
+            | Type::ClassObject(_) => false,
 
             Type::Class(_, _, args) => {
                 for arg in args {

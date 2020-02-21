@@ -238,6 +238,13 @@ pub fn check_assignment(
     match (&assignee, &assigned) {
         (Type::Unknown, _) | (_, Type::Unknown) => TypeAssignability::Valid,
 
+        (Type::ClassObject(_), _) | (_, Type::ClassObject(_)) => TypeAssignability::Invalid {
+            assignee,
+            assigned,
+            invariant,
+            because: vec![],
+        },
+
         (Type::Symbol(assignee_symbol), Type::Symbol(assigned_symbol)) => {
             if assignee_symbol == assigned_symbol {
                 TypeAssignability::Valid

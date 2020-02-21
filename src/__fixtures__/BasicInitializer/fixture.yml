@@ -1,0 +1,6 @@
+description: When an object has an initializer, it is used to instantiate a class.
+main_class: BasicInitializer/Main
+expected:
+  success: true
+  stdout:
+    - a BasicInitializer/X

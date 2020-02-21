@@ -1470,4 +1470,54 @@ impl Navigator {
     pub fn is_within(&self, needle: &Node, haystack: &Node) -> bool {
         self.any_downwards(haystack, &|n| n.id == needle.id)
     }
+
+    /// Whether a class has a class object (i.e. isn't a constant class).
+    pub fn has_class_object(&self, class: &Node) -> bool {
+        self.has_class_object_impl(class).unwrap_or(false)
+    }
+
+    fn has_class_object_impl(&self, class: &Node) -> Option<bool> {
+        if let Class { class_body, .. } = class.kind {
+            let class_body = self.find_child(class, class_body)?;
+            if let ClassBody { class_members, .. } = class_body.kind {
+                for member in class_members {
+                    if let Some(member) = self.find_child(class, member) {
+                        match member.kind {
+                            Initializer { .. } => return Some(true),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub fn initializers_of(&self, class: &Node) -> Vec<Node> {
+        let mut initializers = vec![];
+        if let Class { class_body, .. } = class.kind {
+            if let Some(class_body) = self.find_child(class, class_body) {
+                if let ClassBody { class_members, .. } = class_body.kind {
+                    for member in class_members {
+                        if let Some(member) = self.find_child(class, member) {
+                            match member.kind {
+                                Initializer { .. } => initializers.push(member),
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        initializers
+    }
+
+    pub fn initializer_selector(&self, initializer: &Node) -> Option<String> {
+        if let Initializer { message_pattern, .. } = initializer.kind {
+            let message_pattern = self.find_child(initializer, message_pattern)?;
+            self.message_pattern_selector(&message_pattern)
+        } else {
+            None
+        }
+    }
 }

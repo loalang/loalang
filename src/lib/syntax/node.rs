@@ -429,6 +429,7 @@ pub enum NodeKind {
     /// ```bnf
     /// ClassMember ::=
     ///   Method |
+    ///   Initializer |
     ///   IsDirective
     /// ```
 
@@ -458,6 +459,21 @@ pub enum NodeKind {
     IsDirective {
         is_keyword: Token,
         type_expression: Id,
+        period: Option<Token>,
+    },
+
+    /// ```bnf
+    /// Initializer ::=
+    ///   (PUBLIC_KEYWORD | PRIVATE_KEYWORD)?
+    ///   INIT_KEYWORD
+    ///   MessagePattern
+    ///   PERIOD
+    /// ```
+    Initializer {
+        doc: Id,
+        visibility: Option<Token>,
+        init_keyword: Option<Token>,
+        message_pattern: Id,
         period: Option<Token>,
     },
 
@@ -896,6 +912,13 @@ impl NodeKind {
                 ..
             } => vec![Some(is_keyword), period.as_ref()],
 
+            Initializer {
+                ref visibility,
+                ref init_keyword,
+                ref period,
+                ..
+            } => vec![visibility.as_ref(), init_keyword.as_ref(), period.as_ref()],
+
             Operator(ref tokens) => tokens.iter().map(Some).collect(),
 
             KeywordPair { ref colon, .. } => vec![colon.as_ref()],
@@ -1042,6 +1065,11 @@ impl NodeKind {
                 type_expression, ..
             } => {
                 children.push(type_expression);
+            }
+            Initializer {
+                message_pattern, ..
+            } => {
+                children.push(message_pattern);
             }
             Signature {
                 type_parameter_list,

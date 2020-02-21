@@ -701,7 +701,11 @@ impl Parser {
             }
 
             if sees!(self, PublicKeyword | PrivateKeyword) {
-                class_members.push(self.parse_method(doc, self.child(&mut builder)));
+                if self.peek_next_significant().kind == InitKeyword {
+                    class_members.push(self.parse_initializer(doc, self.child(&mut builder)));
+                } else {
+                    class_members.push(self.parse_method(doc, self.child(&mut builder)));
+                }
                 continue;
             }
 
@@ -752,6 +756,46 @@ impl Parser {
             IsDirective {
                 is_keyword,
                 type_expression,
+                period,
+            },
+        )
+    }
+
+    fn parse_initializer(&mut self, mut doc: Id, mut builder: NodeBuilder) -> Id {
+        let mut visibility = None;
+        let mut init_keyword = None;
+        let message_pattern;
+        let mut period = None;
+
+        if doc == Id::NULL && sees!(self, DocLineMarker) {
+            doc = self.parse_doc(self.child(&mut builder));
+        }
+
+        if sees!(self, PrivateKeyword | PublicKeyword) {
+            visibility = Some(self.next());
+        }
+
+        if sees!(self, InitKeyword) {
+            init_keyword = Some(self.next());
+        } else {
+            self.syntax_error_end("Initializers must start with `init`.");
+        }
+
+        message_pattern = self.parse_message_pattern(self.child(&mut builder));
+
+        if sees!(self, Period) {
+            period = Some(self.next());
+        } else {
+            self.syntax_error_end("Methods must end with a period.");
+        }
+
+        self.finalize(
+            builder,
+            Initializer {
+                doc,
+                visibility,
+                init_keyword,
+                message_pattern,
                 period,
             },
         )

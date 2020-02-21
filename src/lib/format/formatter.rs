@@ -291,6 +291,21 @@ impl<'a> Formatter<'a> {
                 self.write_child(f, type_expression)?;
                 self.write_token_or(f, period, ".")
             }
+            Initializer {
+                doc,
+                visibility,
+                init_keyword,
+                message_pattern,
+                period,
+            } => {
+                self.write_child(f, doc)?;
+                self.write_token_or(f, visibility, "private")?;
+                self.space(f)?;
+                self.write_token_or(f, init_keyword, "init")?;
+                self.space(f)?;
+                self.write_child(f, message_pattern)?;
+                self.write_token_or(f, period, ".")
+            }
             Signature {
                 type_parameter_list,
                 message_pattern,

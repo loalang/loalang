@@ -1,0 +1,10 @@
+namespace BasicInitializer.
+
+export class Main {
+  public run =>
+    X new.
+}
+
+export class X {
+  public init new.
+}

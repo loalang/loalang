@@ -42,7 +42,7 @@ impl Types {
     pub fn get_type_of_expression(&self, expression: &Node) -> Type {
         self.types_cache
             .gate(&expression.id, || match expression.kind {
-                ReferenceExpression { .. } => self.get_type_of_declaration(
+                ReferenceExpression { .. } => self.get_expression_type_of_declaration(
                     &self
                         .navigator
                         .find_declaration(expression, DeclarationKind::Value)?,
@@ -117,6 +117,15 @@ impl Types {
             );
         }
         None
+    }
+
+    pub fn get_expression_type_of_declaration(&self, declaration: &Node) -> Type {
+        if let Class { .. } = declaration.kind {
+            if self.navigator.has_class_object(declaration) {
+                return Type::ClassObject(Box::new(self.get_type_of_declaration(declaration)));
+            }
+        }
+        self.get_type_of_declaration(declaration)
     }
 
     pub fn get_type_of_declaration(&self, declaration: &Node) -> Type {
@@ -248,9 +257,50 @@ impl Types {
             .unwrap_or(vec![])
     }
 
+    pub fn get_static_behaviours_from_class(
+        &self,
+        class: &Node,
+        class_object_type: &Type,
+        class_type: &Type,
+    ) -> Option<Vec<Behaviour>> {
+        if let Class { class_body, .. } = class.kind {
+            let class_body = self.navigator.find_child(class, class_body)?;
+            if let ClassBody { class_members, .. } = class_body.kind {
+                return Some(
+                    class_members
+                        .iter()
+                        .filter_map(|m| self.navigator.find_child(class, *m))
+                        .filter_map(|member| match member.kind {
+                            Initializer { .. } => Some(Behaviour {
+                                message: BehaviourMessage::Unary("new".into()),
+                                method_id: member.id,
+                                receiver_type: class_object_type.clone(),
+                                return_type: class_type.clone(),
+                            }),
+                            _ => None,
+                        })
+                        .collect(),
+                );
+            }
+        }
+        None
+    }
+
     pub fn get_behaviours(&self, type_: &Type) -> Vec<Behaviour> {
         match type_ {
             Type::Unknown => vec![],
+            Type::ClassObject(box class_type) => {
+                if let Type::Class(_, class_id, _) = class_type {
+                    self.navigator
+                        .find_node(*class_id)
+                        .and_then(|class| {
+                            self.get_static_behaviours_from_class(&class, type_, &class_type)
+                        })
+                        .unwrap_or(vec![])
+                } else {
+                    vec![]
+                }
+            }
             Type::UnresolvedInteger(_, _) => self.get_behaviours_from_stdlib_class("Loa/Integer"),
             Type::UnresolvedFloat(_, _) => self.get_behaviours_from_stdlib_class("Loa/Float"),
             Type::Symbol(_) => self.get_behaviours_from_stdlib_class("Loa/Symbol"),
@@ -465,7 +515,8 @@ impl Types {
             | Type::Behaviour(_)
             | Type::UnresolvedInteger(_, _)
             | Type::UnresolvedFloat(_, _)
-            | Type::Symbol(_) => {}
+            | Type::Symbol(_)
+            | Type::ClassObject(_) => {}
             Type::Class(_, id, _) => {
                 if let Some(class) = self.navigator.find_node(*id) {
                     for super_type in self.get_super_types(&class) {
@@ -557,6 +608,7 @@ pub enum Type {
     UnresolvedInteger(String, Id),
     UnresolvedFloat(String, Id),
     Symbol(String),
+    ClassObject(Box<Type>),
 }
 
 impl Type {
@@ -572,6 +624,7 @@ impl Type {
             UnresolvedInteger(s, id) => UnresolvedInteger(s, id),
             UnresolvedFloat(s, id) => UnresolvedFloat(s, id),
             Symbol(s) => Symbol(s),
+            ClassObject(i) => ClassObject(i),
         }
     }
 
@@ -587,7 +640,8 @@ impl Type {
             | UnresolvedFloat(_, _)
             | Symbol(_)
             | Class(_, _, _)
-            | Parameter(_, _, _) => self,
+            | Parameter(_, _, _)
+            | ClassObject(_) => self,
 
             // Recursive types
             Behaviour(box b) => Behaviour(Box::new(b.with_self(self_))),
@@ -615,6 +669,7 @@ impl Type {
 
     pub fn to_markdown(&self, navigator: &Navigator) -> String {
         match self {
+            Type::ClassObject(ref inner) => format!("{} **class**", inner),
             Type::Symbol(s) => format!("_{}_", s),
             Type::Self_(_) => format!("**self**"),
             Type::Unknown => format!("?"),
@@ -657,6 +712,7 @@ impl Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Type::ClassObject(ref inner) => write!(f, "{} class", inner),
             Type::Self_(_) => write!(f, "self"),
             Type::Unknown => write!(f, "?"),
             Type::UnresolvedFloat(s, _) => write!(f, "{}", s),

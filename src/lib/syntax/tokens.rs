@@ -25,6 +25,7 @@ pub enum TokenKind {
     LetKeyword,
     NativeKeyword,
     PanicKeyword,
+    InitKeyword,
 
     Plus,
     Colon,
@@ -92,6 +93,7 @@ impl Token {
             LetKeyword => "let".into(),
             NativeKeyword => "native".into(),
             PanicKeyword => "panic".into(),
+            InitKeyword => "init".into(),
 
             Plus => "+".into(),
             Colon => ":".into(),

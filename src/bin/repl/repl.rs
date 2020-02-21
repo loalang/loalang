@@ -138,7 +138,8 @@ pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
                 | TokenKind::PartialKeyword
                 | TokenKind::LetKeyword
                 | TokenKind::NativeKeyword
-                | TokenKind::PanicKeyword => lexeme.blue().to_string(),
+                | TokenKind::PanicKeyword
+                | TokenKind::InitKeyword => lexeme.blue().to_string(),
                 TokenKind::Plus => lexeme,
                 TokenKind::Asterisk => lexeme,
                 TokenKind::Underscore => lexeme,
