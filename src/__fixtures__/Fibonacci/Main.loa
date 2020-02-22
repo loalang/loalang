@@ -1,0 +1,16 @@
+namespace Fibonacci.
+
+export class Main {
+  public run =>
+    55.
+    // Fibonacci number: 21.
+}
+
+// class Fibonacci {
+  // public number: Number n =>
+    // self number: n val: 1 prev: 0.
+// 
+  // private number: Number n val: Number val prev: Number prev =>
+    // n == 0 ifTrue: prev
+           // ifFalse: (self number: n - 1 val: val + prev prev: val).
+// }

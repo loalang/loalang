@@ -108,6 +108,7 @@ pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
                 | TokenKind::FatArrow
                 | TokenKind::Period
                 | TokenKind::Comma
+                | TokenKind::SemiColon
                 | TokenKind::OpenCurly
                 | TokenKind::CloseCurly
                 | TokenKind::OpenParen
@@ -141,6 +142,7 @@ pub fn highlight(source: Arc<Source>, markers: Vec<(Color, Span)>) -> String {
                 | TokenKind::PanicKeyword
                 | TokenKind::InitKeyword
                 | TokenKind::VarKeyword => lexeme.blue().to_string(),
+                TokenKind::Dash => lexeme,
                 TokenKind::Plus => lexeme,
                 TokenKind::Asterisk => lexeme,
                 TokenKind::Underscore => lexeme,

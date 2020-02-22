@@ -25,6 +25,9 @@ pub enum Instruction {
     Return(u16),
     ReturnLazy(u16),
 
+    MarkClassTrue(u64),
+    MarkClassFalse(u64),
+
     MarkClassString(u64),
     MarkClassCharacter(u64),
     MarkClassSymbol(u64),
@@ -84,6 +87,9 @@ const LOAD_GLOBAL: u8 = 0x90;
 const LOAD_LAZY: u8 = 0x91;
 const RETURN: u8 = 0x92;
 const RETURN_LAZY: u8 = 0x93;
+
+const MARK_CLASS_TRUE: u8 = 0xae;
+const MARK_CLASS_FALSE: u8 = 0xaf;
 
 const MARK_CLASS_STRING: u8 = 0xb0;
 const MARK_CLASS_CHARACTER: u8 = 0xb1;
@@ -175,6 +181,13 @@ impl BytecodeEncoding for Instruction {
             Instruction::Return(index) => Ok(RETURN.serialize(&mut w)? + index.serialize(w)?),
             Instruction::ReturnLazy(index) => {
                 Ok(RETURN_LAZY.serialize(&mut w)? + index.serialize(w)?)
+            }
+
+            Instruction::MarkClassTrue(label) => {
+                Ok(MARK_CLASS_TRUE.serialize(&mut w)? + label.serialize(w)?)
+            }
+            Instruction::MarkClassFalse(label) => {
+                Ok(MARK_CLASS_FALSE.serialize(&mut w)? + label.serialize(w)?)
             }
 
             Instruction::MarkClassString(label) => {
@@ -331,6 +344,9 @@ impl BytecodeEncoding for Instruction {
             [LOAD_LAZY] => Ok(Instruction::LoadLazy(r.deserialize()?, r.deserialize()?)),
             [RETURN] => Ok(Instruction::Return(r.deserialize()?)),
             [RETURN_LAZY] => Ok(Instruction::ReturnLazy(r.deserialize()?)),
+
+            [MARK_CLASS_TRUE] => Ok(Instruction::MarkClassTrue(r.deserialize()?)),
+            [MARK_CLASS_FALSE] => Ok(Instruction::MarkClassFalse(r.deserialize()?)),
 
             [MARK_CLASS_STRING] => Ok(Instruction::MarkClassString(r.deserialize()?)),
             [MARK_CLASS_CHARACTER] => Ok(Instruction::MarkClassCharacter(r.deserialize()?)),
@@ -668,11 +684,15 @@ impl BytecodeEncoding for Vec<Instruction> {
 }
 
 const NATIVE_NUMBER_PLUS: u8 = 0x1a;
+const NATIVE_NUMBER_MINUS: u8 = 0x1b;
+const NATIVE_OBJECT_EQ: u8 = 0x1c;
 
 impl BytecodeEncoding for NativeMethod {
     fn serialize<W: Write>(&self, w: W) -> io::Result<usize> {
         match self {
             NativeMethod::Number_plus => NATIVE_NUMBER_PLUS,
+            NativeMethod::Number_minus => NATIVE_NUMBER_MINUS,
+            NativeMethod::Object_eq => NATIVE_OBJECT_EQ,
         }
         .serialize(w)
     }
@@ -681,6 +701,8 @@ impl BytecodeEncoding for NativeMethod {
         let code: u8 = r.deserialize()?;
         match code {
             NATIVE_NUMBER_PLUS => Ok(NativeMethod::Number_plus),
+            NATIVE_NUMBER_MINUS => Ok(NativeMethod::Number_minus),
+            NATIVE_OBJECT_EQ => Ok(NativeMethod::Object_eq),
             _ => Err(io::ErrorKind::InvalidInput.into()),
         }
     }

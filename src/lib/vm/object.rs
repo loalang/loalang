@@ -24,10 +24,23 @@ pub static mut F32_CLASS: *const Class = null();
 pub static mut F64_CLASS: *const Class = null();
 pub static mut FBIG_CLASS: *const Class = null();
 
+pub static mut TRUE: *const Arc<Object> = null();
+pub static mut FALSE: *const Arc<Object> = null();
+
 #[derive(Debug)]
 pub struct Object {
     pub class: Option<Arc<Class>>,
     pub const_value: ConstValue,
+}
+
+impl PartialEq for Object {
+    fn eq(&self, other: &Object) -> bool {
+        self.class
+            .as_ref()
+            .and_then(|lc| other.class.as_ref().map(|rc| Arc::ptr_eq(lc, rc)))
+            .unwrap_or(false)
+            && self.const_value == other.const_value
+    }
 }
 
 impl Object {
@@ -40,10 +53,8 @@ impl Object {
 
     pub fn get_variable(&self, variable: &Variable) -> Option<Arc<Object>> {
         match self.const_value {
-            ConstValue::InstanceVariables(ref v) => {
-                v.get(&variable.id).cloned()
-            }
-            _ => None
+            ConstValue::InstanceVariables(ref v) => v.get(&variable.id).cloned(),
+            _ => None,
         }
     }
 
@@ -56,12 +67,22 @@ impl Object {
                     v.insert(variable.id, value);
                     ConstValue::InstanceVariables(v)
                 }
-                _ => ConstValue::InstanceVariables(vec![(variable.id, value)].into_iter().collect())
+                _ => {
+                    ConstValue::InstanceVariables(vec![(variable.id, value)].into_iter().collect())
+                }
             },
         })
     }
 
-    fn box_const(const_value: ConstValue, class_ptr: &mut *const Class) -> Arc<Object> {
+    pub fn box_bool(value: bool) -> Arc<Object> {
+        if value {
+            unsafe { (*TRUE).clone() }
+        } else {
+            unsafe { (*FALSE).clone() }
+        }
+    }
+
+    pub fn box_const(const_value: ConstValue, class_ptr: &mut *const Class) -> Arc<Object> {
         let class = unsafe { Arc::from_raw(*class_ptr) };
         *class_ptr = Arc::into_raw(class.clone());
         Arc::new(Object {

@@ -108,6 +108,7 @@ const ASTERISK: u16 = '*' as u16;
 const APOSTROPHE: u16 = '\'' as u16;
 const PLUS: u16 = '+' as u16;
 const COLON: u16 = ':' as u16;
+const SEMI_COLON: u16 = ';' as u16;
 const COMMA: u16 = ',' as u16;
 const PERIOD: u16 = '.' as u16;
 const DASH: u16 = '-' as u16;
@@ -348,6 +349,9 @@ fn next_token(
         // Colon
         (COLON, _) => kind = TokenKind::Colon,
 
+        // SemiColon
+        (SEMI_COLON, _) => kind = TokenKind::SemiColon,
+
         // Comma
         (COMMA, _) => kind = TokenKind::Comma,
 
@@ -370,6 +374,9 @@ fn next_token(
             end_offset = o;
             kind = TokenKind::FatArrow;
         }
+
+        // Dash
+        (DASH, _) => kind = TokenKind::Dash,
 
         // EqualSign
         (EQUAL_SIGN, _) => kind = TokenKind::EqualSign,

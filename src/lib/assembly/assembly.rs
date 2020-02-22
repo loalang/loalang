@@ -260,6 +260,9 @@ impl fmt::Debug for Instruction {
             Return(arity) => write!(f, "Return {}", arity),
             ReturnLazy(arity) => write!(f, "ReturnLazy {}", arity),
 
+            MarkClassTrue(ref label) => write!(f, "MarkClassTrue @{}", label),
+            MarkClassFalse(ref label) => write!(f, "MarkClassFalse @{}", label),
+
             MarkClassString(ref label) => write!(f, "MarkClassString @{}", label),
             MarkClassCharacter(ref label) => write!(f, "MarkClassCharacter @{}", label),
             MarkClassSymbol(ref label) => write!(f, "MarkClassSymbol @{}", label),
@@ -325,6 +328,9 @@ pub enum InstructionKind {
     LoadLazy(u16, Label),
     Return(u16),
     ReturnLazy(u16),
+
+    MarkClassTrue(Label),
+    MarkClassFalse(Label),
 
     MarkClassString(Label),
     MarkClassCharacter(Label),
@@ -434,6 +440,13 @@ impl Instruction {
             }
             InstructionKind::Return(a) => BytecodeInstruction::Return(a),
             InstructionKind::ReturnLazy(a) => BytecodeInstruction::ReturnLazy(a),
+
+            InstructionKind::MarkClassTrue(ref l) => {
+                BytecodeInstruction::MarkClassTrue(label!(l, "class"))
+            }
+            InstructionKind::MarkClassFalse(ref l) => {
+                BytecodeInstruction::MarkClassFalse(label!(l, "class"))
+            }
 
             InstructionKind::MarkClassString(ref l) => {
                 BytecodeInstruction::MarkClassString(label!(l, "class"))

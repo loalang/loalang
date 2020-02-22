@@ -28,6 +28,36 @@ pub enum ConstValue {
     FBig(BigFraction),
 }
 
+impl PartialEq for ConstValue {
+    fn eq(&self, other: &ConstValue) -> bool {
+        use ConstValue::*;
+        match (self, other) {
+            (Nothing, Nothing) => true,
+            (InstanceVariables(l), InstanceVariables(r)) => l == r,
+            (String(l), String(r)) => l == r,
+            (Lazy(l, _, la), Lazy(r, _, ra)) => l == r && la == ra,
+            (Character(l), Character(r)) => l == r,
+            (Symbol(l), Symbol(r)) => l == r,
+            (U8(l), U8(r)) => l == r,
+            (U16(l), U16(r)) => l == r,
+            (U32(l), U32(r)) => l == r,
+            (U64(l), U64(r)) => l == r,
+            (U128(l), U128(r)) => l == r,
+            (UBig(l), UBig(r)) => l == r,
+            (I8(l), I8(r)) => l == r,
+            (I16(l), I16(r)) => l == r,
+            (I32(l), I32(r)) => l == r,
+            (I64(l), I64(r)) => l == r,
+            (I128(l), I128(r)) => l == r,
+            (IBig(l), IBig(r)) => l == r,
+            (F32(l), F32(r)) => l == r,
+            (F64(l), F64(r)) => l == r,
+            (FBig(l), FBig(r)) => l == r,
+            _ => false,
+        }
+    }
+}
+
 impl From<()> for ConstValue {
     fn from(_: ()) -> Self {
         ConstValue::Nothing

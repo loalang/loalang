@@ -13,6 +13,8 @@ pub struct VM {
     variables: HashMap<u64, Arc<Variable>>,
     globals: HashMap<u64, Arc<Object>>,
     declaring_class: u64,
+
+    constant_holder: Vec<Arc<Object>>,
 }
 
 impl VM {
@@ -28,6 +30,8 @@ impl VM {
             variables: HashMap::new(),
             globals: HashMap::new(),
             declaring_class: 0,
+
+            constant_holder: vec![],
         }
     }
 
@@ -126,9 +130,7 @@ impl VM {
                         "variable outside class"
                     );
                     let class = expect!(self, Arc::get_mut(class), "class in use");
-                    class
-                        .variables
-                        .insert(id, variable.clone());
+                    class.variables.insert(id, variable.clone());
                     class
                         .variable_setters
                         .insert(variable.setter_id, variable.clone());
@@ -305,6 +307,19 @@ impl VM {
                     self.push(result);
                     break;
                 }
+
+                Instruction::MarkClassTrue(id) => unsafe {
+                    let true_class = expect!(self, self.classes.get(&id), "True not loaded");
+                    self.constant_holder.push(Object::new(true_class));
+                    TRUE = self.constant_holder.last().unwrap() as *const _;
+                    self.pc += 1;
+                },
+                Instruction::MarkClassFalse(id) => unsafe {
+                    let false_class = expect!(self, self.classes.get(&id), "False not loaded");
+                    self.constant_holder.push(Object::new(false_class));
+                    FALSE = self.constant_holder.last().unwrap() as *const _;
+                    self.pc += 1;
+                },
 
                 Instruction::MarkClassString(id) => unsafe {
                     STRING_CLASS = unwrap!(self, self.raw_class_ptr(id));
@@ -711,7 +726,7 @@ mod tests {
 
             LoadConstU8 12
             LoadConstU8 13
-            CallNative Number_plus
+            CallNative Number#+
 
             Halt
             "#,
@@ -784,7 +799,7 @@ mod tests {
             @lazy
                 LoadLocal 1
                 LoadLocal 1
-                CallNative Number_plus
+                CallNative Number#+
                 ReturnLazy 2
             "#,
             "3",
@@ -859,6 +874,33 @@ mod tests {
               Noop
             "#,
             "a N/A(b=a N/B)",
+        );
+    }
+
+    #[test]
+    fn native_eq_method() {
+        assert_evaluates_to(
+            r#"
+            @A
+              DeclareClass "A"
+
+            @B
+              DeclareClass "B"
+
+            @True
+              DeclareClass "True"
+              MarkClassTrue @True
+
+            @False
+              DeclareClass "False"
+              MarkClassFalse @False
+
+            LoadObject @A
+            LoadObject @B
+            CallNative Object#==
+            Halt
+            "#,
+            "a False",
         );
     }
 }

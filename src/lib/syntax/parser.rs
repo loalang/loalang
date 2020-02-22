@@ -850,7 +850,8 @@ impl Parser {
 
         if sees!(self, FatArrow) {
             fat_arrow = Some(self.next());
-            keyword_pairs = self.parse_keyword_pairs(&mut builder, &Self::parse_expression);
+            keyword_pairs =
+                self.parse_keyword_pairs(&mut builder, &Self::parse_initializer_argument);
         }
 
         if sees!(self, Period) {
@@ -951,7 +952,7 @@ impl Parser {
             }
         } else if sees!(
             self,
-            Asterisk | Plus | Slash | EqualSign | OpenAngle | CloseAngle
+            Dash | Asterisk | Plus | Slash | EqualSign | OpenAngle | CloseAngle
         ) {
             self.parse_binary_message_pattern(builder)
         } else {
@@ -978,7 +979,7 @@ impl Parser {
 
         if sees!(
             self,
-            Asterisk | Plus | Slash | EqualSign | OpenAngle | CloseAngle
+            Dash | Asterisk | Plus | Slash | EqualSign | OpenAngle | CloseAngle
         ) {
             operator = self.parse_operator(self.child(&mut builder));
         } else {
@@ -1226,7 +1227,7 @@ impl Parser {
     fn parse_operator(&mut self, builder: NodeBuilder) -> Id {
         if !sees!(
             self,
-            Asterisk | Plus | Slash | EqualSign | OpenAngle | CloseAngle
+            Dash | Asterisk | Plus | Slash | EqualSign | OpenAngle | CloseAngle
         ) {
             return Id::NULL;
         }
@@ -1234,7 +1235,7 @@ impl Parser {
         let mut tokens = vec![];
         while sees!(
             self,
-            Asterisk | Plus | Slash | EqualSign | OpenAngle | CloseAngle
+            Dash | Asterisk | Plus | Slash | EqualSign | OpenAngle | CloseAngle
         ) {
             tokens.push(self.next());
         }
@@ -1267,6 +1268,17 @@ impl Parser {
         )
     }
 
+    fn parse_initializer_argument(&mut self, mut builder: NodeBuilder) -> Id {
+        if sees!(self, LetKeyword) {
+            return self.parse_let_expression(builder);
+        }
+
+        let result = self.parse_leaf_expression(self.child(&mut builder));
+        let result = self.parse_unary_message_send(self.child(&mut builder), result);
+        let result = self.parse_binary_message_send(self.child(&mut builder), result);
+        builder.fix_parentage(result)
+    }
+
     fn parse_expression(&mut self, mut builder: NodeBuilder) -> Id {
         if sees!(self, LetKeyword) {
             return self.parse_let_expression(builder);
@@ -1276,10 +1288,15 @@ impl Parser {
         let result = self.parse_unary_message_send(self.child(&mut builder), result);
         let result = self.parse_binary_message_send(self.child(&mut builder), result);
         let result = self.parse_keyword_message_send(self.child(&mut builder), result);
+        let result = self.parse_cascade_message_send(self.child(&mut builder), result);
+
         builder.fix_parentage(result)
     }
 
     fn parse_leaf_expression(&mut self, builder: NodeBuilder) -> Id {
+        if sees!(self, OpenParen) {
+            return self.parse_tuple_expression(builder);
+        }
         if sees!(self, PanicKeyword) {
             return self.parse_panic_expression(builder);
         }
@@ -1306,6 +1323,29 @@ impl Parser {
         }
         self.syntax_error_end("Expected expression.");
         Id::NULL
+    }
+
+    fn parse_tuple_expression(&mut self, mut builder: NodeBuilder) -> Id {
+        let open_paren = Some(self.next());
+        let expression;
+        let mut close_paren = None;
+
+        expression = self.parse_expression(self.child(&mut builder));
+
+        if sees!(self, CloseParen) {
+            close_paren = Some(self.next());
+        } else {
+            self.syntax_error_end("Expected closing parenthesis.");
+        }
+
+        self.finalize(
+            builder,
+            TupleExpression {
+                open_paren,
+                expression,
+                close_paren,
+            },
+        )
     }
 
     fn parse_character_expression(&mut self, builder: NodeBuilder) -> Id {
@@ -1480,7 +1520,7 @@ impl Parser {
     fn parse_binary_message_send(&mut self, mut builder: NodeBuilder, receiver: Id) -> Id {
         if sees!(
             self,
-            Asterisk | Plus | Slash | EqualSign | OpenAngle | CloseAngle
+            Dash | Asterisk | Plus | Slash | EqualSign | OpenAngle | CloseAngle
         ) {
             let message = {
                 let mut builder = self.child(&mut builder);
@@ -1537,6 +1577,32 @@ impl Parser {
             );
         }
 
+        return receiver;
+    }
+
+    fn parse_cascade_message_send(&mut self, mut builder: NodeBuilder, receiver: Id) -> Id {
+        if sees!(self, SemiColon) {
+            let result = {
+                let builder = self.child(&mut builder);
+
+                let semi_colon = Some(self.next());
+
+                self.finalize(
+                    builder,
+                    CascadeExpression {
+                        expression: receiver,
+                        semi_colon,
+                    },
+                )
+            };
+
+            let result = self.parse_unary_message_send(self.child(&mut builder), result);
+            let result = self.parse_binary_message_send(self.child(&mut builder), result);
+            let result = self.parse_keyword_message_send(self.child(&mut builder), result);
+            let result = self.parse_cascade_message_send(self.child(&mut builder), result);
+
+            return result;
+        }
         return receiver;
     }
 

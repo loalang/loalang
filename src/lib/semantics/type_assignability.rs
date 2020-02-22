@@ -175,12 +175,14 @@ fn resolve_number(
         let (name, _, _) = navigator.qualified_name_of(&class)?;
 
         match (unresolved, name.as_ref()) {
-            (Type::UnresolvedFloat(_, id), "Loa/Number")
+            (Type::UnresolvedFloat(_, id), "Loa/Object")
+            | (Type::UnresolvedFloat(_, id), "Loa/Number")
             | (Type::UnresolvedFloat(_, id), "Loa/Float")
             | (Type::UnresolvedFloat(_, id), "Loa/Float16")
             | (Type::UnresolvedFloat(_, id), "Loa/Float32")
             | (Type::UnresolvedFloat(_, id), "Loa/Float64")
             | (Type::UnresolvedFloat(_, id), "Loa/BigFloat")
+            | (Type::UnresolvedInteger(_, id), "Loa/Object")
             | (Type::UnresolvedInteger(_, id), "Loa/Number")
             | (Type::UnresolvedInteger(_, id), "Loa/Float")
             | (Type::UnresolvedInteger(_, id), "Loa/Float16")

@@ -28,8 +28,10 @@ pub enum TokenKind {
     InitKeyword,
     VarKeyword,
 
+    Dash,
     Plus,
     Colon,
+    SemiColon,
     Comma,
     Period,
     Slash,
@@ -97,8 +99,10 @@ impl Token {
             InitKeyword => "init".into(),
             VarKeyword => "var".into(),
 
+            Dash => "-".into(),
             Plus => "+".into(),
             Colon => ":".into(),
+            SemiColon => ";".into(),
             Comma => ",".into(),
             Period => ".".into(),
             Slash => "/".into(),

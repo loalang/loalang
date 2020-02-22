@@ -198,6 +198,8 @@ impl Node {
         match self.kind {
             ReferenceExpression { .. }
             | MessageSendExpression { .. }
+            | CascadeExpression { .. }
+            | TupleExpression { .. }
             | SelfExpression(_)
             | StringExpression(_, _)
             | CharacterExpression(_, _)
@@ -644,6 +646,8 @@ pub enum NodeKind {
     ///   IntegerExpression |
     ///   FloatExpression |
     ///   SymbolExpression |
+    ///   CascadeExpression |
+    ///   TupleExpression |
     ///   PanicExpression
     /// ```
 
@@ -652,6 +656,28 @@ pub enum NodeKind {
     ///   Symbol
     /// ```
     ReferenceExpression { symbol: Id },
+
+    /// ```bnf
+    /// CascadeExpression ::=
+    ///   Expression
+    ///   SEMI_COLON
+    /// ```
+    CascadeExpression {
+        expression: Id,
+        semi_colon: Option<Token>,
+    },
+
+    /// ```bnf
+    /// TupleExpression ::=
+    ///   OPEN_PAREN
+    ///   Expression
+    ///   CLOSE_PAREN
+    /// ```
+    TupleExpression {
+        open_paren: Option<Token>,
+        expression: Id,
+        close_paren: Option<Token>,
+    },
 
     /// ```bnf
     /// SelfExpression ::=
@@ -926,6 +952,14 @@ impl NodeKind {
             ReferenceTypeExpression { .. } => vec![],
             ReferenceExpression { .. } => vec![],
 
+            CascadeExpression { ref semi_colon, .. } => vec![semi_colon.as_ref()],
+
+            TupleExpression {
+                ref open_paren,
+                ref close_paren,
+                ..
+            } => vec![open_paren.as_ref(), close_paren.as_ref()],
+
             PanicExpression {
                 ref panic_keyword, ..
             } => vec![Some(panic_keyword)],
@@ -1188,6 +1222,8 @@ impl NodeKind {
             ReferenceExpression { symbol } => {
                 children.push(symbol);
             }
+            CascadeExpression { expression, .. } => children.push(expression),
+            TupleExpression { expression, .. } => children.push(expression),
             MessageSendExpression {
                 expression,
                 message,

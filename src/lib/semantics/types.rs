@@ -48,6 +48,16 @@ impl Types {
                         .find_declaration(expression, DeclarationKind::Value)?,
                 ),
 
+                CascadeExpression { expression: e, .. } => {
+                    let expression = self.navigator.find_child(expression, e)?;
+                    self.get_type_of_expression(&expression)
+                }
+
+                TupleExpression { expression: e, .. } => {
+                    let expression = self.navigator.find_child(expression, e)?;
+                    self.get_type_of_expression(&expression)
+                }
+
                 SelfExpression(_) => Type::Self_(Box::new(
                     self.get_type_of_declaration(
                         &self

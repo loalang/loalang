@@ -240,32 +240,6 @@ impl<'a> Generator<'a> {
         let mut section = Section::named(qn.as_str());
         section.add_instruction(InstructionKind::DeclareClass(qn.clone()));
 
-        if class.span.start.uri.is_stdlib() {
-            let qn = qn.clone();
-            match qn.as_str() {
-                "Loa/String" => section.add_instruction(InstructionKind::MarkClassString(qn)),
-                "Loa/Character" => section.add_instruction(InstructionKind::MarkClassCharacter(qn)),
-                "Loa/Symbol" => section.add_instruction(InstructionKind::MarkClassSymbol(qn)),
-
-                "Loa/UInt8" => section.add_instruction(InstructionKind::MarkClassU8(qn)),
-                "Loa/UInt16" => section.add_instruction(InstructionKind::MarkClassU16(qn)),
-                "Loa/UInt32" => section.add_instruction(InstructionKind::MarkClassU32(qn)),
-                "Loa/UInt64" => section.add_instruction(InstructionKind::MarkClassU64(qn)),
-                "Loa/UInt128" => section.add_instruction(InstructionKind::MarkClassU128(qn)),
-                "Loa/BigNatural" => section.add_instruction(InstructionKind::MarkClassUBig(qn)),
-                "Loa/Int8" => section.add_instruction(InstructionKind::MarkClassI8(qn)),
-                "Loa/Int16" => section.add_instruction(InstructionKind::MarkClassI16(qn)),
-                "Loa/Int32" => section.add_instruction(InstructionKind::MarkClassI32(qn)),
-                "Loa/Int64" => section.add_instruction(InstructionKind::MarkClassI64(qn)),
-                "Loa/Int128" => section.add_instruction(InstructionKind::MarkClassI128(qn)),
-                "Loa/BigInteger" => section.add_instruction(InstructionKind::MarkClassIBig(qn)),
-                "Loa/Float32" => section.add_instruction(InstructionKind::MarkClassF32(qn)),
-                "Loa/Float64" => section.add_instruction(InstructionKind::MarkClassF64(qn)),
-                "Loa/BigFloat" => section.add_instruction(InstructionKind::MarkClassFBig(qn)),
-                _ => {}
-            }
-        }
-
         let mut methods_section = Section::named(format!("{}$methods", qn));
 
         for variable in self.analysis.navigator.variables_of_class(class) {
@@ -274,9 +248,15 @@ impl<'a> Generator<'a> {
             let getter_label = format!("{}#{}", qn, variable_name);
             let setter_label = format!("{}#{}:", qn, variable_name);
 
-            assembly.add_section(Section::named(variable_label.clone()).with_instruction(InstructionKind::Noop));
-            assembly.add_section(Section::named(getter_label.clone()).with_instruction(InstructionKind::Noop));
-            assembly.add_section(Section::named(setter_label.clone()).with_instruction(InstructionKind::Noop));
+            assembly.add_section(
+                Section::named(variable_label.clone()).with_instruction(InstructionKind::Noop),
+            );
+            assembly.add_section(
+                Section::named(getter_label.clone()).with_instruction(InstructionKind::Noop),
+            );
+            assembly.add_section(
+                Section::named(setter_label.clone()).with_instruction(InstructionKind::Noop),
+            );
 
             methods_section.add_instruction(InstructionKind::DeclareVariable(
                 variable_name,
@@ -329,6 +309,35 @@ impl<'a> Generator<'a> {
 
         if !methods_section.is_empty() {
             assembly.add_method_declaration_section(methods_section);
+        }
+
+        if class.span.start.uri.is_stdlib() {
+            let qn = qn.clone();
+            match qn.as_str() {
+                "Loa/True" => section.add_instruction(InstructionKind::MarkClassTrue(qn)),
+                "Loa/False" => section.add_instruction(InstructionKind::MarkClassFalse(qn)),
+
+                "Loa/String" => section.add_instruction(InstructionKind::MarkClassString(qn)),
+                "Loa/Character" => section.add_instruction(InstructionKind::MarkClassCharacter(qn)),
+                "Loa/Symbol" => section.add_instruction(InstructionKind::MarkClassSymbol(qn)),
+
+                "Loa/UInt8" => section.add_instruction(InstructionKind::MarkClassU8(qn)),
+                "Loa/UInt16" => section.add_instruction(InstructionKind::MarkClassU16(qn)),
+                "Loa/UInt32" => section.add_instruction(InstructionKind::MarkClassU32(qn)),
+                "Loa/UInt64" => section.add_instruction(InstructionKind::MarkClassU64(qn)),
+                "Loa/UInt128" => section.add_instruction(InstructionKind::MarkClassU128(qn)),
+                "Loa/BigNatural" => section.add_instruction(InstructionKind::MarkClassUBig(qn)),
+                "Loa/Int8" => section.add_instruction(InstructionKind::MarkClassI8(qn)),
+                "Loa/Int16" => section.add_instruction(InstructionKind::MarkClassI16(qn)),
+                "Loa/Int32" => section.add_instruction(InstructionKind::MarkClassI32(qn)),
+                "Loa/Int64" => section.add_instruction(InstructionKind::MarkClassI64(qn)),
+                "Loa/Int128" => section.add_instruction(InstructionKind::MarkClassI128(qn)),
+                "Loa/BigInteger" => section.add_instruction(InstructionKind::MarkClassIBig(qn)),
+                "Loa/Float32" => section.add_instruction(InstructionKind::MarkClassF32(qn)),
+                "Loa/Float64" => section.add_instruction(InstructionKind::MarkClassF64(qn)),
+                "Loa/BigFloat" => section.add_instruction(InstructionKind::MarkClassFBig(qn)),
+                _ => {}
+            }
         }
 
         assembly.add_class_declaration_section(section);
@@ -454,6 +463,14 @@ impl<'a> Generator<'a> {
                 self.generate_expression(assembly, section, &e)?;
                 section.add_instruction(InstructionKind::Panic);
             }
+            CascadeExpression { expression: e, .. } => {
+                let e = self.analysis.navigator.find_child(expression, e)?;
+                self.generate_expression(assembly, section, &e)?;
+            }
+            TupleExpression { expression: e, .. } => {
+                let e = self.analysis.navigator.find_child(expression, e)?;
+                self.generate_expression(assembly, section, &e)?;
+            }
             StringExpression(_, ref v) => {
                 section.add_instruction(InstructionKind::LoadConstString(v.clone()));
             }
@@ -502,10 +519,15 @@ impl<'a> Generator<'a> {
                 let message = self.analysis.navigator.find_child(expression, message)?;
                 let arguments = self.analysis.navigator.message_arguments(&message);
                 for argument in arguments.iter().rev() {
-                    if let MessageSendExpression { .. } = argument.kind {
-                        self.generate_lazy(assembly, section, argument)?;
-                    } else {
-                        self.generate_expression(assembly, section, argument)?;
+                    match argument.kind {
+                        TupleExpression { .. }
+                        | MessageSendExpression { .. }
+                        | PanicExpression { .. } => {
+                            self.generate_lazy(assembly, section, argument)?;
+                        }
+                        _ => {
+                            self.generate_expression(assembly, section, argument)?;
+                        }
                     }
                     self.locals.push(argument.id);
                 }
@@ -1051,7 +1073,7 @@ mod tests {
                 Halt
 
                 @Loa/Number#+
-                    CallNative Number_plus
+                    CallNative Number#+
                     Return 0
             "#,
         );

@@ -262,8 +262,26 @@ impl Parser {
             // MarkClass..
             else if code.starts_with("MarkClass") {
                 code.drain(.."MarkClass".len());
+                // ..False <label>
+                if code.starts_with("False") {
+                    code.drain(.."False".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassFalse(label),
+                    });
+                }
+                // ..True <label>
+                else if code.starts_with("True") {
+                    code.drain(.."True".len());
+                    let label = self.parse_label(code)?;
+                    section.instructions.push(Instruction {
+                        leading_comment,
+                        kind: InstructionKind::MarkClassTrue(label),
+                    });
+                }
                 // ..String <label>
-                if code.starts_with("String") {
+                else if code.starts_with("String") {
                     code.drain(.."String".len());
                     let label = self.parse_label(code)?;
                     section.instructions.push(Instruction {
@@ -627,9 +645,15 @@ impl Parser {
 
     fn parse_native_method(&mut self, code: &mut String) -> ParseResult<NativeMethod> {
         self.skip_leading_whitespace(code);
-        if code.starts_with("Number_plus") {
-            code.drain(.."Number_plus".len());
+        if code.starts_with("Number#+") {
+            code.drain(.."Number#+".len());
             Ok(NativeMethod::Number_plus)
+        } else if code.starts_with("Number#-") {
+            code.drain(.."Number#-".len());
+            Ok(NativeMethod::Number_minus)
+        } else if code.starts_with("Object#==") {
+            code.drain(.."Object#==".len());
+            Ok(NativeMethod::Object_eq)
         } else {
             Err(ParseError::ExpectedNativeMethod(code.clone()))
         }

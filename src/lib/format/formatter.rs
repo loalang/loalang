@@ -7,6 +7,7 @@ pub struct Formatter<'a> {
     indentation: usize,
     indent: &'a str,
     is_in_doc: bool,
+    pub is_at_start_of_line: bool,
 }
 
 impl<'a> Formatter<'a> {
@@ -16,6 +17,7 @@ impl<'a> Formatter<'a> {
             indentation: 0,
             indent,
             is_in_doc: false,
+            is_at_start_of_line: true,
         }
     }
 
@@ -52,11 +54,13 @@ impl<'a> Formatter<'a> {
     }
 
     fn write_token(&mut self, f: &mut F, token: &Token) -> Result {
+        self.is_at_start_of_line = false;
         self.write_comments(f, token.before.clone())?;
         write!(f, "{}", token.lexeme())
     }
 
     fn write_comments(&mut self, f: &mut F, tokens: Vec<Token>) -> Result {
+        self.is_at_start_of_line = false;
         for token in tokens {
             if let TokenKind::LineComment(_) = token.kind {
                 write!(f, "{}", token.lexeme())?;
@@ -67,6 +71,7 @@ impl<'a> Formatter<'a> {
     }
 
     fn write_token_or(&mut self, f: &mut F, token: &Option<Token>, fallback: &str) -> Result {
+        self.is_at_start_of_line = false;
         match token {
             Some(token) => self.write_token(f, token),
             None => write!(f, "{}", fallback),
@@ -84,7 +89,7 @@ impl<'a> Formatter<'a> {
         write!(f, " ")
     }
 
-    fn break_line(&self, f: &mut F) -> Result {
+    fn break_line(&mut self, f: &mut F) -> Result {
         write!(f, "\n")?;
         for _ in 0..self.indentation {
             write!(f, "{}", self.indent)?;
@@ -92,6 +97,7 @@ impl<'a> Formatter<'a> {
         if self.is_in_doc {
             write!(f, "///")?;
         }
+        self.is_at_start_of_line = true;
         Ok(())
     }
 
@@ -467,14 +473,38 @@ impl<'a> Formatter<'a> {
                 message,
             } => {
                 self.write_child(f, expression)?;
-                self.space(f)?;
-                self.write_child(f, message)
+                if !self.is_at_start_of_line {
+                    self.space(f)?;
+                }
+                self.write_child(f, message)?;
+                Ok(())
+            }
+            CascadeExpression {
+                expression,
+                semi_colon,
+            } => {
+                self.write_child(f, expression)?;
+                self.indent();
+                self.write_token_or(f, semi_colon, ";")?;
+                self.break_line(f)?;
+                self.outdent();
+                Ok(())
+            }
+            TupleExpression {
+                open_paren,
+                expression,
+                close_paren,
+            } => {
+                self.write_token_or(f, open_paren, "(")?;
+                self.write_child(f, expression)?;
+                self.write_token_or(f, close_paren, ")")
             }
             PanicExpression {
                 panic_keyword,
                 expression,
             } => {
                 self.write_token(f, panic_keyword)?;
+                self.space(f)?;
                 self.write_child(f, expression)
             }
             UnaryMessage { symbol } => self.write_child(f, symbol),
