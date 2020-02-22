@@ -271,12 +271,21 @@ impl Types {
                         .iter()
                         .filter_map(|m| self.navigator.find_child(class, *m))
                         .filter_map(|member| match member.kind {
-                            Initializer { .. } => Some(Behaviour {
-                                message: BehaviourMessage::Unary("new".into()),
-                                method_id: member.id,
-                                receiver_type: class_object_type.clone(),
-                                return_type: class_type.clone(),
-                            }),
+                            Initializer {
+                                message_pattern, ..
+                            } => {
+                                let message_pattern =
+                                    self.navigator.find_child(&member, message_pattern)?;
+                                let message =
+                                    self.behaviour_message_from_message_pattern(&message_pattern)?;
+
+                                Some(Behaviour {
+                                    message,
+                                    method_id: member.id,
+                                    receiver_type: class_object_type.clone(),
+                                    return_type: class_type.clone(),
+                                })
+                            }
                             _ => None,
                         })
                         .collect(),
@@ -353,20 +362,25 @@ impl Types {
             let mut behaviours = HashMap::new();
 
             if let Some(class_body) = self.navigator.find_node(class_body) {
-                if let ClassBody { class_members, .. } = class_body.kind {
+                if let ClassBody {
+                    ref class_members, ..
+                } = class_body.kind
+                {
                     behaviours.extend(
                         class_members
-                            .into_iter()
-                            .filter_map(|member_id| {
-                                let maybe_method = self.navigator.find_node(member_id)?;
-                                if let Method { .. } = maybe_method.kind {
-                                    self.get_behaviour_from_method(
-                                        receiver_type.clone(),
-                                        maybe_method,
-                                    )
-                                } else {
-                                    None
-                                }
+                            .iter()
+                            .filter_map(|m| self.navigator.find_child(&class_body, *m))
+                            .flat_map(|member| match member.kind {
+                                Method { .. } => self
+                                    .get_behaviour_from_method(receiver_type.clone(), member)
+                                    .map(|m| vec![m])
+                                    .unwrap_or(vec![]),
+
+                                Variable { .. } => self
+                                    .get_behaviours_from_variable(receiver_type.clone(), &member)
+                                    .unwrap_or(vec![]),
+
+                                _ => vec![],
                             })
                             .map(|b| (b.selector(), b.with_applied_type_arguments(&type_arg_map))),
                     );
@@ -385,6 +399,86 @@ impl Types {
             return Some(behaviours.into_iter().map(|(_, b)| b).collect());
         }
         None
+    }
+
+    fn get_behaviours_from_variable(
+        &self,
+        receiver_type: Type,
+        variable: &Node,
+    ) -> Option<Vec<Behaviour>> {
+        let (name, _) = self.navigator.symbol_of(variable)?;
+        let type_ = self.get_type_of_variable(variable);
+
+        Some(vec![
+            Behaviour {
+                receiver_type: receiver_type.clone(),
+                message: BehaviourMessage::Unary(name.clone()),
+                method_id: variable.id,
+                return_type: type_.clone(),
+            },
+            Behaviour {
+                receiver_type: receiver_type.clone(),
+                message: BehaviourMessage::Keyword(vec![(name, type_)]),
+                method_id: variable.id,
+                return_type: Type::Self_(Box::new(receiver_type)),
+            },
+        ])
+    }
+
+    fn behaviour_message_from_message_pattern(
+        &self,
+        message_pattern: &Node,
+    ) -> Option<BehaviourMessage> {
+        match message_pattern.kind {
+            UnaryMessagePattern { symbol } => {
+                if let Symbol(t) = self.navigator.find_node(symbol)?.kind {
+                    Some(BehaviourMessage::Unary(t.lexeme()))
+                } else {
+                    None
+                }
+            }
+
+            BinaryMessagePattern {
+                operator,
+                parameter_pattern,
+            } => {
+                let parameter_pattern = self.navigator.find_node(parameter_pattern)?;
+                let type_ = self.get_type_of_parameter_pattern(&parameter_pattern);
+
+                if let Operator(t) = self.navigator.find_node(operator)?.kind {
+                    Some(BehaviourMessage::Binary(
+                        t.into_iter()
+                            .map(|t| t.lexeme())
+                            .collect::<Vec<_>>()
+                            .join(""),
+                        type_,
+                    ))
+                } else {
+                    None
+                }
+            }
+
+            KeywordMessagePattern { ref keyword_pairs } => {
+                let mut keywords = vec![];
+
+                for pair in keyword_pairs {
+                    let pair = self.navigator.find_node(*pair)?;
+                    if let KeywordPair { keyword, value, .. } = pair.kind {
+                        let keyword = self.navigator.find_node(keyword)?;
+                        let (name, _) = self.navigator.symbol_of(&keyword)?;
+
+                        let parameter_pattern = self.navigator.find_node(value)?;
+                        let type_ = self.get_type_of_parameter_pattern(&parameter_pattern);
+
+                        keywords.push((name, type_));
+                    }
+                }
+
+                Some(BehaviourMessage::Keyword(keywords))
+            }
+
+            _ => None,
+        }
     }
 
     pub fn get_behaviour_from_method(
@@ -416,56 +510,7 @@ impl Types {
                     self.get_type_of_return_type(&return_type)
                 };
 
-                let message = match message_pattern.kind {
-                    UnaryMessagePattern { symbol } => {
-                        if let Symbol(t) = self.navigator.find_node(symbol)?.kind {
-                            BehaviourMessage::Unary(t.lexeme())
-                        } else {
-                            return None;
-                        }
-                    }
-
-                    BinaryMessagePattern {
-                        operator,
-                        parameter_pattern,
-                    } => {
-                        let parameter_pattern = self.navigator.find_node(parameter_pattern)?;
-                        let type_ = self.get_type_of_parameter_pattern(&parameter_pattern);
-
-                        if let Operator(t) = self.navigator.find_node(operator)?.kind {
-                            BehaviourMessage::Binary(
-                                t.into_iter()
-                                    .map(|t| t.lexeme())
-                                    .collect::<Vec<_>>()
-                                    .join(""),
-                                type_,
-                            )
-                        } else {
-                            return None;
-                        }
-                    }
-
-                    KeywordMessagePattern { keyword_pairs } => {
-                        let mut keywords = vec![];
-
-                        for pair in keyword_pairs {
-                            let pair = self.navigator.find_node(pair)?;
-                            if let KeywordPair { keyword, value, .. } = pair.kind {
-                                let keyword = self.navigator.find_node(keyword)?;
-                                let (name, _) = self.navigator.symbol_of(&keyword)?;
-
-                                let parameter_pattern = self.navigator.find_node(value)?;
-                                let type_ = self.get_type_of_parameter_pattern(&parameter_pattern);
-
-                                keywords.push((name, type_));
-                            }
-                        }
-
-                        BehaviourMessage::Keyword(keywords)
-                    }
-
-                    _ => return None,
-                };
+                let message = self.behaviour_message_from_message_pattern(&message_pattern)?;
 
                 return Some(Behaviour {
                     receiver_type,
@@ -500,6 +545,25 @@ impl Types {
 
     pub fn get_type_of_behaviour(&self, behaviour: &Behaviour) -> Type {
         Type::Behaviour(Box::new(behaviour.clone()))
+    }
+
+    pub fn get_type_of_variable(&self, variable: &Node) -> Type {
+        if let Variable {
+            type_expression,
+            expression,
+            ..
+        } = variable.kind
+        {
+            if type_expression == Id::NULL {
+                let expression = self.navigator.find_child(variable, expression)?;
+                self.get_type_of_expression(&expression)
+            } else {
+                let type_expression = self.navigator.find_child(variable, type_expression)?;
+                self.get_type_of_type_expression(&type_expression)
+            }
+        } else {
+            Type::Unknown
+        }
     }
 
     fn insert_distanced_types(

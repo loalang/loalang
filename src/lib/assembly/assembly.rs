@@ -236,6 +236,10 @@ impl fmt::Debug for Instruction {
             Panic => write!(f, "Panic"),
             DumpStack => write!(f, "DumpStack"),
             DeclareClass(ref name) => write!(f, "DeclareClass {:?}", name),
+            DeclareVariable(ref name, ref vl, ref gl, ref sl) => {
+                write!(f, "DeclareVariable {:?} @{} @{} @{}", name, vl, gl, sl)
+            }
+            UseVariable(ref label) => write!(f, "UseVariable @{}", label),
             DeclareMethod(ref selector, ref label) => {
                 write!(f, "DeclareMethod {:?} @{}", selector, label)
             }
@@ -306,6 +310,8 @@ pub enum InstructionKind {
     Panic,
     DumpStack,
     DeclareClass(String),
+    DeclareVariable(String, Label, Label, Label),
+    UseVariable(Label),
     DeclareMethod(String, Label),
     UseMethod(Label),
     OverrideMethod(Label, Label),
@@ -388,6 +394,17 @@ impl Instruction {
             InstructionKind::Panic => BytecodeInstruction::Panic,
             InstructionKind::DumpStack => BytecodeInstruction::DumpStack,
             InstructionKind::DeclareClass(ref s) => BytecodeInstruction::DeclareClass(s.clone()),
+            InstructionKind::DeclareVariable(ref s, ref vl, ref gl, ref sl) => {
+                BytecodeInstruction::DeclareVariable(
+                    s.clone(),
+                    label!(vl, "variable"),
+                    label!(gl, "variable getter"),
+                    label!(sl, "variable setter"),
+                )
+            }
+            InstructionKind::UseVariable(ref vl) => {
+                BytecodeInstruction::UseVariable(label!(vl, "variable"))
+            }
             InstructionKind::DeclareMethod(ref s, ref l) => {
                 BytecodeInstruction::DeclareMethod(s.clone(), label!(l, "method"))
             }

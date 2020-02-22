@@ -115,6 +115,27 @@ impl Parser {
                     kind: InstructionKind::DeclareClass(name),
                 });
             }
+            // DeclareVariable <string> <label> <label> <label>
+            else if code.starts_with("DeclareVariable") {
+                code.drain(.."DeclareVariable".len());
+                let name = self.parse_string(code)?;
+                let vl = self.parse_label(code)?;
+                let gl = self.parse_label(code)?;
+                let sl = self.parse_label(code)?;
+                section.instructions.push(Instruction {
+                    leading_comment,
+                    kind: InstructionKind::DeclareVariable(name, vl, gl, sl),
+                });
+            }
+            // UseVariable <label>
+            else if code.starts_with("UseVariable") {
+                code.drain(.."UseVariable".len());
+                let label = self.parse_label(code)?;
+                section.instructions.push(Instruction {
+                    leading_comment,
+                    kind: InstructionKind::UseVariable(label),
+                });
+            }
             // DeclareMethod <string> <label>
             else if code.starts_with("DeclareMethod") {
                 code.drain(.."DeclareMethod".len());

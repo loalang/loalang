@@ -6,6 +6,7 @@ use num_bigint::{BigInt, BigUint};
 #[derive(Debug, Clone)]
 pub enum ConstValue {
     Nothing,
+    InstanceVariables(HashMap<u64, Arc<Object>>),
     String(String),
     Lazy(u64, CallStack, Vec<Arc<Object>>),
     Character(u16),

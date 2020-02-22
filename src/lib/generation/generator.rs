@@ -176,8 +176,48 @@ impl<'a> Generator<'a> {
                     .add_instruction(InstructionKind::DeclareMethod(selector, label.clone()));
                 section.add_instruction(InstructionKind::UseMethod(label.clone()));
                 let mut init_section = Section::named(label);
+
+                for param in self.analysis.navigator.initializer_parameters(&initializer) {
+                    self.parameters.push(param.id);
+                }
+
+                let assignments = self
+                    .analysis
+                    .navigator
+                    .initializer_assignments(&initializer);
+
+                // For each assignment in the initializer body
+                for (_, argument) in assignments.iter() {
+                    // evaluate the expression so that it appears at the top of the stack
+                    self.generate_expression(assembly, &mut init_section, &argument)?;
+                }
+
+                // Push the new object
                 init_section.add_instruction(InstructionKind::LoadObject(name.into()));
-                init_section.add_instruction(InstructionKind::Return(1));
+
+                // Again, for each assignment, call the setter for the variable
+                for (v, a) in assignments.iter() {
+                    let label = format!("{}#{}:", name, v);
+                    let Location {
+                        ref uri,
+                        line,
+                        character,
+                        ..
+                    } = a.span.start;
+                    init_section.add_instruction(InstructionKind::CallMethod(
+                        label,
+                        uri.to_string(),
+                        line as u64,
+                        character as u64,
+                    ));
+                }
+
+                init_section.add_instruction(InstructionKind::Return(
+                    self.analysis.navigator.initializer_arity(&initializer)? as u16,
+                ));
+
+                self.parameters.clear();
+
                 assembly.add_section(init_section);
             }
         }
@@ -227,6 +267,26 @@ impl<'a> Generator<'a> {
         }
 
         let mut methods_section = Section::named(format!("{}$methods", qn));
+
+        for variable in self.analysis.navigator.variables_of_class(class) {
+            let (variable_name, _) = self.analysis.navigator.symbol_of(&variable)?;
+            let variable_label = format!("{}({})", qn, variable_name);
+            let getter_label = format!("{}#{}", qn, variable_name);
+            let setter_label = format!("{}#{}:", qn, variable_name);
+
+            assembly.add_section(Section::named(variable_label.clone()).with_instruction(InstructionKind::Noop));
+            assembly.add_section(Section::named(getter_label.clone()).with_instruction(InstructionKind::Noop));
+            assembly.add_section(Section::named(setter_label.clone()).with_instruction(InstructionKind::Noop));
+
+            methods_section.add_instruction(InstructionKind::DeclareVariable(
+                variable_name,
+                variable_label.clone(),
+                getter_label,
+                setter_label,
+            ));
+
+            section.add_instruction(InstructionKind::UseVariable(variable_label));
+        }
 
         for method in self.analysis.navigator.methods_of_class(class) {
             let (method_name, method_label) =
@@ -1319,6 +1379,58 @@ mod tests {
                 @A$class#new
                     LoadObject @A
                     Return 1
+            "#,
+        );
+    }
+
+    #[test]
+    fn single_variable() {
+        assert_generates(
+            Source::test(
+                r#"
+                    namespace N.
+                    class A {
+                        public var B b.
+                        public init new: B b =>
+                          b: b.
+                    }
+                    class B.
+                "#,
+            ),
+            r#"
+                @N/A$class$methods
+                  DeclareMethod "new:" @N/A$class#new:
+
+                @N/A$methods
+                  DeclareVariable "b" @N/A(b) @N/A#b @N/A#b:
+
+                @N/A$class
+                  DeclareClass "N/A class"
+                  UseMethod @N/A$class#new:
+
+                @N/A
+                  DeclareClass "N/A"
+                  UseVariable @N/A(b)
+
+                @N/B
+                  DeclareClass "N/B"
+
+                Halt
+
+                @N/A$class#new:
+                  LoadLocal 1
+                  LoadObject @N/A
+                  CallMethod @N/A#b: "test:" 6 30
+                  Return 2
+
+                @N/A(b)
+                  Noop
+
+                @N/A#b
+                  Noop
+
+                @N/A#b:
+                  Noop
             "#,
         );
     }

@@ -701,10 +701,16 @@ impl Parser {
             }
 
             if sees!(self, PublicKeyword | PrivateKeyword) {
-                if self.peek_next_significant().kind == InitKeyword {
-                    class_members.push(self.parse_initializer(doc, self.child(&mut builder)));
-                } else {
-                    class_members.push(self.parse_method(doc, self.child(&mut builder)));
+                match self.peek_next_significant().kind {
+                    InitKeyword => {
+                        class_members.push(self.parse_initializer(doc, self.child(&mut builder)));
+                    }
+                    VarKeyword => {
+                        class_members.push(self.parse_variable(doc, self.child(&mut builder)));
+                    }
+                    _ => {
+                        class_members.push(self.parse_method(doc, self.child(&mut builder)));
+                    }
                 }
                 continue;
             }
@@ -761,10 +767,69 @@ impl Parser {
         )
     }
 
+    fn parse_variable(&mut self, mut doc: Id, mut builder: NodeBuilder) -> Id {
+        let mut visibility = None;
+        let mut var_keyword = None;
+        let mut type_expression = Id::NULL;
+        let symbol;
+        let mut equal_sign = None;
+        let mut expression = Id::NULL;
+        let mut period = None;
+
+        if doc == Id::NULL && sees!(self, DocLineMarker) {
+            doc = self.parse_doc(self.child(&mut builder));
+        }
+
+        if sees!(self, PrivateKeyword | PublicKeyword) {
+            visibility = Some(self.next());
+        }
+
+        if sees!(self, VarKeyword) {
+            var_keyword = Some(self.next());
+        } else {
+            self.syntax_error_end("Variables must start with `var`.");
+        }
+
+        if sees!(self, SimpleSymbol(_))
+            && !matches!(self.peek_next_significant().kind, EqualSign | Period)
+        {
+            type_expression = self.parse_type_expression(self.child(&mut builder));
+        }
+
+        symbol = self.parse_symbol(self.child(&mut builder));
+
+        if sees!(self, EqualSign) {
+            equal_sign = Some(self.next());
+            expression = self.parse_expression(self.child(&mut builder));
+        }
+
+        if sees!(self, Period) {
+            period = Some(self.next());
+        } else {
+            self.syntax_error_end("Variables must end with a period.");
+        }
+
+        self.finalize(
+            builder,
+            Variable {
+                doc,
+                visibility,
+                var_keyword,
+                type_expression,
+                symbol,
+                equal_sign,
+                expression,
+                period,
+            },
+        )
+    }
+
     fn parse_initializer(&mut self, mut doc: Id, mut builder: NodeBuilder) -> Id {
         let mut visibility = None;
         let mut init_keyword = None;
         let message_pattern;
+        let mut fat_arrow = None;
+        let mut keyword_pairs = vec![];
         let mut period = None;
 
         if doc == Id::NULL && sees!(self, DocLineMarker) {
@@ -783,10 +848,15 @@ impl Parser {
 
         message_pattern = self.parse_message_pattern(self.child(&mut builder));
 
+        if sees!(self, FatArrow) {
+            fat_arrow = Some(self.next());
+            keyword_pairs = self.parse_keyword_pairs(&mut builder, &Self::parse_expression);
+        }
+
         if sees!(self, Period) {
             period = Some(self.next());
         } else {
-            self.syntax_error_end("Methods must end with a period.");
+            self.syntax_error_end("Initializers must end with a period.");
         }
 
         self.finalize(
@@ -796,6 +866,8 @@ impl Parser {
                 visibility,
                 init_keyword,
                 message_pattern,
+                fat_arrow,
+                keyword_pairs,
                 period,
             },
         )

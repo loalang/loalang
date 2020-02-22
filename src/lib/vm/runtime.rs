@@ -25,7 +25,9 @@ where
                 return vm.panic("adding lazy".into())
             }
 
-            (ConstValue::Nothing, _)
+            (ConstValue::InstanceVariables(_), _)
+            | (_, ConstValue::InstanceVariables(_))
+            | (ConstValue::Nothing, _)
             | (_, ConstValue::Nothing)
             | (ConstValue::String(_), _)
             | (_, ConstValue::String(_))

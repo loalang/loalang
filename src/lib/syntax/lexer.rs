@@ -333,6 +333,7 @@ fn next_token(
                 "native" => kind = TokenKind::NativeKeyword,
                 "panic" => kind = TokenKind::PanicKeyword,
                 "init" => kind = TokenKind::InitKeyword,
+                "var" => kind = TokenKind::VarKeyword,
 
                 lexeme => kind = TokenKind::SimpleSymbol(lexeme.into()),
             }

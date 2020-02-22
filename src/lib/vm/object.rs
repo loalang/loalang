@@ -38,6 +38,29 @@ impl Object {
         })
     }
 
+    pub fn get_variable(&self, variable: &Variable) -> Option<Arc<Object>> {
+        match self.const_value {
+            ConstValue::InstanceVariables(ref v) => {
+                v.get(&variable.id).cloned()
+            }
+            _ => None
+        }
+    }
+
+    pub fn set_variable(&self, variable: &Variable, value: Arc<Object>) -> Arc<Object> {
+        Arc::new(Object {
+            class: self.class.clone(),
+            const_value: match self.const_value {
+                ConstValue::InstanceVariables(ref v) => {
+                    let mut v = v.clone();
+                    v.insert(variable.id, value);
+                    ConstValue::InstanceVariables(v)
+                }
+                _ => ConstValue::InstanceVariables(vec![(variable.id, value)].into_iter().collect())
+            },
+        })
+    }
+
     fn box_const(const_value: ConstValue, class_ptr: &mut *const Class) -> Arc<Object> {
         let class = unsafe { Arc::from_raw(*class_ptr) };
         *class_ptr = Arc::into_raw(class.clone());
@@ -136,6 +159,24 @@ impl fmt::Display for Object {
                 f,
                 "a {}",
                 self.class.as_ref().map(|c| c.name.as_ref()).unwrap_or("")
+            ),
+            ConstValue::InstanceVariables(ref v) => write!(
+                f,
+                "a {}({})",
+                self.class.as_ref().map(|c| c.name.as_ref()).unwrap_or(""),
+                {
+                    let mut variables = vec![];
+
+                    let class = self.class.as_ref().unwrap();
+                    for (id, value) in v.iter() {
+                        let mut var = class.variables.get(&id).unwrap().name.clone();
+                        var.push('=');
+                        var.push_str(format!("{}", value).as_ref());
+                        variables.push(var);
+                    }
+
+                    variables.join(", ")
+                }
             ),
             ConstValue::String(s) => write!(f, "{}", s),
             ConstValue::Lazy(_, _, _) => write!(f, "$lazy"),

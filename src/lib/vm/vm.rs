@@ -10,6 +10,7 @@ pub struct VM {
 
     classes: HashMap<u64, Arc<Class>>,
     methods: HashMap<u64, Arc<Method>>,
+    variables: HashMap<u64, Arc<Variable>>,
     globals: HashMap<u64, Arc<Object>>,
     declaring_class: u64,
 }
@@ -24,6 +25,7 @@ impl VM {
 
             classes: HashMap::new(),
             methods: HashMap::new(),
+            variables: HashMap::new(),
             globals: HashMap::new(),
             declaring_class: 0,
         }
@@ -104,6 +106,38 @@ impl VM {
                     self.pc += 1;
                 }
 
+                Instruction::DeclareVariable(ref name, id, getter_id, setter_id) => {
+                    self.pc += 1;
+                    let variable = Arc::new(Variable {
+                        name: name.clone(),
+                        id,
+                        getter_id,
+                        setter_id,
+                    });
+                    self.variables.insert(id, variable);
+                }
+
+                Instruction::UseVariable(id) => {
+                    let variable =
+                        expect!(self, self.variables.get(&id), "cannot use unknown variable");
+                    let class = expect!(
+                        self,
+                        self.classes.get_mut(&self.declaring_class),
+                        "variable outside class"
+                    );
+                    let class = expect!(self, Arc::get_mut(class), "class in use");
+                    class
+                        .variables
+                        .insert(id, variable.clone());
+                    class
+                        .variable_setters
+                        .insert(variable.setter_id, variable.clone());
+                    class
+                        .variable_getters
+                        .insert(variable.getter_id, variable.clone());
+                    self.pc += 1;
+                }
+
                 Instruction::DeclareMethod(ref name, offset) => {
                     let method = Arc::new(Method {
                         name: name.clone(),
@@ -164,6 +198,29 @@ impl VM {
                             &receiver.class,
                             "cannot call method on object without class"
                         );
+
+                        if let Some(var) = class.variable_getters.get(offset) {
+                            let receiver = unwrap!(self, self.pop());
+                            let value = expect!(
+                                self,
+                                receiver.get_variable(var),
+                                "{} has no value in variable {}",
+                                receiver,
+                                var.name
+                            );
+                            self.push(value);
+                            self.pc += 1;
+                            continue;
+                        }
+
+                        if let Some(var) = class.variable_setters.get(offset) {
+                            let receiver = unwrap!(self, self.pop());
+                            let value = unwrap!(self, self.pop());
+                            self.push(receiver.set_variable(var, value));
+                            self.pc += 1;
+                            continue;
+                        }
+
                         let method = expect!(
                             self,
                             class.methods.get(offset),
@@ -757,6 +814,51 @@ mod tests {
                 Return 1
             "#,
             "a A",
+        );
+    }
+
+    #[test]
+    fn single_variable() {
+        assert_evaluates_to(
+            r#"
+            @N/A$class$methods
+              DeclareMethod "new:" @N/A$class#new:
+
+            @N/A$methods
+              DeclareVariable "b" @N/A(b) @N/A#b @N/A#b:
+
+            @N/A$class
+              DeclareClass "N/A class"
+              UseMethod @N/A$class#new:
+
+            @N/A
+              DeclareClass "N/A"
+              UseVariable @N/A(b)
+
+            @N/B
+              DeclareClass "N/B"
+
+            LoadObject @N/B
+            LoadObject @N/A$class
+            CallMethod @N/A$class#new: "test:" 0 0
+            Halt
+
+            @N/A$class#new:
+              LoadLocal 1
+              LoadObject @N/A
+              CallMethod @N/A#b: "test:" 6 30
+              Return 2
+
+            @N/A(b)
+              Noop
+
+            @N/A#b
+              Noop
+
+            @N/A#b:
+              Noop
+            "#,
+            "a N/A(b=a N/B)",
         );
     }
 }

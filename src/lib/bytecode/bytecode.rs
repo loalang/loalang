@@ -9,6 +9,8 @@ pub enum Instruction {
     Panic,
     DumpStack,
     DeclareClass(String),
+    DeclareVariable(String, u64, u64, u64),
+    UseVariable(u64),
     DeclareMethod(String, u64),
     UseMethod(u64),
     OverrideMethod(u64, u64),
@@ -67,19 +69,21 @@ const HALT: u8 = 0x81;
 const PANIC: u8 = 0x82;
 const DUMP_STACK: u8 = 0x83;
 const DECLARE_CLASS: u8 = 0x84;
-const DECLARE_METHOD: u8 = 0x85;
-const USE_METHOD: u8 = 0x86;
-const OVERRIDE_METHOD: u8 = 0x87;
-const LOAD_OBJECT: u8 = 0x88;
-const CALL_METHOD: u8 = 0x89;
-const CALL_NATIVE: u8 = 0x8a;
-const LOAD_LOCAL: u8 = 0x8b;
-const DROP_LOCAL: u8 = 0x8c;
-const STORE_GLOBAL: u8 = 0x8d;
-const LOAD_GLOBAL: u8 = 0x8e;
-const LOAD_LAZY: u8 = 0x8f;
-const RETURN: u8 = 0x90;
-const RETURN_LAZY: u8 = 0x91;
+const DECLARE_VARIABLE: u8 = 0x85;
+const USE_VARIABLE: u8 = 0x86;
+const DECLARE_METHOD: u8 = 0x87;
+const USE_METHOD: u8 = 0x88;
+const OVERRIDE_METHOD: u8 = 0x89;
+const LOAD_OBJECT: u8 = 0x8a;
+const CALL_METHOD: u8 = 0x8b;
+const CALL_NATIVE: u8 = 0x8c;
+const LOAD_LOCAL: u8 = 0x8d;
+const DROP_LOCAL: u8 = 0x8e;
+const STORE_GLOBAL: u8 = 0x8f;
+const LOAD_GLOBAL: u8 = 0x90;
+const LOAD_LAZY: u8 = 0x91;
+const RETURN: u8 = 0x92;
+const RETURN_LAZY: u8 = 0x93;
 
 const MARK_CLASS_STRING: u8 = 0xb0;
 const MARK_CLASS_CHARACTER: u8 = 0xb1;
@@ -129,6 +133,13 @@ impl BytecodeEncoding for Instruction {
             Instruction::DeclareClass(ref name) => {
                 Ok(DECLARE_CLASS.serialize(&mut w)? + name.serialize(w)?)
             }
+            Instruction::DeclareVariable(ref name, vl, gl, sl) => Ok(DECLARE_VARIABLE
+                .serialize(&mut w)?
+                + name.serialize(&mut w)?
+                + vl.serialize(&mut w)?
+                + gl.serialize(&mut w)?
+                + sl.serialize(w)?),
+            Instruction::UseVariable(id) => Ok(USE_VARIABLE.serialize(&mut w)? + id.serialize(w)?),
             Instruction::DeclareMethod(ref name, id) => Ok(DECLARE_METHOD.serialize(&mut w)?
                 + name.serialize(&mut w)?
                 + id.serialize(w)?),
@@ -289,6 +300,13 @@ impl BytecodeEncoding for Instruction {
             [PANIC] => Ok(Instruction::Panic),
             [DUMP_STACK] => Ok(Instruction::DumpStack),
             [DECLARE_CLASS] => Ok(Instruction::DeclareClass(r.deserialize()?)),
+            [DECLARE_VARIABLE] => Ok(Instruction::DeclareVariable(
+                r.deserialize()?,
+                r.deserialize()?,
+                r.deserialize()?,
+                r.deserialize()?,
+            )),
+            [USE_VARIABLE] => Ok(Instruction::UseVariable(r.deserialize()?)),
             [DECLARE_METHOD] => Ok(Instruction::DeclareMethod(
                 r.deserialize()?,
                 r.deserialize()?,

@@ -296,6 +296,8 @@ impl<'a> Formatter<'a> {
                 visibility,
                 init_keyword,
                 message_pattern,
+                fat_arrow,
+                keyword_pairs,
                 period,
             } => {
                 self.write_child(f, doc)?;
@@ -304,6 +306,49 @@ impl<'a> Formatter<'a> {
                 self.write_token_or(f, init_keyword, "init")?;
                 self.space(f)?;
                 self.write_child(f, message_pattern)?;
+                if fat_arrow.is_some() {
+                    self.space(f)?;
+                    self.write_token_or(f, fat_arrow, "=>")?;
+
+                    self.indent();
+                    for pair in keyword_pairs {
+                        self.break_line(f)?;
+                        self.write_child(f, pair)?;
+                    }
+                    self.outdent();
+                }
+                self.write_token_or(f, period, ".")
+            }
+            Variable {
+                doc,
+                visibility,
+                var_keyword,
+                type_expression,
+                symbol,
+                equal_sign,
+                expression,
+                period,
+            } => {
+                self.write_child(f, doc)?;
+                self.write_token_or(f, visibility, "private")?;
+                self.space(f)?;
+                self.write_token_or(f, var_keyword, "var")?;
+
+                if !type_expression.is_null() {
+                    self.space(f)?;
+                    self.write_child(f, type_expression)?;
+                }
+
+                self.space(f)?;
+                self.write_child(f, symbol)?;
+
+                if equal_sign.is_some() {
+                    self.space(f)?;
+                    self.write_token_or(f, equal_sign, "=")?;
+                    self.space(f)?;
+                    self.write_child(f, expression)?;
+                }
+
                 self.write_token_or(f, period, ".")
             }
             Signature {

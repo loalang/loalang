@@ -1,0 +1,15 @@
+namespace SingleVariableWithInitializer.
+
+export class Main {
+  public run =>
+    let x = X new: 24.
+    let x' = X new: x value + 18.
+    x' value.
+}
+
+export class X {
+  public var Number value.
+
+  public init new: Number value =>
+    value: value.
+}

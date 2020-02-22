@@ -1,0 +1,6 @@
+description: A variable in a class is initialized with an initializer.
+main_class: SingleVariableWithInitializer/Main
+expected:
+  success: true
+  stdout:
+    - 42

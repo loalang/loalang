@@ -430,6 +430,7 @@ pub enum NodeKind {
     /// ClassMember ::=
     ///   Method |
     ///   Initializer |
+    ///   Variable |
     ///   IsDirective
     /// ```
 
@@ -463,10 +464,31 @@ pub enum NodeKind {
     },
 
     /// ```bnf
+    /// Variable ::=
+    ///   (PUBLIC_KEYWORD | PRIVATE_KEYWORD)?
+    ///   VAR_KEYWORD
+    ///   TypeExpression?
+    ///   Symbol
+    ///   (EQUAL_SIGN Expression)?
+    ///   PERIOD
+    /// ```
+    Variable {
+        doc: Id,
+        visibility: Option<Token>,
+        var_keyword: Option<Token>,
+        type_expression: Id,
+        symbol: Id,
+        equal_sign: Option<Token>,
+        expression: Id,
+        period: Option<Token>,
+    },
+
+    /// ```bnf
     /// Initializer ::=
     ///   (PUBLIC_KEYWORD | PRIVATE_KEYWORD)?
     ///   INIT_KEYWORD
     ///   MessagePattern
+    ///   (FAT_ARROW KeywordPair<Expression>*)
     ///   PERIOD
     /// ```
     Initializer {
@@ -474,6 +496,8 @@ pub enum NodeKind {
         visibility: Option<Token>,
         init_keyword: Option<Token>,
         message_pattern: Id,
+        fat_arrow: Option<Token>,
+        keyword_pairs: Vec<Id>,
         period: Option<Token>,
     },
 
@@ -912,12 +936,31 @@ impl NodeKind {
                 ..
             } => vec![Some(is_keyword), period.as_ref()],
 
+            Variable {
+                ref visibility,
+                ref var_keyword,
+                ref equal_sign,
+                ref period,
+                ..
+            } => vec![
+                visibility.as_ref(),
+                var_keyword.as_ref(),
+                equal_sign.as_ref(),
+                period.as_ref(),
+            ],
+
             Initializer {
                 ref visibility,
                 ref init_keyword,
+                ref fat_arrow,
                 ref period,
                 ..
-            } => vec![visibility.as_ref(), init_keyword.as_ref(), period.as_ref()],
+            } => vec![
+                visibility.as_ref(),
+                init_keyword.as_ref(),
+                fat_arrow.as_ref(),
+                period.as_ref(),
+            ],
 
             Operator(ref tokens) => tokens.iter().map(Some).collect(),
 
@@ -1067,9 +1110,22 @@ impl NodeKind {
                 children.push(type_expression);
             }
             Initializer {
-                message_pattern, ..
+                message_pattern,
+                keyword_pairs,
+                ..
             } => {
                 children.push(message_pattern);
+                children.extend(keyword_pairs);
+            }
+            Variable {
+                type_expression,
+                symbol,
+                expression,
+                ..
+            } => {
+                children.push(type_expression);
+                children.push(symbol);
+                children.push(expression);
             }
             Signature {
                 type_parameter_list,

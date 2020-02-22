@@ -189,9 +189,8 @@ impl Navigator {
             | ReferenceTypeExpression { symbol, .. }
             | ReferenceExpression { symbol, .. }
             | TypeParameter { symbol, .. }
-            | ParameterPattern { symbol, .. } => {
-                self.find_node(symbol).and_then(|s| self.symbol_of(&s))
-            }
+            | ParameterPattern { symbol, .. }
+            | Variable { symbol, .. } => self.find_node(symbol).and_then(|s| self.symbol_of(&s)),
             ImportDirective {
                 symbol,
                 qualified_symbol,
@@ -1032,11 +1031,45 @@ impl Navigator {
         methods
     }
 
+    pub fn variables_of_class(&self, class: &Node) -> Vec<Node> {
+        let mut variables = vec![];
+
+        if let Class { class_body, .. } = class.kind {
+            if let Some(class_body) = self.find_child(class, class_body) {
+                if let ClassBody {
+                    ref class_members, ..
+                } = class_body.kind
+                {
+                    for class_member in class_members.iter() {
+                        if let Some(class_member) = self.find_child(&class_body, *class_member) {
+                            if let Variable { .. } = class_member.kind {
+                                variables.push(class_member);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        variables
+    }
+
     pub fn message_arity(&self, message: &Node) -> Option<usize> {
         match message.kind {
             UnaryMessage { .. } => Some(1),
             BinaryMessage { .. } => Some(2),
             KeywordMessage {
+                ref keyword_pairs, ..
+            } => Some(keyword_pairs.len() + 1),
+            _ => None,
+        }
+    }
+
+    pub fn message_pattern_arity(&self, message_pattern: &Node) -> Option<usize> {
+        match message_pattern.kind {
+            UnaryMessagePattern { .. } => Some(1),
+            BinaryMessagePattern { .. } => Some(2),
+            KeywordMessagePattern {
                 ref keyword_pairs, ..
             } => Some(keyword_pairs.len() + 1),
             _ => None,
@@ -1513,11 +1546,55 @@ impl Navigator {
     }
 
     pub fn initializer_selector(&self, initializer: &Node) -> Option<String> {
-        if let Initializer { message_pattern, .. } = initializer.kind {
+        if let Initializer {
+            message_pattern, ..
+        } = initializer.kind
+        {
             let message_pattern = self.find_child(initializer, message_pattern)?;
             self.message_pattern_selector(&message_pattern)
         } else {
             None
+        }
+    }
+
+    pub fn initializer_arity(&self, initializer: &Node) -> Option<usize> {
+        if let Initializer {
+            message_pattern, ..
+        } = initializer.kind
+        {
+            let message_pattern = self.find_child(initializer, message_pattern)?;
+            self.message_pattern_arity(&message_pattern)
+        } else {
+            None
+        }
+    }
+
+    pub fn initializer_parameters(&self, initializer: &Node) -> Vec<Node> {
+        if let Initializer {
+            message_pattern, ..
+        } = initializer.kind
+        {
+            if let Some(message_pattern) = self.find_child(initializer, message_pattern) {
+                self.message_pattern_parameters(&message_pattern)
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn initializer_assignments(&self, initializer: &Node) -> Vec<(String, Node)> {
+        if let Initializer {
+            ref keyword_pairs, ..
+        } = initializer.kind
+        {
+            self.keyword_pairs(initializer, keyword_pairs)
+                .into_iter()
+                .filter_map(|(k, v)| Some((self.symbol_of(&k)?.0, v)))
+                .collect()
+        } else {
+            vec![]
         }
     }
 }
