@@ -118,7 +118,9 @@ impl<'a> Generator<'a> {
     }
 
     fn sub(&mut self) -> Generator {
-        Generator::new(self.analysis)
+        let mut sub = Generator::new(self.analysis);
+        sub.lazies = self.lazies;
+        sub
     }
 
     pub fn generate_all(&mut self) -> GenerationResult<Assembly> {

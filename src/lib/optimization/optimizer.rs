@@ -1,9 +1,12 @@
 use crate::assembly::*;
+use crate::vm::NativeMethod;
 
 pub struct Optimizer {
     sections: Vec<(String, Section)>,
     marked_sections: Vec<String>,
 
+    true_class_label: Option<String>,
+    false_class_label: Option<String>,
     string_class_label: Option<String>,
     character_class_label: Option<String>,
     symbol_class_label: Option<String>,
@@ -42,6 +45,8 @@ impl Optimizer {
                 .collect(),
             marked_sections: vec![],
 
+            true_class_label: None,
+            false_class_label: None,
             string_class_label: None,
             character_class_label: None,
             symbol_class_label: None,
@@ -89,6 +94,12 @@ impl Optimizer {
         for (label, section) in self.sections.iter() {
             for instruction in section.instructions.iter() {
                 match instruction.kind {
+                    InstructionKind::MarkClassTrue(_) => {
+                        self.true_class_label = Some(label.clone())
+                    }
+                    InstructionKind::MarkClassFalse(_) => {
+                        self.false_class_label = Some(label.clone())
+                    }
                     InstructionKind::MarkClassString(_) => {
                         self.string_class_label = Some(label.clone())
                     }
@@ -248,6 +259,11 @@ impl Optimizer {
                             if let Some(class_name) = target.split("#").next() {
                                 mark!(&format!("{}$methods", class_name));
                             }
+                        }
+
+                        InstructionKind::CallNative(NativeMethod::Object_eq) => {
+                            mark!(?self.true_class_label);
+                            mark!(?self.false_class_label);
                         }
 
                         InstructionKind::LoadConstString(_) => mark!(?self.string_class_label),
