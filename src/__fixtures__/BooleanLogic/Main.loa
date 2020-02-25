@@ -13,14 +13,13 @@ export class Main {
     let false'' = true''' and: false'.
     let true'''' = true''' and: true.
     let false''' = false'' and: false'.
-    let false'''' = false''' and: true''''.
 
     let Int32 fortyTwo = 42.
     let Int32 fiftyEight = 58.
     let Int32 noop = 999.
 
     let fortyTwo' = true'''' ifTrue: fortyTwo ifFalse: noop.
-    let fiftyEight' = false'''' ifTrue: noop ifFalse: fiftyEight.
+    let fiftyEight' = false''' ifTrue: noop ifFalse: fiftyEight.
 
     fortyTwo' + fiftyEight'.
 }

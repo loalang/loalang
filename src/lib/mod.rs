@@ -72,5 +72,7 @@ pub mod assembly;
 
 pub mod bytecode;
 
+pub mod optimization;
+
 #[cfg(test)]
 mod fixture_tests;

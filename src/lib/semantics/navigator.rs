@@ -1500,6 +1500,10 @@ impl Navigator {
             .collect()
     }
 
+    pub fn self_crosses_into(&self, expression: &Node) -> bool {
+        self.any_downwards(expression, &|n| matches!(n.kind, SelfExpression(_)))
+    }
+
     pub fn is_within(&self, needle: &Node, haystack: &Node) -> bool {
         self.any_downwards(haystack, &|n| n.id == needle.id)
     }

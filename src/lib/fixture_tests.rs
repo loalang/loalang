@@ -1,3 +1,4 @@
+use crate::optimization::Optimizable;
 use crate::*;
 use serde::Deserialize;
 
@@ -26,9 +27,13 @@ fn fixtures() {
         let entry = entry.unwrap();
 
         let fixture_name = entry.file_name().and_then(std::ffi::OsStr::to_str).unwrap();
+        eprintln!("\n{} ===============================", fixture_name);
         if fixture_name.starts_with("_") {
+            eprintln!("Skipping");
             continue;
         }
+
+        eprintln!("Parsing.");
 
         let mut fixture_config_path = entry.clone();
         fixture_config_path.push("fixture.yml");
@@ -48,6 +53,8 @@ fn fixtures() {
         if let Some(ref main_class) = fixture_config.main_class {
             sources.push(Source::main(main_class));
         }
+
+        eprintln!("Analyzing.");
 
         let mut analysis: semantics::Analysis = sources
             .into_iter()
@@ -90,8 +97,16 @@ fn fixtures() {
         }
 
         if let Some(_) = fixture_config.main_class {
+            eprintln!("Generating.");
+
             let mut generator = generation::Generator::new(&mut analysis);
-            let assembly = generator.generate_all().unwrap();
+            let mut assembly = generator.generate_all().unwrap();
+
+            eprintln!("Optimizing.");
+            assembly.optimize();
+
+            eprintln!("Running.");
+            eprintln!("{:?}", assembly);
 
             let mut vm = vm::VM::new();
             let result = vm.eval_pop::<()>(assembly.clone().into()).unwrap();

@@ -42,6 +42,7 @@ use std::convert::identity;
 use std::io::stdout;
 use std::process::exit;
 use std::str::FromStr;
+use loa::optimization::Optimizable;
 
 fn log_to_file() {
     log_panics::init();
@@ -311,10 +312,12 @@ fn main() -> Result<(), clap::Error> {
         ("build", Some(matches)) => {
             log_to_stderr();
             let output_assembly = matches.is_present("output_assembly");
-            let assembly = build(
+            let mut assembly = build(
                 matches.value_of("main").unwrap(),
                 matches.is_present("no_stdlib"),
             );
+
+            assembly.optimize();
 
             let mut write: Box<dyn std::io::Write> = match matches.value_of("out") {
                 None | Some("") => Box::new(stdout()),

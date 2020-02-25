@@ -7,6 +7,91 @@ use num_traits::ToPrimitive;
 
 pub type GenerationResult<T> = Result<T, GenerationError>;
 
+enum SimulatedStackElement {
+    Self_,
+    Declaration(Id),
+    Expression(Id),
+}
+
+impl SimulatedStackElement {
+    pub fn is(&self, id: Id) -> bool {
+        match self {
+            SimulatedStackElement::Self_ => false,
+            SimulatedStackElement::Expression(i) => *i == id,
+            SimulatedStackElement::Declaration(i) => *i == id,
+        }
+    }
+}
+
+struct SimulatedStack(Vec<SimulatedStackElement>);
+
+impl SimulatedStack {
+    pub fn new() -> SimulatedStack {
+        SimulatedStack(vec![])
+    }
+
+    pub fn pop(&mut self) {
+        #[allow(unused)]
+        let result = self.0.pop();
+        #[cfg(debug_assertions)]
+        assert!(result.is_some());
+    }
+
+    pub fn push_self(&mut self) {
+        self.0.push(SimulatedStackElement::Self_);
+    }
+
+    pub fn push_declaration(&mut self, id: Id) {
+        self.0.push(SimulatedStackElement::Declaration(id));
+    }
+
+    pub fn push_expression(&mut self, id: Id) {
+        self.0.push(SimulatedStackElement::Expression(id));
+    }
+
+    pub fn turn_top_into_declaration(&mut self, id: Id) {
+        self.pop();
+        self.push_declaration(id);
+    }
+
+    pub fn assert_empty(&self) {
+        #[cfg(debug_assertions)]
+        assert_eq!(self.0.len(), 0);
+    }
+
+    pub fn drop_index(&mut self, index: usize) {
+        self.0.remove(self.0.len() - 1 - index);
+    }
+
+    pub fn drop(&mut self, id: Id) -> GenerationResult<()> {
+        let index = self.index_of(id)?;
+        self.drop_index(index as usize);
+        Ok(())
+    }
+
+    pub fn index_of_self(&mut self) -> GenerationResult<u16> {
+        let mut index = 0;
+        for element in self.0.iter().rev() {
+            if matches!(element, SimulatedStackElement::Self_) {
+                return Ok(index as u16);
+            }
+            index += 1;
+        }
+        Err(GenerationError::OutOfScope(Id::NULL))
+    }
+
+    pub fn index_of(&mut self, id: Id) -> GenerationResult<u16> {
+        let mut index = 0;
+        for element in self.0.iter().rev() {
+            if element.is(id) {
+                return Ok(index as u16);
+            }
+            index += 1;
+        }
+        Err(GenerationError::OutOfScope(id))
+    }
+}
+
 pub trait REPLDirectives {
     fn show_type(&self, type_: Type);
     fn show_behaviours(&self, type_: Type, types: &Types);
@@ -19,8 +104,7 @@ impl REPLDirectives for () {
 
 pub struct Generator<'a> {
     analysis: &'a mut Analysis,
-    locals: Stack<Id>,
-    parameters: Vec<Id>,
+    simulated_stack: SimulatedStack,
     lazies: usize,
 }
 
@@ -28,16 +112,13 @@ impl<'a> Generator<'a> {
     pub fn new(analysis: &'a mut Analysis) -> Generator<'a> {
         Generator {
             analysis,
-            locals: Stack::new(),
-            parameters: vec![],
+            simulated_stack: SimulatedStack::new(),
             lazies: 0,
         }
     }
 
     fn sub(&mut self) -> Generator {
-        let mut sub = Generator::new(self.analysis);
-        sub.lazies = self.lazies;
-        sub
+        Generator::new(self.analysis)
     }
 
     pub fn generate_all(&mut self) -> GenerationResult<Assembly> {
@@ -151,7 +232,7 @@ impl<'a> Generator<'a> {
             LetBinding { expression, .. } => {
                 let expression = self.analysis.navigator.find_child(binding, expression)?;
                 self.generate_expression(assembly, section, &expression)?;
-                self.locals.push(binding.id);
+                self.simulated_stack.turn_top_into_declaration(binding.id);
                 Ok(())
             }
             _ => Err(invalid_node(binding, "Expected let binding.")),
@@ -171,31 +252,38 @@ impl<'a> Generator<'a> {
 
         for initializer in self.analysis.navigator.initializers_of(class) {
             if let Some(selector) = self.analysis.navigator.initializer_selector(&initializer) {
+                self.simulated_stack.assert_empty();
+
                 let label = format!("{}$class#{}", name, selector);
                 methods_section
                     .add_instruction(InstructionKind::DeclareMethod(selector, label.clone()));
                 section.add_instruction(InstructionKind::UseMethod(label.clone()));
                 let mut init_section = Section::named(label);
 
-                for param in self.analysis.navigator.initializer_parameters(&initializer) {
-                    self.parameters.push(param.id);
+                for param in self
+                    .analysis
+                    .navigator
+                    .initializer_parameters(&initializer)
+                    .iter()
+                    .rev()
+                {
+                    self.simulated_stack.push_declaration(param.id);
                 }
+
+                self.simulated_stack.push_self();
 
                 let assignments = self
                     .analysis
                     .navigator
                     .initializer_assignments(&initializer);
 
-                // For each assignment in the initializer body
                 for (_, argument) in assignments.iter() {
-                    // evaluate the expression so that it appears at the top of the stack
                     self.generate_expression(assembly, &mut init_section, &argument)?;
                 }
 
-                // Push the new object
                 init_section.add_instruction(InstructionKind::LoadObject(name.into()));
+                self.simulated_stack.push_expression(Id::NULL);
 
-                // Again, for each assignment, call the setter for the variable
                 for (v, a) in assignments.iter() {
                     let label = format!("{}#{}:", name, v);
                     let Location {
@@ -210,13 +298,20 @@ impl<'a> Generator<'a> {
                         line as u64,
                         character as u64,
                     ));
+                    self.simulated_stack.drop_index(1);
                 }
 
-                init_section.add_instruction(InstructionKind::Return(
-                    self.analysis.navigator.initializer_arity(&initializer)? as u16,
-                ));
+                // Class object
+                self.simulated_stack.drop_index(1);
 
-                self.parameters.clear();
+                let arity = self.analysis.navigator.initializer_arity(&initializer)?;
+                init_section.add_instruction(InstructionKind::Return(arity as u16));
+
+                for _ in 0..arity {
+                    self.simulated_stack.pop();
+                }
+
+                self.simulated_stack.assert_empty();
 
                 assembly.add_section(init_section);
             }
@@ -357,17 +452,29 @@ impl<'a> Generator<'a> {
             method_section.add_instruction(InstructionKind::CallNative(label.as_str().into()));
             method_section.add_instruction(InstructionKind::Return(0));
         } else if let Some(body) = self.analysis.navigator.method_body(method) {
-            for param in self.analysis.navigator.method_parameters(method) {
-                self.parameters.push(param.id);
+            self.simulated_stack.assert_empty();
+
+            let parameters = self.analysis.navigator.method_parameters(method);
+            for param in parameters.iter().rev() {
+                self.simulated_stack.push_declaration(param.id);
             }
+            self.simulated_stack.push_self();
 
             self.generate_expression(assembly, &mut method_section, &body)?;
 
             method_section.add_instruction(InstructionKind::Return(
                 self.analysis.navigator.method_arity(method)? as u16,
             ));
+            for _ in parameters {
+                self.simulated_stack.pop();
+            }
+            // Receiver
+            self.simulated_stack.pop();
 
-            self.parameters.clear();
+            // Result
+            self.simulated_stack.pop();
+
+            self.simulated_stack.assert_empty();
         } else {
             method_section.add_instruction(InstructionKind::LoadConstString(format!(
                 "{} is not implemented.",
@@ -378,24 +485,6 @@ impl<'a> Generator<'a> {
 
         assembly.add_section(method_section);
         Ok((selector, label))
-    }
-
-    fn index_of_parameter(&self, parameter: Id) -> GenerationResult<u16> {
-        for (i, p) in self.parameters.iter().enumerate() {
-            if *p == parameter {
-                return Ok((i + 1 + self.locals.size()) as u16);
-            }
-        }
-        Err(GenerationError::OutOfScope(parameter))
-    }
-
-    fn index_of_local(&self, local: Id) -> GenerationResult<u16> {
-        for (i, l) in self.locals.iter().enumerate() {
-            if *l == local {
-                return Ok(i as u16);
-            }
-        }
-        Err(GenerationError::OutOfScope(local))
     }
 
     fn generate_reference_to(
@@ -414,9 +503,9 @@ impl<'a> Generator<'a> {
                 }
             }
             ParameterPattern { .. } => section.add_instruction(InstructionKind::LoadLocal(
-                self.index_of_parameter(declaration.id)?,
+                self.simulated_stack.index_of(declaration.id)?,
             )),
-            LetBinding { .. } => match self.index_of_local(declaration.id) {
+            LetBinding { .. } => match self.simulated_stack.index_of(declaration.id) {
                 Ok(index) => section.add_instruction(InstructionKind::LoadLocal(index)),
                 _ => section.add_instruction(InstructionKind::LoadGlobal(
                     self.analysis.navigator.symbol_of(declaration)?.0,
@@ -456,12 +545,16 @@ impl<'a> Generator<'a> {
     ) -> GenerationResult<()> {
         match expression.kind {
             SelfExpression(_) => {
-                section.add_instruction(InstructionKind::LoadLocal(self.locals.size() as u16));
+                section.add_instruction(InstructionKind::LoadLocal(
+                    self.simulated_stack.index_of_self()?,
+                ));
+                self.simulated_stack.push_expression(expression.id);
             }
             PanicExpression { expression: e, .. } => {
                 let e = self.analysis.navigator.find_child(expression, e)?;
                 self.generate_expression(assembly, section, &e)?;
                 section.add_instruction(InstructionKind::Panic);
+                self.simulated_stack.pop();
             }
             CascadeExpression { expression: e, .. } => {
                 let e = self.analysis.navigator.find_child(expression, e)?;
@@ -473,15 +566,19 @@ impl<'a> Generator<'a> {
             }
             StringExpression(_, ref v) => {
                 section.add_instruction(InstructionKind::LoadConstString(v.clone()));
+                self.simulated_stack.push_expression(expression.id);
             }
             CharacterExpression(_, ref v) => {
                 section.add_instruction(InstructionKind::LoadConstCharacter(v.unwrap().clone()));
+                self.simulated_stack.push_expression(expression.id);
             }
             SymbolExpression(_, ref v) => {
                 section.add_instruction(InstructionKind::LoadConstSymbol(v.clone()));
+                self.simulated_stack.push_expression(expression.id);
             }
             IntegerExpression(_, _) | FloatExpression(_, _) => {
                 self.generate_number(section, expression)?;
+                self.simulated_stack.push_expression(expression.id);
             }
             LetExpression {
                 let_binding,
@@ -494,10 +591,12 @@ impl<'a> Generator<'a> {
                     .find_child(expression, let_binding)?;
                 let expression = self.analysis.navigator.find_child(expression, e)?;
                 self.declare_let_binding(assembly, section, &let_binding)?;
+
                 self.generate_expression(assembly, section, &expression)?;
-                let index = self.index_of_local(let_binding.id)?;
-                section.add_instruction(InstructionKind::DropLocal(index + 1));
-                self.locals.drop(index as usize);
+
+                let index = self.simulated_stack.index_of(let_binding.id)?;
+                section.add_instruction(InstructionKind::DropLocal(index));
+                self.simulated_stack.drop(let_binding.id)?;
             }
             ReferenceExpression { .. } => {
                 let declaration = self
@@ -505,6 +604,7 @@ impl<'a> Generator<'a> {
                     .navigator
                     .find_declaration(expression, DeclarationKind::Value)?;
                 self.generate_reference_to(section, &declaration)?;
+                self.simulated_stack.push_expression(expression.id);
             }
             MessageSendExpression {
                 expression: r,
@@ -529,7 +629,6 @@ impl<'a> Generator<'a> {
                             self.generate_expression(assembly, section, argument)?;
                         }
                     }
-                    self.locals.push(argument.id);
                 }
 
                 // Receiver
@@ -552,7 +651,7 @@ impl<'a> Generator<'a> {
                     character as u64,
                 ));
                 for _ in arguments {
-                    self.locals.pop();
+                    self.simulated_stack.pop();
                 }
             }
             _ => return Err(invalid_node(expression, "Expected expression.")),
@@ -574,20 +673,32 @@ impl<'a> Generator<'a> {
         );
 
         let arguments = self.analysis.navigator.locals_crossing_into(expression);
-        let arity = arguments.len() as u16;
-        let mut arg_ids = Stack::new();
-        for argument in arguments {
+        let mut arity = arguments.len() as u16;
+        let mut lazy_stack = SimulatedStack::new();
+        for argument in arguments.iter() {
             self.generate_reference_to(section, &argument)?;
-
-            arg_ids.push(argument.id);
+            lazy_stack.push_declaration(argument.id);
+            self.simulated_stack.push_declaration(argument.id);
+        }
+        if self.analysis.navigator.self_crosses_into(expression) {
+            arity += 1;
+            section.add_instruction(InstructionKind::LoadLocal(
+                self.simulated_stack.index_of_self()?,
+            ));
+            lazy_stack.push_self();
         }
         section.add_instruction(InstructionKind::LoadLazy(arity, label.clone()));
+        for argument in arguments {
+            self.simulated_stack.drop(argument.id)?;
+        }
+        self.simulated_stack.push_expression(expression.id);
 
         let mut sub_generator = self.sub();
-        sub_generator.locals = arg_ids;
+        sub_generator.simulated_stack = lazy_stack;
         let mut lazy_section = Section::named(label);
         sub_generator.generate_expression(assembly, &mut lazy_section, expression)?;
         lazy_section.add_instruction(InstructionKind::ReturnLazy(arity));
+
         assembly.add_section(lazy_section);
         self.lazies = sub_generator.lazies;
 
@@ -677,7 +788,7 @@ impl<'a> Generator<'a> {
             let (qn, _, _) = self.analysis.navigator.qualified_name_of(&class)?;
 
             match qn.as_str() {
-                "Loa/Number" => {
+                "Loa/Number" | "Loa/Object" => {
                     if let IntegerExpression(_, _) = literal.kind {
                         return self.generate_int(section, literal, BitSize::SizeBig, true);
                     } else {
@@ -1073,7 +1184,7 @@ mod tests {
                 Halt
 
                 @Loa/Number#+
-                    CallNative Number#+
+                    CallNative Loa/Number#+
                     Return 0
             "#,
         );
@@ -1453,6 +1564,120 @@ mod tests {
 
                 @N/A#b:
                   Noop
+            "#,
+        );
+    }
+
+    #[test]
+    fn self_in_lazy() {
+        assert_generates(
+            Source::test(
+                r#"
+                    namespace N.
+                    class P {
+                        public + P p => p.
+                    }
+                    class A {
+                        public a => self p + self p.
+                        public p => P.
+                    }
+                "#,
+            ),
+            r#"
+				@N/P$methods
+				  DeclareMethod "+" @N/P#+
+
+				@N/A$methods
+				  DeclareMethod "a" @N/A#a
+				  DeclareMethod "p" @N/A#p
+
+				@N/P
+				  DeclareClass "N/P"
+				  UseMethod @N/P#+
+
+				@N/A
+				  DeclareClass "N/A"
+				  UseMethod @N/A#a
+				  UseMethod @N/A#p
+
+				Halt
+
+				@N/P#+
+				  LoadLocal 1
+				  Return 2
+
+				@N/A#a$lazy1
+				  LoadLocal 0
+				  CallMethod @N/A#p "test:" 7 46
+				  ReturnLazy 1
+
+				@N/A#a
+				  LoadLocal 0
+				  LoadLazy 1 @N/A#a$lazy1
+				  LoadLocal 1
+				  CallMethod @N/A#p "test:" 7 37
+				  CallMethod @N/P#+ "test:" 7 37
+				  Return 1
+
+				@N/A#p
+				  LoadObject @N/P
+				  Return 1
+            "#,
+        );
+    }
+
+    #[test]
+    fn refer_to_multiple_args_in_lazy() {
+        assert_generates(
+            Source::test(
+                r#"
+                namespace N.
+                class P {
+                    public + P p => p.
+                }
+                class A {
+                    public a: P a b: P b c: P c =>
+                        P + (a + b + c).
+                }
+                "#,
+            ),
+            r#"
+            @N/P$methods
+              DeclareMethod "+" @N/P#+
+
+            @N/A$methods
+              DeclareMethod "a:b:c:" @N/A#a:b:c:
+
+            @N/P
+              DeclareClass "N/P"
+              UseMethod @N/P#+
+
+            @N/A
+              DeclareClass "N/A"
+              UseMethod @N/A#a:b:c:
+
+            Halt
+
+            @N/P#+
+              LoadLocal 1
+              Return 2
+
+            @N/A#a:b:c:$lazy1
+              LoadLocal 0
+              LoadLocal 2
+              LoadLocal 4
+              CallMethod @N/P#+ "test:" 8 30
+              CallMethod @N/P#+ "test:" 8 29
+              ReturnLazy 3
+
+            @N/A#a:b:c:
+              LoadLocal 1
+              LoadLocal 3
+              LoadLocal 5
+              LoadLazy 3 @N/A#a:b:c:$lazy1
+              LoadObject @N/P
+              CallMethod @N/P#+ "test:" 8 25
+              Return 4
             "#,
         );
     }

@@ -251,7 +251,7 @@ impl fmt::Debug for Instruction {
             CallMethod(ref label, ref uri, line, character) => {
                 write!(f, "CallMethod @{} {:?} {} {}", label, uri, line, character)
             }
-            CallNative(ref native_method) => write!(f, "CallNative {:?}", native_method),
+            CallNative(ref native_method) => write!(f, "CallNative {}", native_method),
             LoadLocal(index) => write!(f, "LoadLocal {}", index),
             DropLocal(index) => write!(f, "DropLocal {}", index),
             StoreGlobal(ref label) => write!(f, "StoreGlobal {}", label),

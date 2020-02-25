@@ -406,41 +406,61 @@ where
             (ConstValue::U8(a), ConstValue::U32(b)) => vm.push(subtract_u32(*a as u32, *b)),
             (ConstValue::U8(a), ConstValue::U64(b)) => vm.push(subtract_u64(*a as u64, *b)),
             (ConstValue::U8(a), ConstValue::U128(b)) => vm.push(subtract_u128(*a as u128, *b)),
-            (ConstValue::U8(a), ConstValue::UBig(b)) => vm.push(subtract_ubig(&BigUint::from(*a), b)),
+            (ConstValue::U8(a), ConstValue::UBig(b)) => {
+                vm.push(subtract_ubig(&BigUint::from(*a), b))
+            }
 
             (ConstValue::U16(a), ConstValue::U8(b)) => vm.push(subtract_u16(*a, *b as u16)),
             (ConstValue::U16(a), ConstValue::U16(b)) => vm.push(subtract_u16(*a, *b)),
             (ConstValue::U16(a), ConstValue::U32(b)) => vm.push(subtract_u32(*a as u32, *b)),
             (ConstValue::U16(a), ConstValue::U64(b)) => vm.push(subtract_u64(*a as u64, *b)),
             (ConstValue::U16(a), ConstValue::U128(b)) => vm.push(subtract_u128(*a as u128, *b)),
-            (ConstValue::U16(a), ConstValue::UBig(b)) => vm.push(subtract_ubig(&BigUint::from(*a), b)),
+            (ConstValue::U16(a), ConstValue::UBig(b)) => {
+                vm.push(subtract_ubig(&BigUint::from(*a), b))
+            }
 
             (ConstValue::U32(a), ConstValue::U8(b)) => vm.push(subtract_u32(*a, *b as u32)),
             (ConstValue::U32(a), ConstValue::U16(b)) => vm.push(subtract_u32(*a, *b as u32)),
             (ConstValue::U32(a), ConstValue::U32(b)) => vm.push(subtract_u32(*a, *b)),
             (ConstValue::U32(a), ConstValue::U64(b)) => vm.push(subtract_u64(*a as u64, *b)),
             (ConstValue::U32(a), ConstValue::U128(b)) => vm.push(subtract_u128(*a as u128, *b)),
-            (ConstValue::U32(a), ConstValue::UBig(b)) => vm.push(subtract_ubig(&BigUint::from(*a), b)),
+            (ConstValue::U32(a), ConstValue::UBig(b)) => {
+                vm.push(subtract_ubig(&BigUint::from(*a), b))
+            }
 
             (ConstValue::U64(a), ConstValue::U8(b)) => vm.push(subtract_u64(*a, *b as u64)),
             (ConstValue::U64(a), ConstValue::U16(b)) => vm.push(subtract_u64(*a, *b as u64)),
             (ConstValue::U64(a), ConstValue::U32(b)) => vm.push(subtract_u64(*a, *b as u64)),
             (ConstValue::U64(a), ConstValue::U64(b)) => vm.push(subtract_u64(*a, *b)),
             (ConstValue::U64(a), ConstValue::U128(b)) => vm.push(subtract_u128(*a as u128, *b)),
-            (ConstValue::U64(a), ConstValue::UBig(b)) => vm.push(subtract_ubig(&BigUint::from(*a), b)),
+            (ConstValue::U64(a), ConstValue::UBig(b)) => {
+                vm.push(subtract_ubig(&BigUint::from(*a), b))
+            }
 
             (ConstValue::U128(a), ConstValue::U8(b)) => vm.push(subtract_u128(*a, *b as u128)),
             (ConstValue::U128(a), ConstValue::U16(b)) => vm.push(subtract_u128(*a, *b as u128)),
             (ConstValue::U128(a), ConstValue::U32(b)) => vm.push(subtract_u128(*a, *b as u128)),
             (ConstValue::U128(a), ConstValue::U64(b)) => vm.push(subtract_u128(*a, *b as u128)),
             (ConstValue::U128(a), ConstValue::U128(b)) => vm.push(subtract_u128(*a, *b)),
-            (ConstValue::U128(a), ConstValue::UBig(b)) => vm.push(subtract_ubig(&BigUint::from(*a), b)),
+            (ConstValue::U128(a), ConstValue::UBig(b)) => {
+                vm.push(subtract_ubig(&BigUint::from(*a), b))
+            }
 
-            (ConstValue::UBig(a), ConstValue::U8(b)) => vm.push(subtract_ubig(a, &BigUint::from(*b))),
-            (ConstValue::UBig(a), ConstValue::U16(b)) => vm.push(subtract_ubig(a, &BigUint::from(*b))),
-            (ConstValue::UBig(a), ConstValue::U32(b)) => vm.push(subtract_ubig(a, &BigUint::from(*b))),
-            (ConstValue::UBig(a), ConstValue::U64(b)) => vm.push(subtract_ubig(a, &BigUint::from(*b))),
-            (ConstValue::UBig(a), ConstValue::U128(b)) => vm.push(subtract_ubig(a, &BigUint::from(*b))),
+            (ConstValue::UBig(a), ConstValue::U8(b)) => {
+                vm.push(subtract_ubig(a, &BigUint::from(*b)))
+            }
+            (ConstValue::UBig(a), ConstValue::U16(b)) => {
+                vm.push(subtract_ubig(a, &BigUint::from(*b)))
+            }
+            (ConstValue::UBig(a), ConstValue::U32(b)) => {
+                vm.push(subtract_ubig(a, &BigUint::from(*b)))
+            }
+            (ConstValue::UBig(a), ConstValue::U64(b)) => {
+                vm.push(subtract_ubig(a, &BigUint::from(*b)))
+            }
+            (ConstValue::UBig(a), ConstValue::U128(b)) => {
+                vm.push(subtract_ubig(a, &BigUint::from(*b)))
+            }
             (ConstValue::UBig(a), ConstValue::UBig(b)) => vm.push(subtract_ubig(a, b)),
 
             (ConstValue::I8(a), ConstValue::I8(b)) => vm.push(subtract_i8(*a, *b)),
@@ -448,47 +468,69 @@ where
             (ConstValue::I8(a), ConstValue::I32(b)) => vm.push(subtract_i32(*a as i32, *b)),
             (ConstValue::I8(a), ConstValue::I64(b)) => vm.push(subtract_i64(*a as i64, *b)),
             (ConstValue::I8(a), ConstValue::I128(b)) => vm.push(subtract_i128(*a as i128, *b)),
-            (ConstValue::I8(a), ConstValue::IBig(b)) => vm.push(subtract_ibig(&BigInt::from(*a), b)),
+            (ConstValue::I8(a), ConstValue::IBig(b)) => {
+                vm.push(subtract_ibig(&BigInt::from(*a), b))
+            }
 
             (ConstValue::I16(a), ConstValue::I8(b)) => vm.push(subtract_i16(*a, *b as i16)),
             (ConstValue::I16(a), ConstValue::I16(b)) => vm.push(subtract_i16(*a, *b)),
             (ConstValue::I16(a), ConstValue::I32(b)) => vm.push(subtract_i32(*a as i32, *b)),
             (ConstValue::I16(a), ConstValue::I64(b)) => vm.push(subtract_i64(*a as i64, *b)),
             (ConstValue::I16(a), ConstValue::I128(b)) => vm.push(subtract_i128(*a as i128, *b)),
-            (ConstValue::I16(a), ConstValue::IBig(b)) => vm.push(subtract_ibig(&BigInt::from(*a), b)),
+            (ConstValue::I16(a), ConstValue::IBig(b)) => {
+                vm.push(subtract_ibig(&BigInt::from(*a), b))
+            }
 
             (ConstValue::I32(a), ConstValue::I8(b)) => vm.push(subtract_i32(*a, *b as i32)),
             (ConstValue::I32(a), ConstValue::I16(b)) => vm.push(subtract_i32(*a, *b as i32)),
             (ConstValue::I32(a), ConstValue::I32(b)) => vm.push(subtract_i32(*a, *b)),
             (ConstValue::I32(a), ConstValue::I64(b)) => vm.push(subtract_i64(*a as i64, *b)),
             (ConstValue::I32(a), ConstValue::I128(b)) => vm.push(subtract_i128(*a as i128, *b)),
-            (ConstValue::I32(a), ConstValue::IBig(b)) => vm.push(subtract_ibig(&BigInt::from(*a), b)),
+            (ConstValue::I32(a), ConstValue::IBig(b)) => {
+                vm.push(subtract_ibig(&BigInt::from(*a), b))
+            }
 
             (ConstValue::I64(a), ConstValue::I8(b)) => vm.push(subtract_i64(*a, *b as i64)),
             (ConstValue::I64(a), ConstValue::I16(b)) => vm.push(subtract_i64(*a, *b as i64)),
             (ConstValue::I64(a), ConstValue::I32(b)) => vm.push(subtract_i64(*a, *b as i64)),
             (ConstValue::I64(a), ConstValue::I64(b)) => vm.push(subtract_i64(*a, *b)),
             (ConstValue::I64(a), ConstValue::I128(b)) => vm.push(subtract_i128(*a as i128, *b)),
-            (ConstValue::I64(a), ConstValue::IBig(b)) => vm.push(subtract_ibig(&BigInt::from(*a), b)),
+            (ConstValue::I64(a), ConstValue::IBig(b)) => {
+                vm.push(subtract_ibig(&BigInt::from(*a), b))
+            }
 
             (ConstValue::I128(a), ConstValue::I8(b)) => vm.push(subtract_i128(*a, *b as i128)),
             (ConstValue::I128(a), ConstValue::I16(b)) => vm.push(subtract_i128(*a, *b as i128)),
             (ConstValue::I128(a), ConstValue::I32(b)) => vm.push(subtract_i128(*a, *b as i128)),
             (ConstValue::I128(a), ConstValue::I64(b)) => vm.push(subtract_i128(*a, *b as i128)),
             (ConstValue::I128(a), ConstValue::I128(b)) => vm.push(subtract_i128(*a, *b)),
-            (ConstValue::I128(a), ConstValue::IBig(b)) => vm.push(subtract_ibig(&BigInt::from(*a), b)),
+            (ConstValue::I128(a), ConstValue::IBig(b)) => {
+                vm.push(subtract_ibig(&BigInt::from(*a), b))
+            }
 
-            (ConstValue::IBig(a), ConstValue::I8(b)) => vm.push(subtract_ibig(a, &BigInt::from(*b))),
-            (ConstValue::IBig(a), ConstValue::I16(b)) => vm.push(subtract_ibig(a, &BigInt::from(*b))),
-            (ConstValue::IBig(a), ConstValue::I32(b)) => vm.push(subtract_ibig(a, &BigInt::from(*b))),
-            (ConstValue::IBig(a), ConstValue::I64(b)) => vm.push(subtract_ibig(a, &BigInt::from(*b))),
-            (ConstValue::IBig(a), ConstValue::I128(b)) => vm.push(subtract_ibig(a, &BigInt::from(*b))),
+            (ConstValue::IBig(a), ConstValue::I8(b)) => {
+                vm.push(subtract_ibig(a, &BigInt::from(*b)))
+            }
+            (ConstValue::IBig(a), ConstValue::I16(b)) => {
+                vm.push(subtract_ibig(a, &BigInt::from(*b)))
+            }
+            (ConstValue::IBig(a), ConstValue::I32(b)) => {
+                vm.push(subtract_ibig(a, &BigInt::from(*b)))
+            }
+            (ConstValue::IBig(a), ConstValue::I64(b)) => {
+                vm.push(subtract_ibig(a, &BigInt::from(*b)))
+            }
+            (ConstValue::IBig(a), ConstValue::I128(b)) => {
+                vm.push(subtract_ibig(a, &BigInt::from(*b)))
+            }
             (ConstValue::IBig(a), ConstValue::IBig(b)) => vm.push(subtract_ibig(a, b)),
 
             (ConstValue::U8(b), ConstValue::I8(a)) => vm.push(subtract_i16(*a as i16, *b as i16)),
             (ConstValue::U16(b), ConstValue::I8(a)) => vm.push(subtract_i32(*a as i32, *b as i32)),
             (ConstValue::U32(b), ConstValue::I8(a)) => vm.push(subtract_i64(*a as i64, *b as i64)),
-            (ConstValue::U64(b), ConstValue::I8(a)) => vm.push(subtract_i128(*a as i128, *b as i128)),
+            (ConstValue::U64(b), ConstValue::I8(a)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
             (ConstValue::U128(b), ConstValue::I8(a)) => {
                 vm.push(subtract_ibig(&(*a).into(), &(*b).into()))
             }
@@ -499,7 +541,9 @@ where
             (ConstValue::U8(b), ConstValue::I16(a)) => vm.push(subtract_i16(*a as i16, *b as i16)),
             (ConstValue::U16(b), ConstValue::I16(a)) => vm.push(subtract_i32(*a as i32, *b as i32)),
             (ConstValue::U32(b), ConstValue::I16(a)) => vm.push(subtract_i64(*a as i64, *b as i64)),
-            (ConstValue::U64(b), ConstValue::I16(a)) => vm.push(subtract_i128(*a as i128, *b as i128)),
+            (ConstValue::U64(b), ConstValue::I16(a)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
             (ConstValue::U128(b), ConstValue::I16(a)) => {
                 vm.push(subtract_ibig(&(*a).into(), &(*b).into()))
             }
@@ -510,7 +554,9 @@ where
             (ConstValue::U8(b), ConstValue::I32(a)) => vm.push(subtract_i32(*a as i32, *b as i32)),
             (ConstValue::U16(b), ConstValue::I32(a)) => vm.push(subtract_i32(*a as i32, *b as i32)),
             (ConstValue::U32(b), ConstValue::I32(a)) => vm.push(subtract_i64(*a as i64, *b as i64)),
-            (ConstValue::U64(b), ConstValue::I32(a)) => vm.push(subtract_i128(*a as i128, *b as i128)),
+            (ConstValue::U64(b), ConstValue::I32(a)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
             (ConstValue::U128(b), ConstValue::I32(a)) => {
                 vm.push(subtract_ibig(&(*a).into(), &(*b).into()))
             }
@@ -521,7 +567,9 @@ where
             (ConstValue::U8(b), ConstValue::I64(a)) => vm.push(subtract_i64(*a as i64, *b as i64)),
             (ConstValue::U16(b), ConstValue::I64(a)) => vm.push(subtract_i64(*a as i64, *b as i64)),
             (ConstValue::U32(b), ConstValue::I64(a)) => vm.push(subtract_i64(*a as i64, *b as i64)),
-            (ConstValue::U64(b), ConstValue::I64(a)) => vm.push(subtract_i128(*a as i128, *b as i128)),
+            (ConstValue::U64(b), ConstValue::I64(a)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
             (ConstValue::U128(b), ConstValue::I64(a)) => {
                 vm.push(subtract_ibig(&(*a).into(), &(*b).into()))
             }
@@ -529,10 +577,18 @@ where
                 vm.push(subtract_ibig(&(*a).into(), &(b.clone().into())))
             }
 
-            (ConstValue::U8(b), ConstValue::I128(a)) => vm.push(subtract_i128(*a as i128, *b as i128)),
-            (ConstValue::U16(b), ConstValue::I128(a)) => vm.push(subtract_i128(*a as i128, *b as i128)),
-            (ConstValue::U32(b), ConstValue::I128(a)) => vm.push(subtract_i128(*a as i128, *b as i128)),
-            (ConstValue::U64(b), ConstValue::I128(a)) => vm.push(subtract_i128(*a as i128, *b as i128)),
+            (ConstValue::U8(b), ConstValue::I128(a)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
+            (ConstValue::U16(b), ConstValue::I128(a)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
+            (ConstValue::U32(b), ConstValue::I128(a)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
+            (ConstValue::U64(b), ConstValue::I128(a)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
             (ConstValue::U128(b), ConstValue::I128(a)) => {
                 vm.push(subtract_ibig(&(*a).into(), &(*b).into()))
             }
@@ -545,12 +601,16 @@ where
             (ConstValue::U32(b), ConstValue::IBig(a)) => vm.push(subtract_ibig(a, &(*b).into())),
             (ConstValue::U64(b), ConstValue::IBig(a)) => vm.push(subtract_ibig(a, &(*b).into())),
             (ConstValue::U128(b), ConstValue::IBig(a)) => vm.push(subtract_ibig(a, &(*b).into())),
-            (ConstValue::UBig(b), ConstValue::IBig(a)) => vm.push(subtract_ibig(a, &(b.clone().into()))),
+            (ConstValue::UBig(b), ConstValue::IBig(a)) => {
+                vm.push(subtract_ibig(a, &(b.clone().into())))
+            }
 
             (ConstValue::I8(a), ConstValue::U8(b)) => vm.push(subtract_i16(*a as i16, *b as i16)),
             (ConstValue::I8(a), ConstValue::U16(b)) => vm.push(subtract_i32(*a as i32, *b as i32)),
             (ConstValue::I8(a), ConstValue::U32(b)) => vm.push(subtract_i64(*a as i64, *b as i64)),
-            (ConstValue::I8(a), ConstValue::U64(b)) => vm.push(subtract_i128(*a as i128, *b as i128)),
+            (ConstValue::I8(a), ConstValue::U64(b)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
             (ConstValue::I8(a), ConstValue::U128(b)) => {
                 vm.push(subtract_ibig(&(*a).into(), &(*b).into()))
             }
@@ -561,7 +621,9 @@ where
             (ConstValue::I16(a), ConstValue::U8(b)) => vm.push(subtract_i16(*a as i16, *b as i16)),
             (ConstValue::I16(a), ConstValue::U16(b)) => vm.push(subtract_i32(*a as i32, *b as i32)),
             (ConstValue::I16(a), ConstValue::U32(b)) => vm.push(subtract_i64(*a as i64, *b as i64)),
-            (ConstValue::I16(a), ConstValue::U64(b)) => vm.push(subtract_i128(*a as i128, *b as i128)),
+            (ConstValue::I16(a), ConstValue::U64(b)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
             (ConstValue::I16(a), ConstValue::U128(b)) => {
                 vm.push(subtract_ibig(&(*a).into(), &(*b).into()))
             }
@@ -572,7 +634,9 @@ where
             (ConstValue::I32(a), ConstValue::U8(b)) => vm.push(subtract_i32(*a as i32, *b as i32)),
             (ConstValue::I32(a), ConstValue::U16(b)) => vm.push(subtract_i32(*a as i32, *b as i32)),
             (ConstValue::I32(a), ConstValue::U32(b)) => vm.push(subtract_i64(*a as i64, *b as i64)),
-            (ConstValue::I32(a), ConstValue::U64(b)) => vm.push(subtract_i128(*a as i128, *b as i128)),
+            (ConstValue::I32(a), ConstValue::U64(b)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
             (ConstValue::I32(a), ConstValue::U128(b)) => {
                 vm.push(subtract_ibig(&(*a).into(), &(*b).into()))
             }
@@ -583,7 +647,9 @@ where
             (ConstValue::I64(a), ConstValue::U8(b)) => vm.push(subtract_i64(*a as i64, *b as i64)),
             (ConstValue::I64(a), ConstValue::U16(b)) => vm.push(subtract_i64(*a as i64, *b as i64)),
             (ConstValue::I64(a), ConstValue::U32(b)) => vm.push(subtract_i64(*a as i64, *b as i64)),
-            (ConstValue::I64(a), ConstValue::U64(b)) => vm.push(subtract_i128(*a as i128, *b as i128)),
+            (ConstValue::I64(a), ConstValue::U64(b)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
             (ConstValue::I64(a), ConstValue::U128(b)) => {
                 vm.push(subtract_ibig(&(*a).into(), &(*b).into()))
             }
@@ -591,10 +657,18 @@ where
                 vm.push(subtract_ibig(&(*a).into(), &(b.clone().into())))
             }
 
-            (ConstValue::I128(a), ConstValue::U8(b)) => vm.push(subtract_i128(*a as i128, *b as i128)),
-            (ConstValue::I128(a), ConstValue::U16(b)) => vm.push(subtract_i128(*a as i128, *b as i128)),
-            (ConstValue::I128(a), ConstValue::U32(b)) => vm.push(subtract_i128(*a as i128, *b as i128)),
-            (ConstValue::I128(a), ConstValue::U64(b)) => vm.push(subtract_i128(*a as i128, *b as i128)),
+            (ConstValue::I128(a), ConstValue::U8(b)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
+            (ConstValue::I128(a), ConstValue::U16(b)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
+            (ConstValue::I128(a), ConstValue::U32(b)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
+            (ConstValue::I128(a), ConstValue::U64(b)) => {
+                vm.push(subtract_i128(*a as i128, *b as i128))
+            }
             (ConstValue::I128(a), ConstValue::U128(b)) => {
                 vm.push(subtract_ibig(&(*a).into(), &(*b).into()))
             }
@@ -607,7 +681,9 @@ where
             (ConstValue::IBig(a), ConstValue::U32(b)) => vm.push(subtract_ibig(a, &(*b).into())),
             (ConstValue::IBig(a), ConstValue::U64(b)) => vm.push(subtract_ibig(a, &(*b).into())),
             (ConstValue::IBig(a), ConstValue::U128(b)) => vm.push(subtract_ibig(a, &(*b).into())),
-            (ConstValue::IBig(a), ConstValue::UBig(b)) => vm.push(subtract_ibig(a, &(b.clone().into()))),
+            (ConstValue::IBig(a), ConstValue::UBig(b)) => {
+                vm.push(subtract_ibig(a, &(b.clone().into())))
+            }
 
             (ConstValue::F32(a), ConstValue::U8(b)) | (ConstValue::U8(b), ConstValue::F32(a)) => {
                 vm.push(subtract_f32(*a, *b as f32))
@@ -938,6 +1014,17 @@ impl<'a> From<&'a str> for NativeMethod {
             "Loa/Number#-" => Number_minus,
             "Loa/Object#==" => Object_eq,
             n => panic!("unknown native method: {}", n),
+        }
+    }
+}
+
+impl std::fmt::Display for NativeMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        use NativeMethod::*;
+        match self {
+             Number_plus => write!(f, "Loa/Number#+"),
+             Number_minus => write!(f, "Loa/Number#-"),
+             Object_eq => write!(f, "Loa/Object#=="),
         }
     }
 }

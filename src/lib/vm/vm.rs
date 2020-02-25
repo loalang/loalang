@@ -226,8 +226,11 @@ impl VM {
                         let method = expect!(
                             self,
                             class.methods.get(offset),
-                            "message #{:X} not understood by {}",
-                            offset,
+                            "message #{} not understood by {}",
+                            self.methods
+                                .get(offset)
+                                .map(|m| &m.name)
+                                .unwrap_or(&"?".into()),
                             receiver
                         )
                         .clone();
@@ -473,25 +476,27 @@ impl VM {
     }
 
     #[inline]
-    fn eval_lazy<M: Runtime>(&mut self, object: Arc<Object>) -> Option<Arc<Object>> {
-        match object.const_value {
-            ConstValue::Lazy(offset, ref call_stack, ref dependencies) => {
-                for dep in dependencies.iter().cloned() {
-                    self.push(dep);
+    fn eval_lazy<M: Runtime>(&mut self, mut object: Arc<Object>) -> Option<Arc<Object>> {
+        loop {
+            match object.const_value {
+                ConstValue::Lazy(offset, ref call_stack, ref dependencies) => {
+                    for dep in dependencies.iter().cloned() {
+                        self.push(dep);
+                    }
+                    let return_offset = self.pc;
+                    let call_stack = std::mem::replace(&mut self.call_stack, call_stack.clone());
+
+                    self.pc = offset as usize;
+                    self.do_eval::<M>().report::<M>()?;
+                    let result = self.pop().report::<M>()?;
+
+                    self.pc = return_offset;
+                    self.call_stack = call_stack;
+
+                    object = result;
                 }
-                let return_offset = self.pc;
-                let call_stack = std::mem::replace(&mut self.call_stack, call_stack.clone());
-
-                self.pc = offset as usize;
-                self.do_eval::<M>().report::<M>()?;
-                let result = self.pop().report::<M>()?;
-
-                self.pc = return_offset;
-                self.call_stack = call_stack;
-
-                self.eval_lazy::<M>(result)
+                _ => return Some(object),
             }
-            _ => Some(object),
         }
     }
 
@@ -726,7 +731,7 @@ mod tests {
 
             LoadConstU8 12
             LoadConstU8 13
-            CallNative Number#+
+            CallNative Loa/Number#+
 
             Halt
             "#,
@@ -799,7 +804,7 @@ mod tests {
             @lazy
                 LoadLocal 1
                 LoadLocal 1
-                CallNative Number#+
+                CallNative Loa/Number#+
                 ReturnLazy 2
             "#,
             "3",
@@ -897,10 +902,102 @@ mod tests {
 
             LoadObject @A
             LoadObject @B
-            CallNative Object#==
+            CallNative Loa/Object#==
             Halt
             "#,
             "a False",
+        );
+    }
+
+    #[test]
+    fn recursive_call() {
+        assert_evaluates_to(
+            r#"
+            @Integer
+              DeclareClass "Integer"
+              MarkClassI32 @Integer
+
+            @Boolean$methods
+              DeclareMethod "ifTrue:ifFalse:" @Boolean#ifTrue:ifFalse:
+
+            @True$methods
+              DeclareMethod "ifTrue:ifFalse:" @True#ifTrue:ifFalse:
+
+            @False$methods
+              DeclareMethod "ifTrue:ifFalse:" @False#ifTrue:ifFalse:
+
+            @True
+              DeclareClass "True"
+              OverrideMethod @Boolean#ifTrue:ifFalse: @True#ifTrue:ifFalse:
+              MarkClassTrue @True
+
+            @False
+              DeclareClass "False"
+              OverrideMethod @Boolean#ifTrue:ifFalse: @False#ifTrue:ifFalse:
+              MarkClassFalse @False
+
+            @N$methods
+              DeclareMethod "n:" @N#n:
+
+            @N
+              DeclareClass "A"
+              UseMethod @N#n:
+
+            LoadConstI32 0
+            LoadObject @N
+            CallMethod @N#n: "test:" 0 0
+            Halt
+
+            @Boolean#ifTrue:ifFalse:
+                Noop
+
+            @True#ifTrue:ifFalse:
+              LoadLocal 2
+              Return 2
+
+            @False#ifTrue:ifFalse:
+              LoadLocal 1
+              Return 2
+
+            ; N n: Integer n
+            @N#n:
+              ; n
+              LoadLocal 1
+
+              ; self
+              LoadLocal 1
+              ; n
+              LoadLocal 3
+              ; (self n: n + 1)
+              LoadLazy 2 @N#n$recur
+
+              ; n
+              LoadLocal 3
+              ; 1000
+              LoadConstI32 1000
+              ; n == 1000
+              CallNative Loa/Object#==
+
+              ; n == 1000 ifTrue: n ifFalse: (self n: n + 1)
+              CallMethod @Boolean#ifTrue:ifFalse: "test:" 1 0
+
+              ; why is this needed?
+              DropLocal 1
+
+              Return 2
+
+            ; n, self
+            @N#n$recur
+              LoadConstI32 1
+              LoadLocal 2
+              CallNative Loa/Number#+
+
+              LoadLocal 1
+              CallMethod @N#n: "test:" 2 0
+
+              ReturnLazy 2
+            "#,
+            "1000",
         );
     }
 }

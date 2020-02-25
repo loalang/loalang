@@ -645,14 +645,14 @@ impl Parser {
 
     fn parse_native_method(&mut self, code: &mut String) -> ParseResult<NativeMethod> {
         self.skip_leading_whitespace(code);
-        if code.starts_with("Number#+") {
-            code.drain(.."Number#+".len());
+        if code.starts_with("Loa/Number#+") {
+            code.drain(.."Loa/Number#+".len());
             Ok(NativeMethod::Number_plus)
-        } else if code.starts_with("Number#-") {
-            code.drain(.."Number#-".len());
+        } else if code.starts_with("Loa/Number#-") {
+            code.drain(.."Loa/Number#-".len());
             Ok(NativeMethod::Number_minus)
-        } else if code.starts_with("Object#==") {
-            code.drain(.."Object#==".len());
+        } else if code.starts_with("Loa/Object#==") {
+            code.drain(.."Loa/Object#==".len());
             Ok(NativeMethod::Object_eq)
         } else {
             Err(ParseError::ExpectedNativeMethod(code.clone()))
