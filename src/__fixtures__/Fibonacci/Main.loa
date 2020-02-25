@@ -2,7 +2,7 @@ namespace Fibonacci.
 
 export class Main {
   public run =>
-    Fibonacci number: 21.
+    Fibonacci number: 10.
 }
 
 class Fibonacci {

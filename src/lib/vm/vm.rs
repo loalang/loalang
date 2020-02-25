@@ -480,7 +480,7 @@ impl VM {
         loop {
             match object.const_value {
                 ConstValue::Lazy(offset, ref call_stack, ref dependencies) => {
-                    for dep in dependencies.iter().cloned() {
+                    for dep in dependencies.iter().cloned().rev() {
                         self.push(dep);
                     }
                     let return_offset = self.pc;
@@ -906,98 +906,6 @@ mod tests {
             Halt
             "#,
             "a False",
-        );
-    }
-
-    #[test]
-    fn recursive_call() {
-        assert_evaluates_to(
-            r#"
-            @Integer
-              DeclareClass "Integer"
-              MarkClassI32 @Integer
-
-            @Boolean$methods
-              DeclareMethod "ifTrue:ifFalse:" @Boolean#ifTrue:ifFalse:
-
-            @True$methods
-              DeclareMethod "ifTrue:ifFalse:" @True#ifTrue:ifFalse:
-
-            @False$methods
-              DeclareMethod "ifTrue:ifFalse:" @False#ifTrue:ifFalse:
-
-            @True
-              DeclareClass "True"
-              OverrideMethod @Boolean#ifTrue:ifFalse: @True#ifTrue:ifFalse:
-              MarkClassTrue @True
-
-            @False
-              DeclareClass "False"
-              OverrideMethod @Boolean#ifTrue:ifFalse: @False#ifTrue:ifFalse:
-              MarkClassFalse @False
-
-            @N$methods
-              DeclareMethod "n:" @N#n:
-
-            @N
-              DeclareClass "A"
-              UseMethod @N#n:
-
-            LoadConstI32 0
-            LoadObject @N
-            CallMethod @N#n: "test:" 0 0
-            Halt
-
-            @Boolean#ifTrue:ifFalse:
-                Noop
-
-            @True#ifTrue:ifFalse:
-              LoadLocal 2
-              Return 2
-
-            @False#ifTrue:ifFalse:
-              LoadLocal 1
-              Return 2
-
-            ; N n: Integer n
-            @N#n:
-              ; n
-              LoadLocal 1
-
-              ; self
-              LoadLocal 1
-              ; n
-              LoadLocal 3
-              ; (self n: n + 1)
-              LoadLazy 2 @N#n$recur
-
-              ; n
-              LoadLocal 3
-              ; 1000
-              LoadConstI32 1000
-              ; n == 1000
-              CallNative Loa/Object#==
-
-              ; n == 1000 ifTrue: n ifFalse: (self n: n + 1)
-              CallMethod @Boolean#ifTrue:ifFalse: "test:" 1 0
-
-              ; why is this needed?
-              DropLocal 1
-
-              Return 2
-
-            ; n, self
-            @N#n$recur
-              LoadConstI32 1
-              LoadLocal 2
-              CallNative Loa/Number#+
-
-              LoadLocal 1
-              CallMethod @N#n: "test:" 2 0
-
-              ReturnLazy 2
-            "#,
-            "1000",
         );
     }
 }

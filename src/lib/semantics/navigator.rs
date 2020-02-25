@@ -1492,12 +1492,19 @@ impl Navigator {
     }
 
     pub fn locals_crossing_into(&self, expression: &Node) -> Vec<Node> {
-        self.all_references_downwards(expression, DeclarationKind::Value)
+        let locals: HashMap<_, _> = self.all_references_downwards(expression, DeclarationKind::Value)
             .into_iter()
             .filter_map(|r| self.find_declaration(&r, DeclarationKind::Value))
             .filter(|d| !matches!(d.kind, Class{..}))
             .filter(|d| !self.is_within(&d, expression))
-            .collect()
+            .map(|d| (d.id, d))
+            .collect();
+
+        let mut locals: Vec<_> = locals.into_iter().map(|(_, d)| d).collect();
+
+        locals.sort_by(|a, b| a.span.start.offset.cmp(&b.span.start.offset));
+
+        locals
     }
 
     pub fn self_crosses_into(&self, expression: &Node) -> bool {
