@@ -77,9 +77,9 @@ dist/linux: docker/loa-base
 	gsutil cp target/dist/$(VERSION)_x86_64-linux.tar.gz gs://cdn.loalang.xyz/
 
 dist/std:
-	gsutil rsync -d std gs://cdn.loalang.xyz/$(VERSION)/std
+	gsutil rsync -r -d std gs://cdn.loalang.xyz/$(VERSION)/std
 	tree -J std | jq '.[0].contents' | gsutil cp - gs://cdn.loalang.xyz/$(VERSION)/std/manifest.json
-	gsutil setmeta -h "Content-Type: application/loa" gs://cdn.loalang.xyz/$(VERSION)/std/*.loa
+	gsutil setmeta -h "Content-Type: application/loa" gs://cdn.loalang.xyz/$(VERSION)/std/**/*.loa
 
 _dist:
 	rm -rf target/dist/$(VERSION)/$(DIST_NAME)
