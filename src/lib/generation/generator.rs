@@ -279,7 +279,7 @@ impl<'a> Generator<'a> {
                     .navigator
                     .initializer_assignments(&initializer);
 
-                for (_, argument) in assignments.iter() {
+                for (_, argument) in assignments.iter().rev() {
                     self.generate_expression(assembly, &mut init_section, &argument)?;
                 }
 

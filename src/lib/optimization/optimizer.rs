@@ -229,15 +229,14 @@ impl Optimizer {
                 for instruction in section.instructions.iter() {
                     match instruction.kind {
                         InstructionKind::LoadObject(ref label)
-                            | InstructionKind::LoadLazy(_, ref label)
-                            => {
+                        | InstructionKind::LoadLazy(_, ref label) => {
                             mark!(label);
                         }
-                         InstructionKind::DeclareVariable(_, ref vl, ref gl, ref sl) => {
+                        InstructionKind::DeclareVariable(_, ref vl, ref gl, ref sl) => {
                             mark!(vl);
                             mark!(gl);
                             mark!(sl);
-                         }
+                        }
                         InstructionKind::CallMethod(ref label, _, _, _) => {
                             // Mark method implementation as used
                             mark!(label);

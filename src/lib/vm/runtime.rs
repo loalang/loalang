@@ -1022,9 +1022,9 @@ impl std::fmt::Display for NativeMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         use NativeMethod::*;
         match self {
-             Number_plus => write!(f, "Loa/Number#+"),
-             Number_minus => write!(f, "Loa/Number#-"),
-             Object_eq => write!(f, "Loa/Object#=="),
+            Number_plus => write!(f, "Loa/Number#+"),
+            Number_minus => write!(f, "Loa/Number#-"),
+            Object_eq => write!(f, "Loa/Object#=="),
         }
     }
 }

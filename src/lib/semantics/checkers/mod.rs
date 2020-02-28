@@ -36,6 +36,9 @@ pub use self::private_methods::*;
 mod type_parameter_variance;
 pub use self::type_parameter_variance::*;
 
+mod variable_initialization;
+pub use self::variable_initialization::*;
+
 const UNDEFINED_TYPE_REFERENCE: UndefinedTypeReference = UndefinedTypeReference;
 const UNDEFINED_REFERENCE: UndefinedReference = UndefinedReference;
 const UNDEFINED_BEHAVIOUR: UndefinedBehaviour = UndefinedBehaviour;
@@ -48,6 +51,7 @@ const IMPRECISE_FLOAT_LITERAL: ImpreciseFloatLiteral = ImpreciseFloatLiteral;
 const WRONG_NUMBER_OF_TYPE_ARGUMENTS: WrongNumberOfTypeArguments = WrongNumberOfTypeArguments;
 const PRIVATE_METHODS: PrivateMethods = PrivateMethods;
 const TYPE_PARAMETER_VARIANCE: TypeParameterVariance = TypeParameterVariance;
+const VARIABLE_INITIALIZATION: VariableInitialization = VariableInitialization;
 
 #[inline]
 pub fn checkers() -> Vec<&'static dyn Checker> {
@@ -64,5 +68,6 @@ pub fn checkers() -> Vec<&'static dyn Checker> {
         &WRONG_NUMBER_OF_TYPE_ARGUMENTS,
         &PRIVATE_METHODS,
         &TYPE_PARAMETER_VARIANCE,
+        &VARIABLE_INITIALIZATION,
     ]
 }

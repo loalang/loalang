@@ -340,6 +340,10 @@ impl Navigator {
         self.all_matching(|n| n.is_class())
     }
 
+    pub fn all_initializers(&self) -> Vec<Node> {
+        self.all_matching(|n| n.is_initializer())
+    }
+
     pub fn all_is_directives(&self) -> Vec<Node> {
         self.all_matching(|n| n.is_is_directive())
     }
@@ -1492,7 +1496,8 @@ impl Navigator {
     }
 
     pub fn locals_crossing_into(&self, expression: &Node) -> Vec<Node> {
-        let locals: HashMap<_, _> = self.all_references_downwards(expression, DeclarationKind::Value)
+        let locals: HashMap<_, _> = self
+            .all_references_downwards(expression, DeclarationKind::Value)
             .into_iter()
             .filter_map(|r| self.find_declaration(&r, DeclarationKind::Value))
             .filter(|d| !matches!(d.kind, Class{..}))

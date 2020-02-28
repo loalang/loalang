@@ -1,0 +1,47 @@
+namespace InvalidInitializer.
+
+export class Basic {
+  public init new.
+}
+
+export class SingleVariable {
+  private var Boolean variable.
+
+  public init new: Boolean variable =>
+    variable: variable.
+}
+
+export class UninitializedVariable {
+  private var Boolean variable.
+
+  public init new. //$ Initializer `new` must initialize `variable`.
+}
+
+export class UninitializedVariables {
+  private var Boolean a.
+  private var Boolean b.
+
+  public init new. //$ Initializer `new` must initialize `a` and `b`.
+}
+
+export class ThreeUninitializedVariables {
+  private var Boolean a.
+  private var Boolean b.
+  private var Boolean c.
+
+  public init new. //$ Initializer `new` must initialize `a`, `b`, and `c`.
+}
+
+export class OneOfThreeVariablesInitialized {
+  private var Boolean a.
+  private var Boolean b.
+  private var Boolean c.
+
+  public init new => //$ Initializer `new` must initialize `a` and `c`.
+    b: True.
+}
+
+export class ExtraneousVariable {
+  public init new =>
+    x: True. //$ `x` is not a variable of `ExtraneousVariable`.
+}

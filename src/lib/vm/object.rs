@@ -186,17 +186,17 @@ impl fmt::Display for Object {
                 "a {}({})",
                 self.class.as_ref().map(|c| c.name.as_ref()).unwrap_or(""),
                 {
-                    let mut variables = vec![];
+                    let mut variables = std::collections::BTreeSet::new();
 
                     let class = self.class.as_ref().unwrap();
                     for (id, value) in v.iter() {
                         let mut var = class.variables.get(&id).unwrap().name.clone();
                         var.push('=');
                         var.push_str(format!("{}", value).as_ref());
-                        variables.push(var);
+                        variables.insert(var);
                     }
 
-                    variables.join(", ")
+                    variables.into_iter().collect::<Vec<_>>().join(", ")
                 }
             ),
             ConstValue::String(s) => write!(f, "{}", s),

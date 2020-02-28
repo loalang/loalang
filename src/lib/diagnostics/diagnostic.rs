@@ -27,6 +27,8 @@ pub enum Diagnostic {
     WrongNumberOfTypeArguments(Span, String, usize, usize),
     InvalidAccessToPrivateMethod(Span, String, String),
     InvalidTypeParameterReferenceVarianceUsage(Span, String, &'static str, &'static str),
+    IncompleteInitializer(Span, String, Vec<String>),
+    UndefinedInitializedVariable(Span, String, String),
 }
 
 #[derive(Clone)]
@@ -40,21 +42,24 @@ impl Diagnostic {
         use Diagnostic::*;
 
         match self {
-            SyntaxError(ref s, _) => s,
-            UndefinedTypeReference(ref s, _) => s,
-            UndefinedReference(ref s, _) => s,
-            UndefinedBehaviour(ref s, _, _) => s,
-            UndefinedImport(ref s, _) => s,
-            UnexportedImport(ref s, _) => s,
-            UnassignableType { span: ref s, .. } => s,
-            DuplicatedDeclaration(ref s, _, _) => s,
-            InvalidInherit { span: ref s, .. } => s,
-            InvalidLiteralType(ref s, _) => s,
-            OutOfBounds(ref s, _, _) => s,
-            TooPreciseFloat(ref s, _, _) => s,
-            WrongNumberOfTypeArguments(ref s, _, _, _) => s,
-            InvalidAccessToPrivateMethod(ref s, _, _) => s,
-            InvalidTypeParameterReferenceVarianceUsage(ref s, _, _, _) => s,
+            SyntaxError(ref s, _)
+            | UndefinedTypeReference(ref s, _)
+            | UndefinedReference(ref s, _)
+            | UndefinedBehaviour(ref s, _, _)
+            | UndefinedImport(ref s, _)
+            | UnexportedImport(ref s, _)
+            | UnassignableType { span: ref s, .. }
+            | DuplicatedDeclaration(ref s, _, _)
+            | InvalidInherit { span: ref s, .. }
+            | InvalidLiteralType(ref s, _)
+            | OutOfBounds(ref s, _, _)
+            | TooPreciseFloat(ref s, _, _)
+            | WrongNumberOfTypeArguments(ref s, _, _, _)
+            | InvalidAccessToPrivateMethod(ref s, _, _)
+            | InvalidTypeParameterReferenceVarianceUsage(ref s, _, _, _)
+            | IncompleteInitializer(ref s, _, _)
+            | UndefinedInitializedVariable(ref s, _, _)
+            => s,
         }
     }
 
@@ -62,21 +67,25 @@ impl Diagnostic {
         use Diagnostic::*;
 
         match self {
-            SyntaxError(_, _) => DiagnosticLevel::Error,
-            UndefinedTypeReference(_, _) => DiagnosticLevel::Error,
-            UndefinedReference(_, _) => DiagnosticLevel::Error,
-            UndefinedBehaviour(_, _, _) => DiagnosticLevel::Error,
-            UndefinedImport(_, _) => DiagnosticLevel::Error,
-            UnexportedImport(_, _) => DiagnosticLevel::Error,
-            UnassignableType { .. } => DiagnosticLevel::Error,
-            DuplicatedDeclaration(_, _, _) => DiagnosticLevel::Error,
-            InvalidInherit { .. } => DiagnosticLevel::Error,
-            InvalidLiteralType(_, _) => DiagnosticLevel::Error,
-            OutOfBounds(_, _, _) => DiagnosticLevel::Error,
+            SyntaxError(_, _)
+            | UndefinedTypeReference(_, _)
+            | UndefinedReference(_, _)
+            | UndefinedBehaviour(_, _, _)
+            | UndefinedImport(_, _)
+            | UnexportedImport(_, _)
+            | UnassignableType { .. }
+            | DuplicatedDeclaration(_, _, _)
+            | InvalidInherit { .. }
+            | InvalidLiteralType(_, _)
+            | OutOfBounds(_, _, _)
+            | WrongNumberOfTypeArguments(_, _, _, _)
+            | InvalidAccessToPrivateMethod(_, _, _)
+            | InvalidTypeParameterReferenceVarianceUsage(_, _, _, _)
+            | IncompleteInitializer(_, _, _) 
+            | UndefinedInitializedVariable(_, _, _) 
+            => DiagnosticLevel::Error,
+
             TooPreciseFloat(_, _, _) => DiagnosticLevel::Warning,
-            WrongNumberOfTypeArguments(_, _, _, _) => DiagnosticLevel::Error,
-            InvalidAccessToPrivateMethod(_, _, _) => DiagnosticLevel::Error,
-            InvalidTypeParameterReferenceVarianceUsage(_, _, _, _) => DiagnosticLevel::Error,
         }
     }
 
@@ -99,6 +108,8 @@ impl Diagnostic {
             WrongNumberOfTypeArguments(_, _, _, _) => 13,
             InvalidAccessToPrivateMethod(_, _, _) => 14,
             InvalidTypeParameterReferenceVarianceUsage(_, _, _, _) => 15,
+            IncompleteInitializer(_, _, _) => 16,
+            UndefinedInitializedVariable(_, _, _) => 17,
         }
     }
 
@@ -209,6 +220,31 @@ impl fmt::Display for Diagnostic {
                 "`{}` cannot be used in {} position, because it's marked as `{}`.",
                 name, usage, mark
             ),
+            IncompleteInitializer(_, selector, uninitialized_names) => {
+                write!(f, "Initializer `{}` must initialize ", selector)?;
+
+                match uninitialized_names.len() {
+                    1 => write!(f, "`{}`.", &uninitialized_names[0]),
+                    2 => write!(
+                        f,
+                        "`{}` and `{}`.",
+                        &uninitialized_names[0], &uninitialized_names[1]
+                    ),
+                    n => {
+                        for (i, name) in uninitialized_names.iter().enumerate() {
+                            if i < n - 1 {
+                                write!(f, "`{}`, ", name)?;
+                            } else {
+                                write!(f, "and `{}`", name)?;
+                            }
+                        }
+                        write!(f, ".")
+                    }
+                }
+            }
+            UndefinedInitializedVariable(_, var_name, class_name) => {
+                write!(f, "`{}` is not a variable of `{}`.", var_name, class_name)
+            }
         }
     }
 }

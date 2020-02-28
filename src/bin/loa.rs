@@ -36,13 +36,13 @@ use crate::docs::{Docs, Versions};
 use crate::pkg::ManifestFile;
 use loa::bytecode::BytecodeEncoding;
 use loa::bytecode::Instruction;
+use loa::optimization::Optimizable;
 use loa::vm::VM;
 use log::LevelFilter;
 use std::convert::identity;
 use std::io::stdout;
 use std::process::exit;
 use std::str::FromStr;
-use loa::optimization::Optimizable;
 
 fn log_to_file() {
     log_panics::init();

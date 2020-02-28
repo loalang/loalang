@@ -1,0 +1,4 @@
+description: An initializer must satisfy a couple of rules.
+expected:
+  success: false
+  stdout: []

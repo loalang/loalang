@@ -122,6 +122,13 @@ impl Node {
         }
     }
 
+    pub fn is_initializer(&self) -> bool {
+        match self.kind {
+            Initializer { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn is_message_send(&self) -> bool {
         match self.kind {
             MessageSendExpression { .. } => true,
