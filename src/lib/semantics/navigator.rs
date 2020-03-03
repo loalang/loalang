@@ -244,12 +244,24 @@ impl Navigator {
                     import_directives: vec![],
                 }))
             } else if node.is_message_pattern() {
-                let signature = self.parent(node)?;
-                let method = self.parent(&signature)?;
-                self.find_usage(&method, DeclarationKind::None, types)
+                let parent = self.parent(node)?;
+                match parent.kind {
+                    Signature { .. } => {
+                        let method = self.parent(&parent)?;
+                        self.find_usage(&method, DeclarationKind::None, types)
+                    }
+                    Initializer { .. } => self.find_usage(&parent, DeclarationKind::None, types),
+                    _ => None,
+                }
             } else if node.is_message() {
                 let method = self.method_from_message(node, types)?;
                 self.find_usage(&method, DeclarationKind::None, types)
+            } else if node.is_initializer() {
+                Some(Arc::new(semantics::Usage {
+                    declaration: node.clone(),
+                    references: self.find_method_references(node, types),
+                    import_directives: vec![],
+                }))
             } else {
                 None
             }

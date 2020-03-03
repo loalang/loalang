@@ -270,6 +270,18 @@ impl Server {
             });
         }
 
+        if let syntax::Initializer {
+            message_pattern, ..
+        } = node.kind
+        {
+            let message_pattern = navigator.find_child(node, message_pattern)?;
+            return Some(server::NamedNode {
+                name_span: message_pattern.span.clone(),
+                name: navigator.message_selector(&message_pattern)?,
+                node: node.clone(),
+            });
+        }
+
         if let syntax::Method { signature, .. } = node.kind {
             let signature = navigator.find_child(node, signature)?;
             if let syntax::Signature {

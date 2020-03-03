@@ -58,8 +58,7 @@ impl Diagnostic {
             | InvalidAccessToPrivateMethod(ref s, _, _)
             | InvalidTypeParameterReferenceVarianceUsage(ref s, _, _, _)
             | IncompleteInitializer(ref s, _, _)
-            | UndefinedInitializedVariable(ref s, _, _)
-            => s,
+            | UndefinedInitializedVariable(ref s, _, _) => s,
         }
     }
 
@@ -81,9 +80,8 @@ impl Diagnostic {
             | WrongNumberOfTypeArguments(_, _, _, _)
             | InvalidAccessToPrivateMethod(_, _, _)
             | InvalidTypeParameterReferenceVarianceUsage(_, _, _, _)
-            | IncompleteInitializer(_, _, _) 
-            | UndefinedInitializedVariable(_, _, _) 
-            => DiagnosticLevel::Error,
+            | IncompleteInitializer(_, _, _)
+            | UndefinedInitializedVariable(_, _, _) => DiagnosticLevel::Error,
 
             TooPreciseFloat(_, _, _) => DiagnosticLevel::Warning,
         }
