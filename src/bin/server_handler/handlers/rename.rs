@@ -42,18 +42,41 @@ impl RenameRequestHandler {
         edits.push(edit)
     }
 
-    fn rename_behaviour(
+    fn rename_method(
         usage: &server::Usage,
         context: &mut ServerContext,
         new_name: String,
     ) -> Option<HashMap<URI, Vec<TextEdit>>> {
-        let mut edits = HashMap::new();
-
         let message_pattern = context
             .server
             .analysis
             .navigator
             .message_pattern_of_method(&usage.declaration.node)?;
+
+        Self::rename_behaviour(usage, message_pattern, context, new_name)
+    }
+
+    fn rename_initializer(
+        usage: &server::Usage,
+        context: &mut ServerContext,
+        new_name: String,
+    ) -> Option<HashMap<URI, Vec<TextEdit>>> {
+        let message_pattern = context
+            .server
+            .analysis
+            .navigator
+            .message_pattern_of_initializer(&usage.declaration.node)?;
+
+        Self::rename_behaviour(usage, message_pattern, context, new_name)
+    }
+
+    fn rename_behaviour(
+        usage: &server::Usage,
+        message_pattern: syntax::Node,
+        context: &mut ServerContext,
+        new_name: String,
+    ) -> Option<HashMap<URI, Vec<TextEdit>>> {
+        let mut edits = HashMap::new();
 
         match message_pattern.kind {
             syntax::UnaryMessagePattern { symbol, .. } => {
@@ -216,8 +239,10 @@ impl RequestHandler for RenameRequestHandler {
         let location = context.server.location(&uri, location)?;
         let usage = context.server.usage(location)?;
 
-        let edits = if usage.is_behaviour() {
-            Self::rename_behaviour(&usage, context, params.new_name.clone())?
+        let edits = if usage.is_method() {
+            Self::rename_method(&usage, context, params.new_name.clone())?
+        } else if usage.is_initializer() {
+            Self::rename_initializer(&usage, context, params.new_name.clone())?
         } else {
             Self::rename_symbol(&usage, params.new_name.clone())?
         };

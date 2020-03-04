@@ -978,6 +978,13 @@ impl Navigator {
         None
     }
 
+    pub fn message_pattern_of_initializer(&self, initializer: &Node) -> Option<Node> {
+        if let Initializer { message_pattern, .. } = initializer.kind {
+            return self.find_child(initializer, message_pattern);
+        }
+        None
+    }
+
     pub fn message_pattern_selector(&self, message_pattern: &Node) -> Option<String> {
         match message_pattern.kind {
             UnaryMessagePattern { symbol, .. } => {

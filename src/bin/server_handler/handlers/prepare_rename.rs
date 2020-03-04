@@ -13,12 +13,25 @@ impl RequestHandler for PrepareRenameRequestHandler {
         let location = context.server.location(&uri, location)?;
         let usage = context.server.usage(location)?;
 
-        let placeholder = if usage.is_behaviour() {
+        let placeholder = if usage.is_method() {
             let message_pattern = context
                 .server
                 .analysis
                 .navigator
                 .message_pattern_of_method(&usage.declaration.node)?;
+            let selector = context
+                .server
+                .analysis
+                .navigator
+                .message_pattern_selector(&message_pattern)?;
+
+            selector
+        } else if usage.is_initializer() {
+            let message_pattern = context
+                .server
+                .analysis
+                .navigator
+                .message_pattern_of_initializer(&usage.declaration.node)?;
             let selector = context
                 .server
                 .analysis

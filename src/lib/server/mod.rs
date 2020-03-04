@@ -27,8 +27,12 @@ impl Usage {
         self.handle.name != self.declaration.name
     }
 
-    pub fn is_behaviour(&self) -> bool {
+    pub fn is_method(&self) -> bool {
         self.declaration.node.is_method()
+    }
+
+    pub fn is_initializer(&self) -> bool {
+        self.declaration.node.is_initializer()
     }
 }
 
