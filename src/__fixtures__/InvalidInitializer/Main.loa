@@ -45,3 +45,17 @@ export class ExtraneousVariable {
   public init new =>
     x: True. //$ `x` is not a variable of `ExtraneousVariable`.
 }
+
+export class SingleVariableConstInitiailized {
+  private var Boolean a = True.
+
+  public init new.
+}
+
+export class OneOfTwoVariablesConstInitiailized {
+  private var Boolean a = True.
+  private var Boolean b.
+
+  public init new =>
+    b: False.
+}

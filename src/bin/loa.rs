@@ -57,12 +57,15 @@ fn log_to_file() {
             log_file
         })
         .unwrap();
-    simple_logging::log_to(log_file, log::LevelFilter::Info);
+    #[cfg(debug_assertions)]
+    simple_logging::log_to(log_file, LevelFilter::Info);
+    #[cfg(not(debug_assertions))]
+    simple_logging::log_to(log_file, LevelFilter::Error);
 }
 
 fn log_to_stderr() {
     #[cfg(debug_assertions)]
-    simple_logging::log_to_stderr(LevelFilter::Debug);
+    simple_logging::log_to_stderr(LevelFilter::Info);
     #[cfg(not(debug_assertions))]
     simple_logging::log_to_stderr(LevelFilter::Error);
 }

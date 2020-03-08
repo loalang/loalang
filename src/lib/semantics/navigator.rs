@@ -979,7 +979,10 @@ impl Navigator {
     }
 
     pub fn message_pattern_of_initializer(&self, initializer: &Node) -> Option<Node> {
-        if let Initializer { message_pattern, .. } = initializer.kind {
+        if let Initializer {
+            message_pattern, ..
+        } = initializer.kind
+        {
             return self.find_child(initializer, message_pattern);
         }
         None
@@ -1545,13 +1548,21 @@ impl Navigator {
     }
 
     fn has_class_object_impl(&self, class: &Node) -> Option<bool> {
-        if let Class { class_body, .. } = class.kind {
+        if let Class {
+            class_body,
+            ref partial_keyword,
+            ..
+        } = class.kind
+        {
+            if partial_keyword.is_some() {
+                return Some(true);
+            }
             let class_body = self.find_child(class, class_body)?;
             if let ClassBody { class_members, .. } = class_body.kind {
                 for member in class_members {
                     if let Some(member) = self.find_child(class, member) {
                         match member.kind {
-                            Initializer { .. } => return Some(true),
+                            Initializer { .. } | Variable { .. } => return Some(true),
                             _ => {}
                         }
                     }
@@ -1630,6 +1641,14 @@ impl Navigator {
                 .collect()
         } else {
             vec![]
+        }
+    }
+
+    pub fn variable_has_const_initializer(&self, variable: &Node) -> bool {
+        if let Variable { expression, .. } = variable.kind {
+            !expression.is_null()
+        } else {
+            false
         }
     }
 }

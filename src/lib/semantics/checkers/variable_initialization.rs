@@ -18,11 +18,18 @@ impl VariableInitialization {
                 .filter_map(|v| analysis.navigator.symbol_of(v))
                 .map(|(name, _)| name)
                 .collect::<Vec<_>>();
+            let default_initialized_names = variables
+                .iter()
+                .filter(|v| analysis.navigator.variable_has_const_initializer(v))
+                .filter_map(|v| analysis.navigator.symbol_of(v))
+                .map(|(name, _)| name)
+                .collect::<Vec<_>>();
             for initializer in analysis.navigator.initializers_of(class) {
                 self.check_initializer(
                     &class_name,
                     &initializer,
                     &variable_names,
+                    &default_initialized_names,
                     analysis,
                     diagnostics,
                 )
@@ -36,6 +43,7 @@ impl VariableInitialization {
         class_name: &String,
         initializer: &Node,
         variable_names: &Vec<String>,
+        default_initialized_names: &Vec<String>,
         analysis: &mut Analysis,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Option<()> {
@@ -60,6 +68,10 @@ impl VariableInitialization {
                         extraneous_names.push((initialized_name, symbol));
                     }
                 });
+
+            for default_init in default_initialized_names.iter() {
+                uninitialized_names.remove(default_init);
+            }
 
             if !uninitialized_names.is_empty() {
                 let message_pattern = analysis

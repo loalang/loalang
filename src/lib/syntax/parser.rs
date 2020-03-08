@@ -5,7 +5,7 @@ use num_traits::pow::Pow;
 
 macro_rules! sees {
     ($self:expr, $($pattern:tt)+) => {
-        match &$self.tokens[0].kind {
+        match &$self.peek().kind {
             $($pattern)+ => true,
             _ => false,
         }
@@ -42,6 +42,12 @@ impl Parser {
     }
 
     fn next(&mut self) -> Token {
+        #[cfg(debug_assertions)]
+        {
+            if sees!(self, EOF) {
+                panic!("EOF is being consumed!");
+            }
+        }
         let before = std::mem::replace(&mut self.leading_insignificants, vec![]);
         let mut token = self.next_insignificant();
         self.last_token_span = token.span.clone();
@@ -53,6 +59,12 @@ impl Parser {
 
     #[inline]
     fn peek(&self) -> &Token {
+        #[cfg(debug_assertions)]
+        {
+            if self.tokens.len() == 0 {
+                panic!("EOF was consumed!");
+            }
+        }
         &self.tokens[0]
     }
 
@@ -346,6 +358,10 @@ impl Parser {
     }
 
     fn parse_symbol(&mut self, builder: NodeBuilder) -> Id {
+        if !sees!(self, SimpleSymbol(_)) {
+            self.syntax_error("Expected a symbol.");
+            return Id::NULL;
+        }
         let token = self.next();
         self.finalize(builder, Symbol(token))
     }
