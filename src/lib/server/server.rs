@@ -346,7 +346,7 @@ impl Server {
                         .filter(|b| {
                             self.analysis
                                 .navigator
-                                .find_node(b.method_id)
+                                .find_node(b.id)
                                 .and_then(|method| {
                                     self.analysis
                                         .navigator

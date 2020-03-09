@@ -1,0 +1,6 @@
+description: A class can inherit variables from another class.
+main_class: InheritedVariables/Main
+expected:
+  success: true
+  stdout:
+    - Hello World!

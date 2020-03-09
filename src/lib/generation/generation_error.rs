@@ -10,8 +10,10 @@ pub enum GenerationError {
 }
 
 impl From<NoneError> for GenerationError {
-    fn from(e: NoneError) -> Self {
-        panic!(e)
-        // GenerationError::TraversalFailure
+    fn from(_: NoneError) -> Self {
+        #[cfg(debug_assertions)]
+        panic!("Generation stopped because of faulty syntax tree.");
+        #[cfg(not(debug_assertions))]
+        GenerationError::TraversalFailure
     }
 }

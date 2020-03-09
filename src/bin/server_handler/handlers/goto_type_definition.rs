@@ -21,7 +21,7 @@ impl GotoTypeDefinitionRequestHandler {
                 Some(convert::from_loa::span_to_location(s.span).into())
             }
             semantics::Type::Behaviour(b) => {
-                let method = navigator.find_node(b.method_id)?;
+                let method = navigator.find_node(b.id)?;
                 Some(convert::from_loa::span_to_location(method.span).into())
             }
         }

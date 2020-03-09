@@ -248,7 +248,7 @@ fn main() -> Result<(), clap::Error> {
 
     match cli.subcommand() {
         ("repl", Some(matches)) => {
-            log_to_file();
+            log_to_stderr();
             repl::repl(!matches.is_present("no_stdlib"))
         }
 

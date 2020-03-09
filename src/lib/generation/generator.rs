@@ -286,8 +286,20 @@ impl<'a> Generator<'a> {
                 init_section.add_instruction(InstructionKind::LoadObject(name.into()));
                 self.simulated_stack.push_expression(Id::NULL);
 
+                let variables = self
+                    .analysis
+                    .navigator
+                    .variables_of_class(class)
+                    .into_iter()
+                    .filter_map(|v| Some((self.analysis.navigator.symbol_of(&v)?.0, v)))
+                    .collect::<HashMap<_, _>>();
+
                 for (v, a) in assignments.iter() {
-                    let label = format!("{}#{}:", name, v);
+                    let variable = variables.get(v)?;
+                    let owning_class = self.analysis.navigator.closest_class_upwards(&variable)?;
+                    let (owning_class_name, _, _) =
+                        self.analysis.navigator.qualified_name_of(&owning_class)?;
+                    let label = format!("{}#{}:", owning_class_name, v);
                     let Location {
                         ref uri,
                         line,
@@ -339,7 +351,7 @@ impl<'a> Generator<'a> {
 
         let mut methods_section = Section::named(format!("{}$methods", qn));
 
-        for variable in self.analysis.navigator.variables_of_class(class) {
+        for variable in self.analysis.navigator.own_variables_of_class(class) {
             let (variable_name, _) = self.analysis.navigator.symbol_of(&variable)?;
             let variable_label = format!("{}({})", qn, variable_name);
             let getter_label = format!("{}#{}", qn, variable_name);
@@ -391,16 +403,32 @@ impl<'a> Generator<'a> {
             .types
             .get_behaviours(&self.analysis.types.get_type_of_declaration(class))
         {
-            let method = self.analysis.navigator.find_node(behaviour.method_id)?;
+            let method = self.analysis.navigator.find_node(behaviour.id)?;
             let owning_class = self.analysis.navigator.closest_class_upwards(&method)?;
 
             if owning_class.id != class.id {
                 let (owning_class_qn, _, _) =
                     self.analysis.navigator.qualified_name_of(&owning_class)?;
-                let selector = self.analysis.navigator.method_selector(&method)?;
-                let label = format!("{}#{}", owning_class_qn, selector);
 
-                section.add_instruction(InstructionKind::UseMethod(label));
+                let behaviour_node = self.analysis.navigator.find_node(behaviour.id)?;
+                match behaviour_node.kind {
+                    Method { .. } => {
+                        let label = format!("{}#{}", owning_class_qn, behaviour.selector());
+                        section.add_instruction(InstructionKind::UseMethod(label));
+                    }
+                    Variable { .. } => {
+                        if let BehaviourMessage::Unary(ref selector) = behaviour.message {
+                            let label = format!("{}({})", owning_class_qn, selector);
+                            section.add_instruction(InstructionKind::UseVariable(label));
+                        }
+                    }
+                    _ => {
+                        return Err(invalid_node(
+                            &behaviour_node,
+                            "expected a value behaviour node",
+                        ))
+                    }
+                }
             }
         }
 

@@ -86,7 +86,7 @@ impl TypeParameterVariance {
         match expected_position {
             SignaturePosition::In => {
                 if self.type_parameter_is_used_in_type(behaviour.return_type, type_parameter) {
-                    let method = analysis.navigator.find_node(behaviour.method_id)?;
+                    let method = analysis.navigator.find_node(behaviour.id)?;
                     diagnostics.push(Diagnostic::InvalidTypeParameterReferenceVarianceUsage(
                         method.span,
                         analysis.navigator.symbol_of(type_parameter)?.0,
@@ -97,7 +97,7 @@ impl TypeParameterVariance {
             }
             SignaturePosition::Out => {
                 if self.type_parameter_is_used_in_message(behaviour.message, type_parameter) {
-                    let method = analysis.navigator.find_node(behaviour.method_id)?;
+                    let method = analysis.navigator.find_node(behaviour.id)?;
                     diagnostics.push(Diagnostic::InvalidTypeParameterReferenceVarianceUsage(
                         method.span,
                         analysis.navigator.symbol_of(type_parameter)?.0,

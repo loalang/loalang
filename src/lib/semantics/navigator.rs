@@ -9,6 +9,7 @@ pub struct Navigator {
     usage_cache: Cache<(DeclarationKind, Id), Option<Arc<Usage>>>,
     stdlib_class_cache: Cache<String, Option<Node>>,
     stdlib_classes_cache: Cache<(), HashMap<String, Node>>,
+    variables_cache: Cache<Id, Vec<Node>>,
 }
 
 impl Navigator {
@@ -18,6 +19,7 @@ impl Navigator {
             usage_cache: Cache::new(),
             stdlib_class_cache: Cache::new(),
             stdlib_classes_cache: Cache::new(),
+            variables_cache: Cache::new(),
         }
     }
 
@@ -278,7 +280,7 @@ impl Navigator {
             let selector = self.message_selector(message)?;
             for behaviour in behaviours {
                 if behaviour.selector() == selector {
-                    return self.find_node(behaviour.method_id);
+                    return self.find_node(behaviour.id);
                 }
             }
         }
@@ -1057,7 +1059,7 @@ impl Navigator {
         methods
     }
 
-    pub fn variables_of_class(&self, class: &Node) -> Vec<Node> {
+    pub fn own_variables_of_class(&self, class: &Node) -> Vec<Node> {
         let mut variables = vec![];
 
         if let Class { class_body, .. } = class.kind {
@@ -1068,7 +1070,7 @@ impl Navigator {
                 {
                     for class_member in class_members.iter() {
                         if let Some(class_member) = self.find_child(&class_body, *class_member) {
-                            if let Variable { .. } = class_member.kind {
+                            if class_member.is_variable() {
                                 variables.push(class_member);
                             }
                         }
@@ -1078,6 +1080,56 @@ impl Navigator {
         }
 
         variables
+    }
+
+    pub fn variables_of_class(&self, class: &Node) -> Vec<Node> {
+        self.variables_cache.gate(&class.id, || {
+            let mut variables = HashMap::new();
+
+            if let Class { class_body, .. } = class.kind {
+                if let Some(class_body) = self.find_child(class, class_body) {
+                    if let ClassBody {
+                        ref class_members, ..
+                    } = class_body.kind
+                    {
+                        for class_member in class_members.iter() {
+                            if let Some(class_member) = self.find_child(&class_body, *class_member)
+                            {
+                                match class_member.kind {
+                                    Variable { .. } => {
+                                        if let Some((n, _)) = self.symbol_of(&class_member) {
+                                            variables.insert(n, class_member);
+                                        }
+                                    }
+                                    IsDirective {
+                                        type_expression, ..
+                                    } => {
+                                        self.find_child(&class_member, type_expression)
+                                            .and_then(|t| {
+                                                self.find_declaration(&t, DeclarationKind::Type)
+                                            })
+                                            .map(|c| {
+                                                if let Class { .. } = c.kind {
+                                                    for v in self.variables_of_class(&c) {
+                                                        if let Some((n, _)) = self.symbol_of(&v) {
+                                                            if !variables.contains_key(&n) {
+                                                                variables.insert(n, v);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            variables.into_iter().map(|(_, v)| v).collect()
+        })
     }
 
     pub fn message_arity(&self, message: &Node) -> Option<usize> {

@@ -122,6 +122,13 @@ impl Node {
         }
     }
 
+    pub fn is_variable(&self) -> bool {
+        match self.kind {
+            Variable { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn is_initializer(&self) -> bool {
         match self.kind {
             Initializer { .. } => true,

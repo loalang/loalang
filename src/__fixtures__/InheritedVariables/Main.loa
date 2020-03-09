@@ -1,0 +1,18 @@
+namespace InheritedVariables.
+
+export class Main {
+  public run =>
+    let Super super = Sub of: "Hello World!".
+    super variable.
+}
+
+export class Super {
+  public var String variable.
+}
+
+export class Sub {
+  is Super.
+
+  public init of: String value =>
+    variable: value.
+}

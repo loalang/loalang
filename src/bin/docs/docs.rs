@@ -165,10 +165,7 @@ impl BehaviourDoc {
     pub fn extract(analysis: &Analysis, behaviour: &Behaviour) -> Option<BehaviourDoc> {
         Some(BehaviourDoc {
             selector: behaviour.selector(),
-            description: Markup::extract(
-                analysis,
-                &analysis.navigator.find_node(behaviour.method_id)?,
-            )?,
+            description: Markup::extract(analysis, &analysis.navigator.find_node(behaviour.id)?)?,
             signature: SignatureDoc::extract(analysis, behaviour)?,
         })
     }

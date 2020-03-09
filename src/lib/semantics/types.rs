@@ -291,7 +291,7 @@ impl Types {
 
                                 Some(Behaviour {
                                     message,
-                                    method_id: member.id,
+                                    id: member.id,
                                     receiver_type: class_object_type.clone(),
                                     return_type: class_type.clone(),
                                 })
@@ -423,13 +423,13 @@ impl Types {
             Behaviour {
                 receiver_type: receiver_type.clone(),
                 message: BehaviourMessage::Unary(name.clone()),
-                method_id: variable.id,
+                id: variable.id,
                 return_type: type_.clone(),
             },
             Behaviour {
                 receiver_type: receiver_type.clone(),
                 message: BehaviourMessage::Keyword(vec![(name, type_)]),
-                method_id: variable.id,
+                id: variable.id,
                 return_type: Type::Self_(Box::new(receiver_type)),
             },
         ])
@@ -524,7 +524,7 @@ impl Types {
 
                 return Some(Behaviour {
                     receiver_type,
-                    method_id: method.id,
+                    id: method.id,
                     message,
                     return_type: resolved_return_type,
                 });
@@ -838,7 +838,7 @@ impl Default for Type {
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct Behaviour {
     pub receiver_type: Type,
-    pub method_id: Id,
+    pub id: Id,
     pub message: BehaviourMessage,
     pub return_type: Type,
 }
@@ -866,7 +866,7 @@ impl Behaviour {
     pub fn with_self(self, self_: &Type) -> Behaviour {
         Behaviour {
             receiver_type: self.receiver_type.with_self(self_),
-            method_id: self.method_id,
+            id: self.id,
             message: match self.message {
                 BehaviourMessage::Unary(s) => BehaviourMessage::Unary(s),
                 BehaviourMessage::Binary(o, pt) => BehaviourMessage::Binary(o, pt.with_self(self_)),
@@ -956,7 +956,7 @@ impl Behaviour {
     pub fn with_applied_type_arguments(self, map: &HashMap<Id, Type>) -> Behaviour {
         Behaviour {
             receiver_type: self.receiver_type.with_applied_type_arguments(map),
-            method_id: self.method_id,
+            id: self.id,
             message: match self.message {
                 BehaviourMessage::Unary(s) => BehaviourMessage::Unary(s),
                 BehaviourMessage::Binary(o, pt) => {
