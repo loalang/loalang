@@ -280,7 +280,7 @@ impl<'a> Generator<'a> {
                     .initializer_assignments(&initializer);
 
                 for (_, argument) in assignments.iter().rev() {
-                    self.generate_expression(assembly, &mut init_section, &argument)?;
+                    self.generate_expression_maybe_lazy(assembly, &mut init_section, &argument)?;
                 }
 
                 init_section.add_instruction(InstructionKind::LoadObject(name.into()));
@@ -567,6 +567,20 @@ impl<'a> Generator<'a> {
         self.qualified_type_name(&behaviour.receiver_type)
     }
 
+    fn generate_expression_maybe_lazy(
+        &mut self,
+        assembly: &mut Assembly,
+        section: &mut Section,
+        expression: &Node,
+    ) -> GenerationResult<()> {
+        match expression.kind {
+            TupleExpression { .. } | MessageSendExpression { .. } | PanicExpression { .. } => {
+                self.generate_lazy(assembly, section, expression)
+            }
+            _ => self.generate_expression(assembly, section, expression),
+        }
+    }
+
     fn generate_expression(
         &mut self,
         assembly: &mut Assembly,
@@ -649,16 +663,7 @@ impl<'a> Generator<'a> {
                 let message = self.analysis.navigator.find_child(expression, message)?;
                 let arguments = self.analysis.navigator.message_arguments(&message);
                 for argument in arguments.iter().rev() {
-                    match argument.kind {
-                        TupleExpression { .. }
-                        | MessageSendExpression { .. }
-                        | PanicExpression { .. } => {
-                            self.generate_lazy(assembly, section, argument)?;
-                        }
-                        _ => {
-                            self.generate_expression(assembly, section, argument)?;
-                        }
-                    }
+                    self.generate_expression_maybe_lazy(assembly, section, argument)?;
                 }
 
                 // Receiver
