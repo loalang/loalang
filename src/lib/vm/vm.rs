@@ -202,7 +202,7 @@ impl VM {
                         );
 
                         if let Some(var) = class.variable_getters.get(offset) {
-                            let receiver = unwrap!(self, self.pop());
+                            let receiver = unwrap!(self, self.pop_eval::<M>());
                             let value = expect!(
                                 self,
                                 receiver.get_variable(var),
