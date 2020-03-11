@@ -705,6 +705,7 @@ impl BytecodeEncoding for NativeMethod {
             NATIVE_NUMBER_PLUS => Ok(NativeMethod::Number_plus),
             NATIVE_NUMBER_MINUS => Ok(NativeMethod::Number_minus),
             NATIVE_OBJECT_EQ => Ok(NativeMethod::Object_eq),
+            NATIVE_OBJECT_AS_STRING => Ok(NativeMethod::Object_asString),
             _ => Err(io::ErrorKind::InvalidInput.into()),
         }
     }
