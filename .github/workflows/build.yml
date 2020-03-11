@@ -1,0 +1,123 @@
+name: Build
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v2
+
+      - name: Set up the Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: nightly
+            override: true
+
+      - name: Cache cargo registry
+        uses: actions/cache@v1
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v1
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v1
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build the binaries
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --features build-bin-loa,build-bin-vm
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p loa/{bin,lib/loa,var/log}
+          touch loa/var/log/loa.log
+          cp -r src/bin/docs/public loa/lib/loa/docs-html
+          cp -r std loa/lib/loa/std
+          rm -rf loa/lib/loa/std/.git
+          cp target/release/loa target/release/loavm loa/
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p loa/{bin,lib/loa,var/log}
+          touch loa/var/log/loa.log
+          cp -r src/bin/docs/public loa/lib/loa/docs-html
+          cp -r std loa/lib/loa/std
+          rm -rf loa/lib/loa/std/.git
+          Copy-Item -Path @("target\release\loa.exe", "target\release\loavm.exe") -Destination "loa"
+
+      - name: Pack tarball
+        run: tar -czf ${{ runner.os }}-${{ github.sha }}.tar.gz loa
+
+      - name: Upload tarball
+        uses: actions/upload-artifact@v1
+        with:
+          name: ${{ runner.os }}-${{ github.sha }}
+          path: ${{ runner.os }}-${{ github.sha }}.tar.gz
+
+  release:
+    runs-on: ubuntu-latest
+    if: contains(github.ref, '.')
+    needs: build
+    steps:
+      - name: Download MacOS
+        uses: actions/download-artifact@v1
+        with:
+          name: macOS-${{ github.sha }}
+          path: dist
+
+      - name: Download Linux
+        uses: actions/download-artifact@v1
+        with:
+          name: Linux-${{ github.sha }}
+          path: dist
+
+      - name: Download Windows
+        uses: actions/download-artifact@v1
+        with:
+          name: Windows-${{ github.sha }}
+          path: dist
+
+      - name: Publish MacOS
+        uses: actions-hub/gcloud@master
+        env:
+          PROJECT: loalang
+          APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          CLI: gsutil
+        with:
+          args: cp dist/macOS-${{ github.sha }}.tar.gz gs://cdn.loalang.xyz/${{ github.ref }}-x86_64-macos.tar.gz
+
+      - name: Publish Linux
+        uses: actions-hub/gcloud@master
+        env:
+          PROJECT: loalang
+          APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          CLI: gsutil
+        with:
+          args: cp dist/Linux-${{ github.sha }}.tar.gz gs://cdn.loalang.xyz/${{ github.ref }}-x86_64-linux.tar.gz
+
+      - name: Publish Windows
+        uses: actions-hub/gcloud@master
+        env:
+          PROJECT: loalang
+          APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          CLI: gsutil
+        with:
+          args: cp dist/Windows-${{ github.sha }}.tar.gz gs://cdn.loalang.xyz/${{ github.ref }}-x86_64-windows.tar.gz
