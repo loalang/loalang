@@ -83,6 +83,12 @@ impl Object {
     }
 
     pub fn box_const(const_value: ConstValue, class_ptr: &mut *const Class) -> Arc<Object> {
+        #[cfg(debug_assertions)]
+        {
+            if *class_ptr == null() {
+                panic!("Tried to box {:?}, but class was not loaded.", const_value);
+            }
+        }
         let class = unsafe { Arc::from_raw(*class_ptr) };
         *class_ptr = Arc::into_raw(class.clone());
         Arc::new(Object {

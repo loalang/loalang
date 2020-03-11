@@ -28,7 +28,7 @@ impl Source {
         Source::new(
             SourceKind::REPLLine,
             URI::Main,
-            format!("import {}.\n\n{} run.", main_class, class_name),
+            format!("import {}.\n\n{} run asString.", main_class, class_name),
         )
     }
 

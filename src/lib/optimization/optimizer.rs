@@ -265,6 +265,10 @@ impl Optimizer {
                             mark!(?self.false_class_label);
                         }
 
+                        InstructionKind::CallNative(NativeMethod::Object_asString) => {
+                            mark!(?self.string_class_label);
+                        }
+
                         InstructionKind::LoadConstString(_) => mark!(?self.string_class_label),
                         InstructionKind::LoadConstCharacter(_) => {
                             mark!(?self.character_class_label)
