@@ -3,4 +3,4 @@ main_class: BasicInitializer/Main
 expected:
   success: true
   stdout:
-    - a BasicInitializer/X
+    - BasicInitializer/X

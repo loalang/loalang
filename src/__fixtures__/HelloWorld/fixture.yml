@@ -3,4 +3,4 @@ main_class: HelloWorld/Main
 expected:
   success: true
   stdout:
-    - a HelloWorld/Main
+    - HelloWorld/Main

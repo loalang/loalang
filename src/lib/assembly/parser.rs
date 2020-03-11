@@ -654,6 +654,9 @@ impl Parser {
         } else if code.starts_with("Loa/Object#==") {
             code.drain(.."Loa/Object#==".len());
             Ok(NativeMethod::Object_eq)
+        } else if code.starts_with("Loa/Object#asString") {
+            code.drain(.."Loa/Object#asString".len());
+            Ok(NativeMethod::Object_asString)
         } else {
             Err(ParseError::ExpectedNativeMethod(code.clone()))
         }

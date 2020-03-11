@@ -15,6 +15,7 @@ where
             NativeMethod::Number_plus => Self::number_plus(vm),
             NativeMethod::Number_minus => Self::number_minus(vm),
             NativeMethod::Object_eq => Self::object_eq(vm),
+            NativeMethod::Object_asString => Self::object_asString(vm),
         }
     }
 
@@ -23,6 +24,15 @@ where
         let operand = unwrap!(vm, vm.pop_eval::<Self>());
 
         vm.push(Object::box_bool(receiver == operand));
+
+        VMResult::Ok(())
+    }
+
+    #[allow(non_snake_case)]
+    fn object_asString(vm: &mut VM) -> VMResult<()> {
+        let receiver = unwrap!(vm, vm.pop_eval::<Self>());
+
+        vm.push(Object::box_string(format!("{}", receiver)));
 
         VMResult::Ok(())
     }
@@ -1004,6 +1014,7 @@ pub enum NativeMethod {
     Number_plus,
     Number_minus,
     Object_eq,
+    Object_asString,
 }
 
 impl<'a> From<&'a str> for NativeMethod {
@@ -1013,6 +1024,7 @@ impl<'a> From<&'a str> for NativeMethod {
             "Loa/Number#+" => Number_plus,
             "Loa/Number#-" => Number_minus,
             "Loa/Object#==" => Object_eq,
+            "Loa/Object#asString" => Object_asString,
             n => panic!("unknown native method: {}", n),
         }
     }
@@ -1025,6 +1037,7 @@ impl std::fmt::Display for NativeMethod {
             Number_plus => write!(f, "Loa/Number#+"),
             Number_minus => write!(f, "Loa/Number#-"),
             Object_eq => write!(f, "Loa/Object#=="),
+            Object_asString => write!(f, "Loa/Object#asString"),
         }
     }
 }

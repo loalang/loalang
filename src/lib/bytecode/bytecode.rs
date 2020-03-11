@@ -686,6 +686,7 @@ impl BytecodeEncoding for Vec<Instruction> {
 const NATIVE_NUMBER_PLUS: u8 = 0x1a;
 const NATIVE_NUMBER_MINUS: u8 = 0x1b;
 const NATIVE_OBJECT_EQ: u8 = 0x1c;
+const NATIVE_OBJECT_AS_STRING: u8 = 0x1d;
 
 impl BytecodeEncoding for NativeMethod {
     fn serialize<W: Write>(&self, w: W) -> io::Result<usize> {
@@ -693,6 +694,7 @@ impl BytecodeEncoding for NativeMethod {
             NativeMethod::Number_plus => NATIVE_NUMBER_PLUS,
             NativeMethod::Number_minus => NATIVE_NUMBER_MINUS,
             NativeMethod::Object_eq => NATIVE_OBJECT_EQ,
+            NativeMethod::Object_asString => NATIVE_OBJECT_AS_STRING,
         }
         .serialize(w)
     }

@@ -599,7 +599,7 @@ mod tests {
                 LoadLocal 0
                 Return 1
             "#,
-            "a SomeClass",
+            "SomeClass",
         );
     }
 
@@ -629,7 +629,7 @@ mod tests {
                 LoadLocal 0
                 Return 1
             "#,
-            "a B",
+            "B",
         );
     }
 
@@ -766,7 +766,7 @@ mod tests {
                 LoadLocal 1
                 Return 2
             "#,
-            "a B",
+            "B",
         );
     }
 
@@ -784,7 +784,7 @@ mod tests {
                 LoadObject @SomeClass
                 ReturnLazy 0
             "#,
-            "a SomeClass",
+            "SomeClass",
         );
     }
 
@@ -833,7 +833,7 @@ mod tests {
                 LoadObject @A
                 Return 1
             "#,
-            "a A",
+            "A",
         );
     }
 
@@ -878,7 +878,7 @@ mod tests {
             @N/A#b:
               Noop
             "#,
-            "a N/A(b=a N/B)",
+            "a N/A(b=N/B)",
         );
     }
 
@@ -905,7 +905,7 @@ mod tests {
             CallNative Loa/Object#==
             Halt
             "#,
-            "a False",
+            "False",
         );
     }
 }

@@ -178,7 +178,7 @@ impl fmt::Display for Object {
         match &self.const_value {
             ConstValue::Nothing => write!(
                 f,
-                "a {}",
+                "{}",
                 self.class.as_ref().map(|c| c.name.as_ref()).unwrap_or("")
             ),
             ConstValue::InstanceVariables(ref v) => write!(
