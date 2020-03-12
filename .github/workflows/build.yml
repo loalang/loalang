@@ -10,8 +10,11 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
     steps:
-      - name: Check out the code
+      - name: Check out Compiler
         uses: actions/checkout@v2
+
+      - name: Check out Standard Library
+        run: git submodule update --init
 
       - name: Set up the Rust toolchain
         uses: actions-rs/toolchain@v1
