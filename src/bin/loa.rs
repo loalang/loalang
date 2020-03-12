@@ -3,6 +3,7 @@
 extern crate clap;
 extern crate colored;
 extern crate crypto;
+extern crate dirs;
 extern crate graphql_client;
 extern crate http;
 extern crate ignore;
@@ -19,7 +20,6 @@ extern crate serde_yaml;
 extern crate simple_logging;
 extern crate tar;
 extern crate tee;
-extern crate dirs;
 
 mod docs;
 mod repl;

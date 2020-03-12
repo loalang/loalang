@@ -17,7 +17,7 @@ pub fn sdk_dir() -> PathBuf {
         .expect("Please set the LOA_SDK environment variable")
 }
 
-pub fn sdk_path<S: AsRef<Path>, I: IntoIterator<Item=S>>(segments: I) -> PathBuf {
+pub fn sdk_path<S: AsRef<Path>, I: IntoIterator<Item = S>>(segments: I) -> PathBuf {
     let mut path = sdk_dir();
     path.extend(segments);
     path
