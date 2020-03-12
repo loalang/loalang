@@ -1,4 +1,4 @@
-#![feature(box_patterns, try_trait, matches_macro)]
+#![feature(box_patterns, try_trait)]
 
 pub use std::any::Any;
 pub use std::borrow::Cow;
