@@ -114,7 +114,7 @@ jobs:
       - name: Publish MacOS
         uses: actions-hub/gcloud@master
         env:
-          PROJECT: loalang
+          PROJECT_ID: loalang
           APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
           CLI: gsutil
         with:
@@ -123,7 +123,7 @@ jobs:
       - name: Publish Linux
         uses: actions-hub/gcloud@master
         env:
-          PROJECT: loalang
+          PROJECT_ID: loalang
           APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
           CLI: gsutil
         with:
@@ -132,7 +132,7 @@ jobs:
       - name: Publish Windows
         uses: actions-hub/gcloud@master
         env:
-          PROJECT: loalang
+          PROJECT_ID: loalang
           APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
           CLI: gsutil
         with:
