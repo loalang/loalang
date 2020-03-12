@@ -63,7 +63,7 @@ jobs:
           New-Item -ItemType "file" -Path "loa\var\log" -Name "loa.log"
           Copy-Item -Path "src\bin\docs\public" -Destination "loa\lib\loa\docs-html" -Recurse
           Copy-Item -Path "std" -Destination "loa\lib\loa\std" -Recurse
-          Remove-Item "loa\lib\loa\std\.git" -Recurse
+          Remove-Item -LiteralPath "loa\lib\loa\std\.git" -Force -Recurse -ErrorAction SilentlyContinue
           Copy-Item -Path @("target\release\loa.exe", "target\release\loavm.exe") -Destination "loa"
 
       - name: Pack tarball
