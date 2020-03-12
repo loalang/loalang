@@ -166,7 +166,7 @@ fn next_token(
                 let mut chars = vec![];
                 loop {
                     match stream.peek() {
-                        Some((_, NEWLINE)) | None => break,
+                        Some((_, NEWLINE)) | Some((_, CARRIAGE_RETURN)) | None => break,
                         Some((_, _)) => {
                             let (o, c) = stream.next().unwrap();
                             end_offset = o;
@@ -514,7 +514,7 @@ fn next_doc_token(
     let (offset, first_char) = stream.next()?;
 
     match first_char {
-        NEWLINE => {
+        NEWLINE | CARRIAGE_RETURN => {
             if sees_doc_newline(stream).unwrap_or(false) {
                 stream.reset_view();
                 return consume_doc_newline(source, stream, offset, first_char);
@@ -593,6 +593,7 @@ fn next_doc_token(
         match stream.peek() {
             None
             | Some((_, NEWLINE))
+            | Some((_, CARRIAGE_RETURN))
             | Some((_, UNDERSCORE))
             | Some((_, ASTERISK))
             | Some((_, OPEN_BRACKET))
