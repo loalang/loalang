@@ -73,7 +73,7 @@ impl Source {
     }
 
     pub fn stdlib() -> io::Result<Vec<Arc<Source>>> {
-        Self::files_with_uri("/usr/local/lib/loa/std/**/*.loa", |path| URI::Stdlib(path))
+        Self::files_with_uri(sdk_glob(&["std", "**", "*.loa"]).as_ref(), |path| URI::Stdlib(path))
     }
 
     pub fn len(&self) -> usize {

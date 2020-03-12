@@ -3,7 +3,6 @@
 extern crate clap;
 extern crate colored;
 extern crate crypto;
-extern crate dirs;
 extern crate graphql_client;
 extern crate http;
 extern crate ignore;
@@ -20,6 +19,7 @@ extern crate serde_yaml;
 extern crate simple_logging;
 extern crate tar;
 extern crate tee;
+extern crate dirs;
 
 mod docs;
 mod repl;
@@ -49,13 +49,7 @@ fn log_to_file() {
     let log_file = std::fs::OpenOptions::new()
         .append(true)
         .create(true)
-        .open({
-            let mut log_file = dirs::config_dir().unwrap();
-            log_file.push("loa");
-            std::fs::create_dir_all(&log_file).expect("need write permission to config directory");
-            log_file.push("loa.log");
-            log_file
-        })
+        .open(loa::sdk_path(&["log", "loa.log"]))
         .unwrap();
     #[cfg(debug_assertions)]
     simple_logging::log_to(log_file, LevelFilter::Info);

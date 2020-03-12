@@ -20,7 +20,7 @@ pub fn serve(port: u16, mut docs: docs::Docs) {
 
     let new_svc = move || {
         let docs = serde_json::to_string(&docs).unwrap();
-        let docs_html = hyper_staticfile::Static::new("/usr/local/lib/loa/docs-html");
+        let docs_html = hyper_staticfile::Static::new(loa::sdk_path(&["docs", "html"]));
 
         service_fn(move |req| {
             if req.uri().path() == "/docs.json" {

@@ -49,22 +49,36 @@ jobs:
       - name: Package (Unix)
         if: runner.os != 'Windows'
         run: |
-          mkdir -p loa/{bin,lib/loa,var/log}
-          touch loa/var/log/loa.log
-          cp -r src/bin/docs/public loa/lib/loa/docs-html
-          cp -r std loa/lib/loa/std
-          rm -rf loa/lib/loa/std/.git
-          cp target/release/loa target/release/loavm loa/
+          mkdir sdk
+
+          mkdir sdk/docs
+          cp -r src/bin/docs/public sdk/docs/html
+
+          cp -r std sdk/std
+          rm -rf sdk/std/.git
+
+          mkdir sdk/bin
+          cp target/release/loa target/release/loavm loa/bin/
+
+          mkdir sdk/log
+          touch sdk/log/loa.log
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         run: |
-          New-Item -ItemType "directory" -Path "loa", "loa\bin", "loa\lib", "loa\lib\loa", "loa\var", "loa\var\log"
-          New-Item -ItemType "file" -Path "loa\var\log" -Name "loa.log"
-          Copy-Item -Path "src\bin\docs\public" -Destination "loa\lib\loa\docs-html" -Recurse
-          Copy-Item -Path "std" -Destination "loa\lib\loa\std" -Recurse
-          Remove-Item -LiteralPath "loa\lib\loa\std\.git" -Force -Recurse -ErrorAction SilentlyContinue
-          Copy-Item -Path @("target\release\loa.exe", "target\release\loavm.exe") -Destination "loa"
+          New-Item -ItemType "directory" -Path "sdk"
+
+          New-Item -ItemType "directory" -Path "sdk\docs"
+          Copy-Item -Path "src\bin\docs\public" -Destination "sdk\docs\html" -Recurse
+
+          Copy-Item -Path "std" -Destination "sdk\std" -Recurse
+          Remove-Item -LiteralPath "sdk\std\.git" -Force -Recurse -ErrorAction SilentlyContinue
+
+          New-Item -ItemType "directory" -Path "sdk\bin"
+          Copy-Item -Path @("target\release\loa.exe", "target\release\loavm.exe") -Destination "loa\bin"
+
+          New-Item -ItemType "directory" -Path "sdk\log"
+          New-Item -ItemType "file" -Path "sdk\log" -Name "loa.log"
 
       - name: Pack tarball
         run: tar -czf ${{ runner.os }}-${{ github.sha }}.tar.gz loa
