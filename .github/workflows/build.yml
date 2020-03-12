@@ -93,6 +93,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Notify WebAssembly repository
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: loalang/wasm
+          event-type: compiler-release
+          client-payload: '{"ref": "${{ github.ref }}"}"}}'
+
       - name: Download MacOS
         uses: actions/download-artifact@v1
         with:
@@ -128,6 +136,14 @@ jobs:
           CLI: gsutil
         with:
           args: cp dist/Linux-${{ github.sha }}.tar.gz gs://cdn.loalang.xyz/${{ github.ref }}-x86_64-linux.tar.gz
+
+      - name: Notify Homebrew Formula
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: loalang/homebrew-loalang
+          event-type: compiler-release
+          client-payload: '{"ref": "${{ github.ref }}", "checksum": {"mac": "${{ hashFiles('dist/macOS-${{ github.sha }}.tar.gz') }}", "linux": "${{ hashFiles('dist/Linux-${{ github.sha }}.tar.gz') }}"}}'
 
       - name: Publish Windows
         uses: actions-hub/gcloud@master
