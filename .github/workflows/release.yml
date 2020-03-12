@@ -1,4 +1,4 @@
-name: Build
+name: Release
 
 on: [push]
 
@@ -40,11 +40,27 @@ jobs:
           path: target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Run library tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --features=test-library --lib
+
+      - name: Run bin tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --features=test-library,build-bin-loa --bin loa
+
       - name: Build the binaries
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --release --features build-bin-loa,build-bin-vm
+
+      - name: Get version
+        id: version
+        uses: ./.github/actions/version
 
       - name: Package (Unix)
         if: runner.os != 'Windows'
@@ -99,7 +115,10 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           repository: loalang/wasm
           event-type: compiler-release
-          client-payload: '{"ref": "${{ github.ref }}"}"}}'
+          client-payload: >
+            {
+              "version": "${{ steps.version.outputs.version }}"
+            }
 
       - name: Download MacOS
         uses: actions/download-artifact@v1
@@ -126,7 +145,7 @@ jobs:
           APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
           CLI: gsutil
         with:
-          args: cp dist/macOS-${{ github.sha }}.tar.gz gs://cdn.loalang.xyz/${{ github.ref }}-x86_64-macos.tar.gz
+          args: cp dist/macOS-${{ github.sha }}.tar.gz gs://cdn.loalang.xyz/${{ steps.version.outputs.version }}-x86_64-macos.tar.gz
 
       - name: Publish Linux
         uses: actions-hub/gcloud@master
@@ -135,7 +154,7 @@ jobs:
           APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
           CLI: gsutil
         with:
-          args: cp dist/Linux-${{ github.sha }}.tar.gz gs://cdn.loalang.xyz/${{ github.ref }}-x86_64-linux.tar.gz
+          args: cp dist/Linux-${{ github.sha }}.tar.gz gs://cdn.loalang.xyz/${{ steps.version.outputs.version }}-x86_64-linux.tar.gz
 
       - name: Notify Homebrew Formula
         uses: peter-evans/repository-dispatch@v1
@@ -143,7 +162,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           repository: loalang/homebrew-loalang
           event-type: compiler-release
-          client-payload: '{"ref": "${{ github.ref }}"}'
+          client-payload: >
+            {
+              "version": "${{ steps.version.outputs.version }}",
+              "checksum": {
+                "mac": "${{ format('dist/macOS-{0}.tar.gz', github.sha) }}",
+                "linux": "${{ format('dist/Linux-{0}.tar.gz', github.sha) }}"
+              }
+            }
 
       - name: Publish Windows
         uses: actions-hub/gcloud@master
@@ -152,4 +178,4 @@ jobs:
           APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
           CLI: gsutil
         with:
-          args: cp dist/Windows-${{ github.sha }}.tar.gz gs://cdn.loalang.xyz/${{ github.ref }}-x86_64-windows.tar.gz
+          args: cp dist/Windows-${{ github.sha }}.tar.gz gs://cdn.loalang.xyz/${{ steps.version.outputs.version }}-x86_64-windows.tar.gz

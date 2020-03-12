@@ -1,0 +1,19 @@
+name: Docker
+description: Build and push Docker images
+inputs:
+  version:
+    description: The version to tag
+    required: true
+  username:
+    description: The username of the docker.io user to authenticate as
+    required: true
+  password:
+    description: The password for authentication
+    required: true
+runs:
+  using: docker
+  image: Dockerfile
+  args:
+    - ${{ inputs.version }}
+    - ${{ inputs.username }}
+    - ${{ inputs.password }}

@@ -4,13 +4,21 @@ FROM debian
 
 RUN apt-get update && apt-get install -y libssl-dev ca-certificates
 
-RUN mkdir -p /usr/local/var/log
-RUN touch /usr/local/var/log/loa.log
-RUN mkdir -p /usr/local/lib/loa
+RUN mkdir /sdk
+ENV LOA_SDK /sdk
+WORKDIR /sdk
 
-COPY std /usr/local/lib/loa/std
+RUN mkdir docs
+COPY src/bin/docs/public docs/html
 
-COPY --from=base /loalang/target/release/loa /usr/local/bin/loa
+COPY std std
+RUN rm -rf std/.git
+
+RUN mkdir bin
+COPY --from=base /loalang/target/release/loa bin/loa
+
+RUN mkdir log
+RUN touch log/loa.log
 
 RUN mkdir /Project
 WORKDIR /Project

@@ -1,0 +1,8 @@
+name: Extract Version
+description: Extract version number from Cargo.toml
+outputs:
+  version:
+    description: The version of the project
+runs:
+  using: node12
+  main: index.js

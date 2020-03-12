@@ -1,0 +1,24 @@
+name: Docker
+
+on: [push]
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Compiler
+        uses: actions/checkout@v2
+
+      - name: Check out Standard Library
+        run: git submodule update --init
+
+      - name: Get version
+        id: version
+        uses: ./.github/actions/version
+
+      - name: Build images
+        uses: ./.github/actions/docker
+        with:
+          version: ${{ steps.version.outputs.version }}
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
