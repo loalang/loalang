@@ -173,8 +173,8 @@ jobs:
             {
               "version": "${{ steps.version.outputs.version }}",
               "checksum": {
-                "mac": "${{ format('dist/macOS-{0}.tar.gz', github.sha) }}",
-                "linux": "${{ format('dist/Linux-{0}.tar.gz', github.sha) }}"
+                "mac": "${{ hashFiles(format('dist/macOS-{0}.tar.gz', github.sha)) }}",
+                "linux": "${{ hashFiles(format('dist/Linux-{0}.tar.gz', github.sha)) }}"
               }
             }
 
