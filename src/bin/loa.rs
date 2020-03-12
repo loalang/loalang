@@ -1,4 +1,4 @@
-#![feature(try_trait, matches_macro)]
+#![feature(try_trait)]
 
 extern crate clap;
 extern crate colored;
