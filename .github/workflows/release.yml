@@ -109,6 +109,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Check out Compiler
+        uses: actions/checkout@v2
+
       - name: Get version
         id: version
         uses: ./.github/actions/version
