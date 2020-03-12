@@ -24,8 +24,8 @@ pub fn sdk_path<S: AsRef<Path>, I: IntoIterator<Item=S>>(segments: I) -> PathBuf
 }
 
 pub fn sdk_glob(segments: &[&str]) -> String {
-    let d = sdk_dir();
-    let mut path = d.iter().filter_map(|p| p.to_str()).collect::<Vec<_>>();
+    let sdk = sdk_dir();
+    let mut path = vec![sdk.to_str().unwrap()];
     path.extend(segments);
     path.join(std::path::MAIN_SEPARATOR.to_string().as_ref())
 }

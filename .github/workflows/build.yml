@@ -58,7 +58,7 @@ jobs:
           rm -rf sdk/std/.git
 
           mkdir sdk/bin
-          cp target/release/loa target/release/loavm loa/bin/
+          cp target/release/loa target/release/loavm sdk/bin/
 
           mkdir sdk/log
           touch sdk/log/loa.log
@@ -75,13 +75,13 @@ jobs:
           Remove-Item -LiteralPath "sdk\std\.git" -Force -Recurse -ErrorAction SilentlyContinue
 
           New-Item -ItemType "directory" -Path "sdk\bin"
-          Copy-Item -Path @("target\release\loa.exe", "target\release\loavm.exe") -Destination "loa\bin"
+          Copy-Item -Path @("target\release\loa.exe", "target\release\loavm.exe") -Destination "sdk\bin"
 
           New-Item -ItemType "directory" -Path "sdk\log"
           New-Item -ItemType "file" -Path "sdk\log" -Name "loa.log"
 
       - name: Pack tarball
-        run: tar -czf ${{ runner.os }}-${{ github.sha }}.tar.gz loa
+        run: tar -czf ${{ runner.os }}-${{ github.sha }}.tar.gz sdk
 
       - name: Upload tarball
         uses: actions/upload-artifact@v1
