@@ -163,6 +163,21 @@ jobs:
         with:
           args: cp dist/Linux-${{ github.sha }}.tar.gz gs://cdn.loalang.xyz/${{ steps.version.outputs.version }}-x86_64-linux.tar.gz
 
+      - name: Publish Windows
+        uses: actions-hub/gcloud@master
+        env:
+          PROJECT_ID: loalang
+          APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          CLI: gsutil
+        with:
+          args: cp dist/Windows-${{ github.sha }}.tar.gz gs://cdn.loalang.xyz/${{ steps.version.outputs.version }}-x86_64-windows.tar.gz
+
+      - name: Calculate Checksums
+        run: |
+          echo ::set-env name=MAC_CHECKSUM::$(sha256sum dist/macOS-${{ github.sha }}.tar.gz | awk '{print $1}')
+          echo ::set-env name=LINUX_CHECKSUM::$(sha256sum dist/Linux-${{ github.sha }}.tar.gz | awk '{print $1}')
+          echo ::set-env name=WINDOWS_CHECKSUM::$(sha256sum dist/Windows-${{ github.sha }}.tar.gz | awk '{print $1}')
+
       - name: Notify Homebrew Formula
         uses: peter-evans/repository-dispatch@v1
         with:
@@ -173,16 +188,7 @@ jobs:
             {
               "version": "${{ steps.version.outputs.version }}",
               "checksum": {
-                "mac": "${{ hashFiles(format('dist/macOS-{0}.tar.gz', github.sha)) }}",
-                "linux": "${{ hashFiles(format('dist/Linux-{0}.tar.gz', github.sha)) }}"
+                "mac": "${{ env.MAC_CHECKSUM }}",
+                "linux": "${{ env.LINUX_CHECKSUM }}"
               }
             }
-
-      - name: Publish Windows
-        uses: actions-hub/gcloud@master
-        env:
-          PROJECT_ID: loalang
-          APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
-          CLI: gsutil
-        with:
-          args: cp dist/Windows-${{ github.sha }}.tar.gz gs://cdn.loalang.xyz/${{ steps.version.outputs.version }}-x86_64-windows.tar.gz
