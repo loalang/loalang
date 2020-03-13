@@ -1,6 +1,12 @@
 [package]
 name = "loalang"
 version = "0.1.17"
+description = "Loa is a general-purpose, purely immutable, object-oriented programming language."
+license = "MIT"
+license_file = "LICENSE"
+documentation = "https://docs.rs/loalang"
+homepage = "https://loalang.xyz"
+repository = "https://github.com/loalang/loalang"
 authors = ["Emil Broman <emil@emilbroman.me>"]
 edition = "2018"
 
