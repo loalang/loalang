@@ -1,0 +1,15 @@
+name: Publish Standard Library
+description: Publish Standard Library to CDN
+inputs:
+  version:
+    description: The version of the compiler
+    required: true
+  credentials:
+    description: Base64-encoded GCP credentials
+    required: true
+runs:
+  using: docker
+  image: Dockerfile
+  args:
+    - ${{ inputs.version }}
+    - ${{ inputs.credentials }}

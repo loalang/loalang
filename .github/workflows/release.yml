@@ -126,6 +126,12 @@ jobs:
         id: version
         uses: ./.github/actions/version
 
+      - name: Publish Standard Library
+        uses: ./.github/actions/publish-std
+        with:
+          version: ${{ steps.version.outputs.version }}
+          credentials: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+
       - name: Notify WebAssembly repository
         uses: peter-evans/repository-dispatch@v1
         with:
