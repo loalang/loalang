@@ -1,6 +1,6 @@
 .SILENT:
 
-VERSION ?= $(shell toml get Cargo.toml 'package.version' | jq -r)
+VERSION ?= $(shell cargo pkgid | awk -F\# '{print $$2}')
 LOA_SDK ?= sdk
 
 .PHONY: build
