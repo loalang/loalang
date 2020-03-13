@@ -9,3 +9,4 @@ This is main repository for the Loa toolchain, including the following tools:
 * REPL
 * Formatter
 * Package Manager Client
+* Documentation Generator
