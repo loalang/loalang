@@ -61,6 +61,13 @@ jobs:
           command: build
           args: --release --features build-bin-loa,build-bin-vm
 
+      - name: Publish to crates.io
+        uses: actions-rs/cargo@v1
+        continue-on-error: true
+        with:
+          command: publish
+          args: --token ${{ secrets.CRATES_IO_TOKEN }}
+
       - name: Get version
         id: version
         uses: ./.github/actions/version
