@@ -1,6 +1,6 @@
 [package]
 name = "loalang"
-version = "0.1.19"
+version = "0.1.20"
 description = "Loa is a general-purpose, purely immutable, object-oriented programming language."
 license = "MIT"
 license-file = "LICENSE"
